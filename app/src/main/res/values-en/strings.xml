@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tagline">Speak on the go - Tapedo turns it into index cards.</string>
+    <string name="back">Back</string>
+
+    <string name="home_open_settings">Settings</string>
+    <string name="home_empty">The stack is empty. Press the red button and say what you need to do.</string>
+    <string name="home_type_question">What are you recording?</string>
+    <string name="record_start">Record</string>
+    <string name="record_stop">Stop recording</string>
+    <string name="record_counter">%1$s / %2$s</string>
+    <string name="record_listening">Listening…</string>
+    <string name="mic_open_settings">Open phone settings</string>
+    <string name="speech_error_permission">Without the microphone Tapedo cannot hear your note. Allow the microphone in the phone settings.</string>
+    <string name="speech_error_not_available">This phone has no speech recognition. Install or enable the Google app.</string>
+    <string name="speech_error_no_speech">I did not hear anything. Press the button and say it again.</string>
+    <string name="speech_error_network">Speech recognition could not reach the internet. Check the connection, or download the language for offline use in the phone\'s speech recognition settings - then no internet is needed.</string>
+    <string name="speech_error_busy">Speech recognition is busy with another app. Try again in a moment.</string>
+    <string name="speech_error_other">Something went wrong with the microphone. Try again.</string>
+    <string name="speech_error_offline_ask">The phone has no offline pack for this language, so nothing was sent. Online recognition sends your voice to Google. You can also download the offline pack in the phone\'s speech recognition settings.</string>
+    <string name="speech_error_offline_never">The phone has no offline pack for this language, and online recognition is turned off in Settings. Download the offline pack in the phone\'s speech recognition settings.</string>
+    <string name="speech_online_once">Online this time</string>
+    <string name="speech_online_always">Always online</string>
+    <string name="type_hint_auto">Tapedo picks the type from your words: “buy” makes a shopping list, “at 10” an event, “idea” an idea.</string>
+    <string name="type_hint_note">A plain note - the text as you say it.</string>
+    <string name="type_hint_checklist">Each thing on its own line, to tick off. E.g. “packing list: towels, sunscreen, charger”.</string>
+    <string name="type_hint_task">One thing to do, with a due date if you say one (“on Friday”).</string>
+    <string name="type_hint_idea">A loose thought for later - no due date, no priority.</string>
+    <string name="type_hint_event">Date, time and place, e.g. “Tuesday at 10 at the dentist”.</string>
+    <string name="type_hint_shopping">A shopping list, grouped by shop section on its own: dairy, bakery, produce…</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_recording">Recording</string>
+    <string name="settings_section_notes">Notes</string>
+    <string name="settings_section_look">Look and language</string>
+    <string name="settings_recording_end">End of recording</string>
+    <string name="settings_recording_end_silence">On silence</string>
+    <string name="settings_recording_end_stop">Stop button</string>
+    <string name="settings_recording_end_hint">“On silence” ends when you stop talking. “Stop button” keeps listening until you stop it.</string>
+    <string name="settings_max_length">Longest recording</string>
+    <string name="settings_max_length_hint">A safety net for when you forget to stop.</string>
+    <string name="settings_seconds">%d s</string>
+    <string name="settings_minutes">%d min</string>
+    <string name="settings_speech_language">Speech language</string>
+    <string name="settings_speech_language_hint">The phone recognises speech in this language. Mixed notes (e.g. Polish words in an English sentence) usually work too.</string>
+    <string name="settings_online_speech">Online recognition</string>
+    <string name="settings_online_speech_ask">Ask</string>
+    <string name="settings_online_speech_always">Always</string>
+    <string name="settings_online_speech_never">Never</string>
+    <string name="settings_online_speech_hint">When the phone has no offline pack for the speech language, online recognition sends your voice to Google. On phones with on-device recognition (usually Android 12 and newer) your voice never leaves the phone without your consent. On others the system may go online by itself.</string>
+    <string name="settings_save_failed">The change could not be saved. Try again.</string>
+    <string name="settings_default_priority">Priority when nothing says “urgent”</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">Like system</string>
+    <string name="settings_theme_light">Paper</string>
+    <string name="settings_theme_dark">Panel</string>
+    <string name="settings_app_language">App language</string>
+    <string name="settings_reduce_motion">Reduce motion</string>
+    <string name="settings_reduce_motion_hint">Cards and switches change instantly, without movement. Also on automatically when animations are off system-wide.</string>
+    <string name="settings_off">Off</string>
+    <string name="settings_on">On</string>
+    <string name="settings_footer">Notes are encrypted and stored only on this phone. Tapedo never saves sound - only the text is kept. Nothing leaves the phone unless you allow it: the note text goes to the AI provider you choose, and your voice goes to Google with online recognition.</string>
+    <string name="settings_licenses">Open source licences</string>
+    <string name="licenses_title">Licences</string>
+    <string name="licenses_intro">Tapedo is built from open source libraries and fonts. Their licences follow in their original wording.</string>
+    <string name="settings_version">Version %s</string>
+
+    <string name="note_type_note">Note</string>
+    <string name="note_type_checklist">Checklist</string>
+    <string name="note_type_auto">Auto</string>
+    <string name="note_type_task">Task</string>
+    <string name="note_type_idea">Idea</string>
+    <string name="note_type_event">Event</string>
+    <string name="note_type_shopping">Shopping</string>
+    <string name="priority_high">High</string>
+    <string name="priority_medium">Medium</string>
+    <string name="priority_low">Low</string>
+    <string name="default_shopping_title">Shopping</string>
+    <string name="default_checklist_title">List</string>
+
+    <string name="settings_section_ai">AI help</string>
+    <string name="ai_provider">Who structures your notes</string>
+    <string name="ai_none">No AI</string>
+    <string name="ai_none_hint">Simple rules structure your notes: a shopping list after “buy”, an event after “at 10”, priority after “urgent”, a due date after “tomorrow”. Works offline, and the note text never leaves the phone.</string>
+    <string name="ai_free_stamp">Free plan</string>
+    <string name="ai_what_title">What it is</string>
+    <string name="ai_privacy_title">Where your data goes</string>
+    <string name="ai_steps_title">How to get a key</string>
+    <string name="ai_gemini_what">Google’s AI model. It splits a note into separate tasks and lists and fixes misheard words. The free plan has a daily request limit - you can see the current one in Google AI Studio.</string>
+    <string name="ai_gemini_privacy">Only the note text goes to Google - no recording, no data about you. In the EU, Switzerland and the UK, Google does not use it to improve its models, even on the free plan. Outside these countries the free plan lets Google use the text and have people read it - then do not dictate sensitive data.</string>
+    <string name="ai_gemini_step1">Open Google AI Studio with the button below and sign in with a Google account.</string>
+    <string name="ai_gemini_step2">Click “Create API key”.</string>
+    <string name="ai_gemini_step3">Copy the key - it starts with “AIza” - and paste it below.</string>
+    <string name="ai_gemini_open">Open Google AI Studio</string>
+    <string name="ai_groq_what">A service that runs open AI models very fast. It splits a note into separate tasks and lists. The free plan needs no payment card; it has per-minute and per-day request limits.</string>
+    <string name="ai_groq_privacy">Only the note text goes to Groq (USA) - no recording, no data about you. Under its agreement Groq may not use it to train models. By default it does not keep requests; when troubleshooting it may keep logs for up to 30 days - you can turn that off in the Groq console (Data Controls, Zero Data Retention).</string>
+    <string name="ai_groq_step1">Open the Groq console with the button below and create an account (e-mail or Google account).</string>
+    <string name="ai_groq_step2">In “API Keys”, click “Create API Key”.</string>
+    <string name="ai_groq_step3">Copy the key - it starts with “gsk_” - and paste it below.</string>
+    <string name="ai_groq_open">Open the Groq console</string>
+    <string name="ai_key_label">API key</string>
+    <string name="ai_key_hint">The key is encrypted on this phone and sent nowhere except the chosen provider.</string>
+    <string name="ai_key_saved">Key saved: ••••%s</string>
+    <string name="ai_key_none">No key yet - the no-AI rules work until you paste one.</string>
+    <string name="ai_key_save">Save key</string>
+    <string name="ai_key_delete">Delete key</string>
+    <string name="ai_key_buttons_hint">“Save key” works once a key is pasted, “Check” once it is saved.</string>
+    <string name="ai_key_test">Test</string>
+    <string name="ai_test_sample">tomorrow buy bread and milk and on friday call the plumber it is urgent</string>
+    <string name="ai_test_running">Testing…</string>
+    <string name="ai_test_ok">Works. First card from the sample note: “%s”.</string>
+    <string name="ai_error_missing_key">Paste and save a key first.</string>
+    <string name="ai_error_invalid_key">The provider rejected the key. Check that you copied all of it.</string>
+    <string name="ai_error_rate_limited">Free limit reached - try later. Until then the no-AI rules work.</string>
+    <string name="ai_error_network">Cannot reach the provider. Check your internet connection.</string>
+    <string name="ai_error_server">The provider has a temporary problem (error %d). Try later.</string>
+    <string name="ai_error_bad_response">The provider answered in an unexpected way. Try again.</string>
+
+    <!-- Review window (after a recording) -->
+    <string name="home_dismiss">Close</string>
+    <string name="record_state">recording, %1$s of %2$s</string>
+    <string name="review_heard">Heard</string>
+    <string name="review_structuring">Cutting it into cards…</string>
+    <plurals name="review_count">
+        <item quantity="one">%d card</item>
+        <item quantity="other">%d cards</item>
+    </plurals>
+    <string name="review_ai_failed">Simple rules wrote these cards instead of the AI. Reason: %s</string>
+    <string name="review_edit">Edit</string>
+    <string name="review_remove_card">Remove this card</string>
+    <string name="review_save_failed">Couldn\'t save the cards. Nothing is lost - try again.</string>
+    <string name="review_save_retry">Try again</string>
+    <plurals name="review_save">
+        <item quantity="one">Save card</item>
+        <item quantity="other">Save cards</item>
+    </plurals>
+    <string name="review_discard">Discard</string>
+    <string name="review_discard_confirm">Really discard?</string>
+
+    <!-- Card stack -->
+    <string name="stack_open_card">open card</string>
+    <string name="stack_empty_title">A blank card</string>
+    <string name="stack_failed">Notes can\'t be opened right now. Nothing was deleted - try again.</string>
+    <string name="stack_retry">Try again</string>
+    <string name="stack_action_failed">Couldn\'t save the change. Try again.</string>
+    <string name="stack_deleted">Deleted “%s”</string>
+    <string name="stack_undo">Undo</string>
+    <string name="locked_notes_title">Old notes can\'t be read</string>
+    <string name="locked_notes_body">Android lost the key they were encrypted with (it can happen after a system update or a screen lock change), so Tapedo started with an empty stack. The encrypted files were not deleted - they stay in the app\'s data, but nobody can read them without the key.</string>
+    <string name="locked_notes_ok">Got it</string>
+
+    <!-- Card -->
+    <string name="card_due_today">today</string>
+    <string name="card_due_tomorrow">tomorrow</string>
+    <string name="card_due_yesterday">yesterday</string>
+    <string name="card_priority_desc">Priority: %s</string>
+    <string name="card_done">done</string>
+    <string name="card_not_done">to do</string>
+    <string name="card_item_checked">ticked</string>
+    <string name="card_item_unchecked">not ticked</string>
+    <string name="card_ai_desc">Written by AI</string>
+    <string name="card_share">Share</string>
+    <plurals name="card_more_items">
+        <item quantity="one">+ %d more</item>
+        <item quantity="other">+ %d more</item>
+    </plurals>
+    <string name="group_produce">Fruit and veg</string>
+    <string name="group_bakery">Bakery</string>
+    <string name="group_dairy">Dairy</string>
+    <string name="group_meat">Meat and fish</string>
+    <string name="group_frozen">Frozen</string>
+    <string name="group_pantry">Pantry</string>
+    <string name="group_drinks">Drinks</string>
+    <string name="group_household">Household</string>
+    <string name="group_other">Other</string>
+
+    <!-- Card editor -->
+    <string name="editor_title">Card</string>
+    <string name="editor_done">Done</string>
+    <string name="editor_field_title">Title</string>
+    <string name="editor_field_body">Text</string>
+    <string name="editor_field_items">Items</string>
+    <string name="editor_field_place">Place</string>
+    <string name="editor_field_type">Type</string>
+    <string name="editor_field_priority">Priority</string>
+    <string name="editor_due">Due: %s</string>
+    <string name="editor_remove_due">Remove date</string>
+    <string name="editor_time">Time: %s</string>
+    <string name="editor_remove_time">Remove time</string>
+    <string name="editor_task_done">Done</string>
+    <string name="editor_item_label">Item %d</string>
+    <string name="editor_remove_item">Remove item %d</string>
+    <string name="editor_add_item">Add item</string>
+    <string name="editor_delete">Delete card</string>
+</resources>

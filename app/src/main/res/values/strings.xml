@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Tapedo</string>
+    <string name="tagline">Mów w biegu - Tapedo rozpisze to na fiszki.</string>
+    <string name="back">Wstecz</string>
+
+    <!-- Home -->
+    <string name="home_open_settings">Ustawienia</string>
+    <string name="home_empty">Stos jest pusty. Naciśnij czerwony przycisk i powiedz, co masz do zrobienia.</string>
+    <string name="home_type_question">Co nagrywasz?</string>
+    <string name="record_start">Nagraj</string>
+    <string name="record_stop">Zatrzymaj nagrywanie</string>
+    <string name="record_counter">%1$s / %2$s</string>
+    <string name="record_listening">Słucham…</string>
+    <string name="mic_open_settings">Otwórz ustawienia telefonu</string>
+    <string name="speech_error_permission">Bez dostępu do mikrofonu Tapedo nie usłyszy notatki. Zezwól na mikrofon w ustawieniach telefonu.</string>
+    <string name="speech_error_not_available">Ten telefon nie ma rozpoznawania mowy. Zainstaluj albo włącz aplikację Google.</string>
+    <string name="speech_error_no_speech">Nic nie usłyszałem. Naciśnij przycisk i powiedz to jeszcze raz.</string>
+    <string name="speech_error_network">Rozpoznawanie mowy nie połączyło się z internetem. Sprawdź połączenie albo pobierz język offline w ustawieniach rozpoznawania mowy telefonu - wtedy internet nie jest potrzebny.</string>
+    <string name="speech_error_busy">Rozpoznawanie mowy jest zajęte przez inną aplikację. Spróbuj za chwilę.</string>
+    <string name="speech_error_other">Coś poszło nie tak z mikrofonem. Spróbuj jeszcze raz.</string>
+    <string name="speech_error_offline_ask">Telefon nie ma pakietu offline dla tego języka, więc nic nie zostało wysłane. Rozpoznawanie przez internet wysyła głos do Google. Możesz też pobrać pakiet offline w ustawieniach rozpoznawania mowy telefonu.</string>
+    <string name="speech_error_offline_never">Telefon nie ma pakietu offline dla tego języka, a rozpoznawanie przez internet jest wyłączone w Ustawieniach. Pobierz pakiet offline w ustawieniach rozpoznawania mowy telefonu.</string>
+    <string name="speech_online_once">Tym razem przez internet</string>
+    <string name="speech_online_always">Zawsze przez internet</string>
+    <string name="type_hint_auto">Tapedo samo wybierze typ z tego, co powiesz: „kup” to zakupy, „o 10” to spotkanie, „pomysł” to pomysł.</string>
+    <string name="type_hint_note">Zwykła notatka - tekst tak, jak go powiesz.</string>
+    <string name="type_hint_checklist">Każda rzecz osobno, do odhaczania. Np. „lista na wyjazd: ręczniki, krem, ładowarka”.</string>
+    <string name="type_hint_task">Jedna rzecz do zrobienia, z terminem, jeśli go powiesz („w piątek”).</string>
+    <string name="type_hint_idea">Luźna myśl na później - bez terminu i priorytetu.</string>
+    <string name="type_hint_event">Data, godzina i miejsce, np. „we wtorek o 10 u dentysty”.</string>
+    <string name="type_hint_shopping">Lista zakupów, sama pogrupowana na działy: nabiał, pieczywo, warzywa…</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Ustawienia</string>
+    <string name="settings_section_recording">Nagrywanie</string>
+    <string name="settings_section_notes">Notatki</string>
+    <string name="settings_section_look">Wygląd i język</string>
+    <string name="settings_recording_end">Koniec nagrania</string>
+    <string name="settings_recording_end_silence">Po ciszy</string>
+    <string name="settings_recording_end_stop">Przyciskiem stop</string>
+    <string name="settings_recording_end_hint">„Po ciszy” kończy nagranie, gdy przestaniesz mówić. „Przyciskiem stop” słucha, aż sam zatrzymasz.</string>
+    <string name="settings_max_length">Najdłuższe nagranie</string>
+    <string name="settings_max_length_hint">Zabezpieczenie, gdy zapomnisz zatrzymać nagrywanie.</string>
+    <string name="settings_seconds">%d s</string>
+    <string name="settings_minutes">%d min</string>
+    <string name="settings_speech_language">Język mowy</string>
+    <string name="settings_speech_language_hint">W tym języku telefon rozpoznaje mowę. Notatki mieszane (np. angielskie słowa w polskim zdaniu) zwykle też przechodzą.</string>
+    <string name="settings_online_speech">Rozpoznawanie przez internet</string>
+    <string name="settings_online_speech_ask">Pytaj</string>
+    <string name="settings_online_speech_always">Zawsze</string>
+    <string name="settings_online_speech_never">Nigdy</string>
+    <string name="settings_online_speech_hint">Gdy telefon nie ma pakietu offline dla języka mowy, rozpoznawanie przez internet wysyła głos do Google. Na telefonach z rozpoznawaniem na urządzeniu (zwykle Android 12 i nowszy) głos bez Twojej zgody nie wychodzi z telefonu. Na pozostałych system może sam użyć internetu.</string>
+    <string name="settings_save_failed">Nie udało się zapisać zmiany. Spróbuj jeszcze raz.</string>
+    <string name="settings_default_priority">Priorytet, gdy nie padnie „pilne”</string>
+    <string name="settings_theme">Motyw</string>
+    <string name="settings_theme_system">Jak w systemie</string>
+    <string name="settings_theme_light">Papier</string>
+    <string name="settings_theme_dark">Panel</string>
+    <string name="settings_app_language">Język aplikacji</string>
+    <string name="settings_reduce_motion">Ogranicz animacje</string>
+    <string name="settings_reduce_motion_hint">Fiszki i przełączniki zmieniają się od razu, bez ruchu. Działa też samo, gdy animacje są wyłączone w systemie.</string>
+    <string name="settings_off">Wyłączone</string>
+    <string name="settings_on">Włączone</string>
+    <string name="settings_footer">Notatki są zaszyfrowane i zapisane tylko na tym telefonie. Tapedo nie zapisuje dźwięku - zostaje sam tekst. Z telefonu wychodzi tylko to, na co się zgodzisz: tekst notatki do wybranego dostawcy AI i głos do Google przy rozpoznawaniu przez internet.</string>
+    <string name="settings_licenses">Licencje open source</string>
+    <string name="licenses_title">Licencje</string>
+    <string name="licenses_intro">Tapedo jest zbudowane z otwartych bibliotek i krojów pisma. Poniżej ich licencje w oryginalnym, angielskim brzmieniu.</string>
+    <string name="settings_version">Wersja %s</string>
+
+    <!-- Values -->
+    <string name="language_polish" translatable="false">Polski</string>
+    <string name="language_english" translatable="false">English</string>
+    <string name="note_type_note">Notatka</string>
+    <string name="note_type_checklist">Lista punktów</string>
+    <string name="note_type_auto">Sam pozna</string>
+    <string name="note_type_task">Zadanie</string>
+    <string name="note_type_idea">Pomysł</string>
+    <string name="note_type_event">Spotkanie</string>
+    <string name="note_type_shopping">Zakupy</string>
+    <string name="priority_high">Wysoki</string>
+    <string name="priority_medium">Średni</string>
+    <string name="priority_low">Niski</string>
+    <string name="default_shopping_title">Zakupy</string>
+    <string name="default_checklist_title">Lista</string>
+
+    <!-- AI -->
+    <string name="settings_section_ai">Pomoc AI</string>
+    <string name="ai_provider">Kto rozpisuje notatki</string>
+    <string name="ai_none">Bez AI</string>
+    <string name="ai_gemini" translatable="false">Gemini</string>
+    <string name="ai_groq" translatable="false">Groq</string>
+    <string name="ai_none_hint">Notatki rozpisują proste reguły: zakupy po słowie „kup”, spotkanie po „o 10”, priorytet po „pilne”, termin po „jutro”. Działa bez internetu, a tekst notatki nie wychodzi z telefonu.</string>
+    <string name="ai_free_stamp">Darmowy plan</string>
+    <string name="ai_what_title">Co to jest</string>
+    <string name="ai_privacy_title">Gdzie trafiają dane</string>
+    <string name="ai_steps_title">Jak zdobyć klucz</string>
+    <string name="ai_gemini_what">Model AI od Google. Rozpisuje notatkę na osobne zadania i listy, poprawia przekręcone słowa. Darmowy plan ma dzienny limit zapytań - aktualny widać w Google AI Studio.</string>
+    <string name="ai_gemini_privacy">Do Google trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. W UE, Szwajcarii i Wielkiej Brytanii Google nie używa go do ulepszania swoich modeli, także na darmowym planie. Poza tymi krajami darmowy plan pozwala Google używać tekstu i dawać go do przeczytania ludziom - wtedy nie dyktuj danych wrażliwych.</string>
+    <string name="ai_gemini_step1">Otwórz Google AI Studio przyciskiem poniżej i zaloguj się kontem Google.</string>
+    <string name="ai_gemini_step2">Kliknij „Create API key” (utwórz klucz).</string>
+    <string name="ai_gemini_step3">Skopiuj klucz - zaczyna się od „AIza” - i wklej go niżej.</string>
+    <string name="ai_gemini_open">Otwórz Google AI Studio</string>
+    <string name="ai_groq_what">Usługa uruchamiająca otwarte modele AI bardzo szybko. Rozpisuje notatkę na osobne zadania i listy. Darmowy plan nie wymaga karty płatniczej; ma limit zapytań na minutę i na dzień.</string>
+    <string name="ai_groq_privacy">Do Groq (USA) trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. Według umowy Groq nie może używać go do trenowania modeli. Domyślnie nie przechowuje zapytań; przy awariach może trzymać logi do 30 dni - można to wyłączyć w panelu Groq (Data Controls, Zero Data Retention).</string>
+    <string name="ai_groq_step1">Otwórz konsolę Groq przyciskiem poniżej i załóż konto (e-mail albo konto Google).</string>
+    <string name="ai_groq_step2">W „API Keys” kliknij „Create API Key”.</string>
+    <string name="ai_groq_step3">Skopiuj klucz - zaczyna się od „gsk_” - i wklej go niżej.</string>
+    <string name="ai_groq_open">Otwórz konsolę Groq</string>
+    <string name="ai_key_label">Klucz API</string>
+    <string name="ai_key_hint">Klucz jest zaszyfrowany na tym telefonie i nigdzie nie jest wysyłany poza wybranego dostawcę.</string>
+    <string name="ai_key_saved">Klucz zapisany: ••••%s</string>
+    <string name="ai_key_none">Brak klucza - do czasu wklejenia działają reguły bez AI.</string>
+    <string name="ai_key_save">Zapisz klucz</string>
+    <string name="ai_key_delete">Usuń klucz</string>
+    <string name="ai_key_buttons_hint">„Zapisz klucz” działa po wklejeniu klucza, a „Sprawdź” po jego zapisaniu.</string>
+    <string name="ai_key_test">Sprawdź</string>
+    <string name="ai_test_sample">jutro kupić chleb i mleko a w piątek zadzwonić do hydraulika to pilne</string>
+    <string name="ai_test_running">Sprawdzam…</string>
+    <string name="ai_test_ok">Działa. Pierwsza fiszka z próbnej notatki: „%s”.</string>
+    <string name="ai_error_missing_key">Najpierw wklej i zapisz klucz.</string>
+    <string name="ai_error_invalid_key">Dostawca odrzucił klucz. Sprawdź, czy skopiowałeś go w całości.</string>
+    <string name="ai_error_rate_limited">Wyczerpany darmowy limit - spróbuj później. Do tego czasu działają reguły bez AI.</string>
+    <string name="ai_error_network">Brak połączenia z dostawcą. Sprawdź internet.</string>
+    <string name="ai_error_server">Dostawca ma chwilowy problem (błąd %d). Spróbuj później.</string>
+    <string name="ai_error_bad_response">Dostawca odpowiedział w nieoczekiwany sposób. Spróbuj ponownie.</string>
+
+    <!-- Review window (after a recording) -->
+    <string name="home_dismiss">Zamknij</string>
+    <string name="record_state">nagrywanie, %1$s z %2$s</string>
+    <string name="review_heard">Usłyszane</string>
+    <string name="review_structuring">Rozpisuję na fiszki…</string>
+    <plurals name="review_count">
+        <item quantity="one">Wyszła %d fiszka</item>
+        <item quantity="few">Wyszły %d fiszki</item>
+        <item quantity="many">Wyszło %d fiszek</item>
+        <item quantity="other">Wyszło %d fiszki</item>
+    </plurals>
+    <string name="review_ai_failed">Fiszki rozpisały proste reguły zamiast AI. Powód: %s</string>
+    <string name="review_edit">Popraw</string>
+    <string name="review_remove_card">Wyrzuć tę fiszkę</string>
+    <string name="review_save_failed">Nie udało się zapisać fiszek. Nic nie zginęło - spróbuj jeszcze raz.</string>
+    <string name="review_save_retry">Spróbuj jeszcze raz</string>
+    <plurals name="review_save">
+        <item quantity="one">Zapisz fiszkę</item>
+        <item quantity="few">Zapisz fiszki</item>
+        <item quantity="many">Zapisz fiszki</item>
+        <item quantity="other">Zapisz fiszki</item>
+    </plurals>
+    <string name="review_discard">Wyrzuć</string>
+    <string name="review_discard_confirm">Na pewno wyrzucić?</string>
+
+    <!-- Card stack -->
+    <string name="stack_open_card">otwórz fiszkę</string>
+    <string name="stack_empty_title">Pusta fiszka</string>
+    <string name="stack_failed">Nie da się teraz otworzyć notatek. Nic nie zostało usunięte - spróbuj ponownie.</string>
+    <string name="stack_retry">Spróbuj ponownie</string>
+    <string name="stack_action_failed">Nie udało się zapisać zmiany. Spróbuj jeszcze raz.</string>
+    <string name="stack_deleted">Usunięto „%s”</string>
+    <string name="stack_undo">Cofnij</string>
+    <string name="locked_notes_title">Starych notatek nie da się odczytać</string>
+    <string name="locked_notes_body">Android zgubił klucz, którym były zaszyfrowane (zdarza się po aktualizacji systemu albo zmianie blokady ekranu), więc Tapedo zaczęło od pustego stosu. Zaszyfrowanych plików nie usunęło - zostały w danych aplikacji, ale bez klucza nie odczyta ich nikt.</string>
+    <string name="locked_notes_ok">Rozumiem</string>
+
+    <!-- Card -->
+    <string name="card_due_today">dziś</string>
+    <string name="card_due_tomorrow">jutro</string>
+    <string name="card_due_yesterday">wczoraj</string>
+    <string name="card_priority_desc">Priorytet: %s</string>
+    <string name="card_done">zrobione</string>
+    <string name="card_not_done">do zrobienia</string>
+    <string name="card_item_checked">odhaczone</string>
+    <string name="card_item_unchecked">nieodhaczone</string>
+    <string name="card_ai_stamp" translatable="false">AI</string>
+    <string name="card_ai_desc">Rozpisane przez AI</string>
+    <string name="card_share">Udostępnij</string>
+    <plurals name="card_more_items">
+        <item quantity="one">+ jeszcze %d</item>
+        <item quantity="few">+ jeszcze %d</item>
+        <item quantity="many">+ jeszcze %d</item>
+        <item quantity="other">+ jeszcze %d</item>
+    </plurals>
+    <string name="group_produce">Warzywa i owoce</string>
+    <string name="group_bakery">Pieczywo</string>
+    <string name="group_dairy">Nabiał</string>
+    <string name="group_meat">Mięso i ryby</string>
+    <string name="group_frozen">Mrożonki</string>
+    <string name="group_pantry">Spiżarnia</string>
+    <string name="group_drinks">Napoje</string>
+    <string name="group_household">Chemia i dom</string>
+    <string name="group_other">Inne</string>
+
+    <!-- Card editor -->
+    <string name="editor_title">Fiszka</string>
+    <string name="editor_done">Gotowe</string>
+    <string name="editor_field_title">Tytuł</string>
+    <string name="editor_field_body">Treść</string>
+    <string name="editor_field_items">Punkty</string>
+    <string name="editor_field_place">Miejsce</string>
+    <string name="editor_field_type">Typ</string>
+    <string name="editor_field_priority">Priorytet</string>
+    <string name="editor_due">Termin: %s</string>
+    <string name="editor_remove_due">Usuń termin</string>
+    <string name="editor_time">Godzina: %s</string>
+    <string name="editor_remove_time">Usuń godzinę</string>
+    <string name="editor_task_done">Zrobione</string>
+    <string name="editor_item_label">Punkt %d</string>
+    <string name="editor_remove_item">Usuń punkt %d</string>
+    <string name="editor_add_item">Dodaj punkt</string>
+    <string name="editor_delete">Usuń fiszkę</string>
+</resources>

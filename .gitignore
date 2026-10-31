@@ -1,0 +1,23 @@
+*.iml
+.gradle/
+.idea/
+.kotlin/
+/local.properties
+# Build output of every module (app, core)
+build/
+/captures/
+.externalNativeBuild/
+.cxx/
+.DS_Store
+*.jks
+*.keystore
+keystore.properties
+
+# Built packages - published as GitHub releases, not committed
+*.apk
+*.aab
+
+# Local Claude Code settings and crash logs
+.claude/settings.local.json
+*.log
+hs_err_pid*

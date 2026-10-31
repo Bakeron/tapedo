@@ -1,0 +1,110 @@
+package io.github.bakeron.tapedo.ui.cards
+
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import io.github.bakeron.tapedo.ui.theme.TapedoTheme
+
+/** Ruled lines like on an index card, one every [spacing], starting [spacing] from the top. */
+fun Modifier.ruledLines(color: Color, spacing: Dp): Modifier = drawBehind {
+    val step = spacing.toPx()
+    var y = step
+    while (y < size.height) {
+        drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
+        y += step
+    }
+}
+
+/** Squared paper (kratka) for lists. */
+fun Modifier.gridPaper(color: Color, cell: Dp): Modifier = drawBehind {
+    val step = cell.toPx()
+    val stroke = 0.8.dp.toPx()
+    var x = step
+    while (x < size.width) {
+        drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = stroke)
+        x += step
+    }
+    var y = step
+    while (y < size.height) {
+        drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = stroke)
+        y += step
+    }
+}
+
+/**
+ * A hand-drawn pencil line through each line of a text, drawn left to right when [struck] turns on.
+ * Pass the text's layout from `onTextLayout`. With "reduce motion" the line appears at once.
+ */
+@Composable
+fun Modifier.handStrike(struck: Boolean, layout: () -> TextLayoutResult?, color: Color): Modifier {
+    val progress by animateFloatAsState(
+        targetValue = if (struck) 1f else 0f,
+        animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(durationMillis = 260),
+        label = "strike",
+    )
+    return drawWithContent {
+        drawContent()
+        val text = layout() ?: return@drawWithContent
+        if (progress <= 0f) return@drawWithContent
+        val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        for (line in 0 until text.lineCount) {
+            val left = text.getLineLeft(line) - 2.dp.toPx()
+            val right = text.getLineRight(line) + 2.dp.toPx()
+            val mid = (text.getLineTop(line) + text.getLineBottom(line)) / 2f
+            val end = left + (right - left) * progress
+            // A slightly rising, wavy stroke - a pen, not a ruler.
+            val path = Path().apply {
+                moveTo(left, mid + 1.5.dp.toPx())
+                val steps = 6
+                for (i in 1..steps) {
+                    val x = left + (end - left) * i / steps
+                    val wave = if (i % 2 == 0) 0.8f else -0.8f
+                    val rise = 1.5f - 3f * i / steps
+                    lineTo(x, mid + (rise + wave).dp.toPx())
+                }
+            }
+            drawPath(path, color, style = stroke)
+        }
+    }
+}
+
+/** A tick box drawn like a pencil square; ticked = a hand-drawn check mark (shape, not only colour). */
+@Composable
+fun PencilBox(checked: Boolean, ink: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(20.dp)) {
+        val w = size.width
+        val stroke = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val box = Path().apply {
+            moveTo(w * 0.08f, w * 0.12f)
+            lineTo(w * 0.92f, w * 0.08f)
+            lineTo(w * 0.9f, w * 0.92f)
+            lineTo(w * 0.1f, w * 0.9f)
+            close()
+        }
+        drawPath(box, ink, style = stroke)
+        if (checked) {
+            val tick = Path().apply {
+                moveTo(w * 0.22f, w * 0.52f)
+                lineTo(w * 0.44f, w * 0.74f)
+                lineTo(w * 0.86f, w * 0.18f)
+            }
+            drawPath(tick, ink, style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+    }
+}

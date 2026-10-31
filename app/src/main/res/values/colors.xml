@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paper">#F3ECDF</color>
+    <color name="graphite">#2B2A28</color>
+    <color name="record_red">#D2402F</color>
+</resources>
