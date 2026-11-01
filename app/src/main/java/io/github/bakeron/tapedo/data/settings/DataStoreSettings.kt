@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -46,6 +47,7 @@ class DataStoreSettings(context: Context) : SettingsStore {
             theme = p[THEME].toEnum(d.theme),
             reduceMotion = p[REDUCE_MOTION] ?: d.reduceMotion,
             aiProvider = p[AI_PROVIDER].toEnum(d.aiProvider),
+            textScale = p[TEXT_SCALE]?.takeIf { it in AppSettings.TEXT_SCALES } ?: d.textScale,
         )
     }
 
@@ -59,6 +61,7 @@ class DataStoreSettings(context: Context) : SettingsStore {
         p[THEME] = s.theme.name
         p[REDUCE_MOTION] = s.reduceMotion
         p[AI_PROVIDER] = s.aiProvider.name
+        p[TEXT_SCALE] = s.textScale
     }
 
     private inline fun <reified E : Enum<E>> String?.toEnum(default: E): E =
@@ -76,5 +79,6 @@ class DataStoreSettings(context: Context) : SettingsStore {
         val THEME = stringPreferencesKey("theme")
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
         val AI_PROVIDER = stringPreferencesKey("ai_provider")
+        val TEXT_SCALE = floatPreferencesKey("text_scale")
     }
 }

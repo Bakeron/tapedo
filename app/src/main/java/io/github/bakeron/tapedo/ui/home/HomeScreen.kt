@@ -79,6 +79,8 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
     val actionFailed by viewModel.actionFailed.collectAsStateWithLifecycle()
     val lockedNotes by viewModel.lockedNotes.collectAsStateWithLifecycle()
+    val preview by viewModel.preview.collectAsStateWithLifecycle()
+    val appending by viewModel.appending.collectAsStateWithLifecycle()
 
     val listTitles = ListTitles(
         shopping = stringResource(R.string.default_shopping_title),
@@ -96,6 +98,7 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
     }
 
     val edit = editing
+    val shown = preview
     when {
         edit != null -> NoteEditor(
             note = edit.note,
@@ -113,6 +116,25 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onRemove = viewModel::removeCard,
         )
 
+        shown != null -> PreviewScreen(
+            note = shown,
+            recording = recording,
+            appending = appending,
+            actionFailed = actionFailed,
+            askOnline = settings?.onlineSpeech == OnlineSpeech.ASK,
+            onBack = viewModel::closePreview,
+            onEdit = { viewModel.editSaved(shown) },
+            onToggleItem = { i -> viewModel.toggleItem(shown, i) },
+            onToggleDone = { viewModel.toggleDone(shown) },
+            onStartAppend = { viewModel.startRecording(appendTo = shown.id) },
+            onStopAppend = viewModel::stopRecording,
+            onMicDenied = viewModel::micDenied,
+            onOnlineOnce = { viewModel.startRecording(allowOnlineOnce = true, appendTo = shown.id) },
+            onOnlineAlways = { viewModel.allowOnlineAlways(appendTo = shown.id) },
+            onDismissError = viewModel::dismissError,
+            onDismissActionFailed = viewModel::dismissActionFailed,
+        )
+
         else -> HomeScreen(
             typeChoice = settings?.noteTypeChoice,
             recording = recording,
@@ -126,7 +148,7 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onOnlineOnce = { viewModel.startRecording(allowOnlineOnce = true) },
             onOnlineAlways = viewModel::allowOnlineAlways,
             onDismissError = viewModel::dismissError,
-            onOpenCard = viewModel::editSaved,
+            onOpenCard = viewModel::openPreview,
             onToggleItem = viewModel::toggleItem,
             onToggleDone = viewModel::toggleDone,
             onRetryStack = viewModel::retryStack,
@@ -273,7 +295,8 @@ private fun ColumnScope.RecordControls(
     Text(
         stringResource(R.string.home_type_question),
         style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp).semantics { heading() },
+        // Air above: the question must not stick to the last card of the stack.
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 4.dp).semantics { heading() },
     )
     TypeTapeBar(selected = typeChoice, onSelect = onTypeChoice, modifier = Modifier.padding(vertical = 2.dp))
     Text(
@@ -346,7 +369,7 @@ private fun PinnedNote(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun ErrorNote(
+internal fun ErrorNote(
     error: SpeechError,
     askOnline: Boolean,
     onOnlineOnce: () -> Unit,

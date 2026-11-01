@@ -91,16 +91,17 @@ Next (1b): Whisper transcription, more AI providers, private mode, app lock, a h
 
 # Tapedo - po polsku
 
-**Mów w biegu - Tapedo rozpisze to na fiszki.** Dyktafon na Androida, który zamienia szybkie notatki głosowe w osobne fiszki: notatki, listy do odhaczania, zadania z terminem, spotkania, pomysły i listy zakupów pogrupowane na działy sklepu. Działa bez internetu na prostych regułach, a lepiej - z darmowym AI na własnym kluczu.
+**Mów w biegu - Tapedo rozpisze to na karteczki.** Dyktafon na Androida, który zamienia szybkie notatki głosowe w osobne karteczki: notatki, listy do odhaczania, zadania z terminem, spotkania, pomysły i listy zakupów pogrupowane na działy sklepu. Działa bez internetu na prostych regułach, a lepiej - z darmowym AI na własnym kluczu.
 
 ## Co umie
 
 - **Jeden duży przycisk nagrywania** - zapada się jak klawisz magnetofonu, telefon drga, ekran nie gaśnie, a pisak sejsmografu rysuje poziom głosu. Koniec po ciszy albo przyciskiem „stop”, z limitem długości.
-- **Fiszki zamiast transkrypcji** - „Jutro oddać raport szefowi, to pilne. Zakupy: jajka, pomidory, mleko i kawa” to zadanie (na jutro, wysoki priorytet) i lista zakupów z działami.
-- **Okno po nagraniu** - tekst wychodzi z maszyny do pisania, potem wpada na stos jako fiszki do poprawienia albo wyrzucenia. „Wstecz” zapisuje.
-- **Stos fiszek** - odhaczanie na karcie (odręczne przekreślenie), edycja, „Udostępnij”, usuwanie z „Cofnij”.
-- **AI opcjonalnie** - bez AI typ, priorytet, termin i godzinę wybierają reguły. Z Gemini albo Groq (darmowe plany, własny klucz) fiszki są lepsze, a przy błędzie AI notatkę i tak rozpisują reguły.
-- Motyw jasny „Papier” i ciemny „Panel”, język polski i angielski, opisy dla czytnika ekranu, „Ogranicz animacje”, układ w poziomie.
+- **Karteczki zamiast transkrypcji** - „Jutro oddać raport szefowi, to pilne. Zakupy: jajka, pomidory, mleko i kawa” to zadanie (na jutro, wysoki priorytet) i lista zakupów z działami.
+- **Okno po nagraniu** - tekst wychodzi z maszyny do pisania, potem wpada na stos jako karteczki do poprawienia albo wyrzucenia. „Wstecz” zapisuje.
+- **Stos karteczek** - odhaczanie na karcie (odręczne przekreślenie), edycja, „Udostępnij”, usuwanie z „Cofnij”.
+- **Podgląd i „Dopisz głosem”** - jedna karteczka na cały ekran (np. lista zakupów w sklepie); głosem dopisuje się nowe punkty albo tekst.
+- **AI opcjonalnie** - bez AI typ, priorytet, termin i godzinę wybierają reguły. Z Gemini albo Groq (darmowe plany, własny klucz) karteczki są lepsze, a przy błędzie AI notatkę i tak rozpisują reguły.
+- Motyw jasny „Papier” i ciemny „Panel”, język polski i angielski, wielkość tekstu, opisy dla czytnika ekranu, „Ogranicz animacje”, układ w poziomie.
 
 ## Prywatność
 

@@ -44,7 +44,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.ui.cards.IndexCard
-import io.github.bakeron.tapedo.ui.cards.ruledLines
+import io.github.bakeron.tapedo.ui.cards.marginLine
 import io.github.bakeron.tapedo.ui.components.LabelTape
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
@@ -119,8 +119,9 @@ fun ReviewPanel(
                 .background(colors.card, sheet)
                 .border(1.dp, colors.cardEdge, sheet)
                 .verticalScroll(rememberScrollState())
-                .ruledLines(colors.rule, 25.dp)
-                .padding(horizontal = 14.dp, vertical = 2.dp)
+                .padding(start = 12.dp)
+                .marginLine(colors.record.copy(alpha = 0.5f))
+                .padding(end = 14.dp, top = 6.dp, bottom = 6.dp)
                 .clearAndSetSemantics { contentDescription = transcript },
         )
 

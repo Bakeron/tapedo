@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity() {
                 val bars = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
-            TapedoTheme(mode = s.theme, reduceMotion = s.reduceMotion || systemAnimationsOff) {
+            TapedoTheme(mode = s.theme, reduceMotion = s.reduceMotion || systemAnimationsOff, textScale = s.textScale) {
                 TapedoNavHost(container, debugTranscript)
             }
         }

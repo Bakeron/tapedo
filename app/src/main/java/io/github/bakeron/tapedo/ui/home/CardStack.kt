@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.ui.cards.IndexCard
-import io.github.bakeron.tapedo.ui.cards.ruledLines
+import io.github.bakeron.tapedo.ui.cards.marginLine
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 
@@ -104,7 +104,7 @@ private fun EmptyCard() {
             stringResource(R.string.home_empty),
             style = MaterialTheme.typography.bodyMedium,
             color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp).ruledLines(colors.rule, 22.dp),
+            modifier = Modifier.padding(top = 8.dp).marginLine(colors.record.copy(alpha = 0.5f)),
         )
     }
 }

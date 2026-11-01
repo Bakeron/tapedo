@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,15 +22,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 
-/** Ruled lines like on an index card, one every [spacing], starting [spacing] from the top. */
-fun Modifier.ruledLines(color: Color, spacing: Dp): Modifier = drawBehind {
-    val step = spacing.toPx()
-    var y = step
-    while (y < size.height) {
-        drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
-        y += step
-    }
-}
+/**
+ * The red margin line of a notebook page, down the left edge of the text, and room after it.
+ * No ruling across the text: lines in dp never match text in sp, so at a bigger text size they cut through words.
+ */
+fun Modifier.marginLine(color: Color): Modifier = drawBehind {
+    val x = 1.dp.toPx()
+    drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
+}.padding(start = 12.dp)
 
 /** Squared paper (kratka) for lists. */
 fun Modifier.gridPaper(color: Color, cell: Dp): Modifier = drawBehind {

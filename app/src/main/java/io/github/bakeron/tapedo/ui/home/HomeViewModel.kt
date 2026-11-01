@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import io.github.bakeron.tapedo.core.ai.AiError
 import io.github.bakeron.tapedo.core.ai.NoteStructurer
 import io.github.bakeron.tapedo.core.data.NoteRepository
+import io.github.bakeron.tapedo.core.model.ChecklistItem
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
+import io.github.bakeron.tapedo.core.model.ShoppingGroup
 import io.github.bakeron.tapedo.core.rules.ListTitles
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
@@ -29,6 +31,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -122,6 +125,16 @@ class HomeViewModel(
     private val _editing = MutableStateFlow<Editing?>(null)
     val editing: StateFlow<Editing?> = _editing.asStateFlow()
 
+    /** The card open in the preview (one card, whole screen), read fresh from the stack after every change. */
+    private val previewId = MutableStateFlow<Long?>(null)
+    val preview: StateFlow<Note?> = combine(stack, previewId) { st, id ->
+        if (id == null) null else (st as? StackState.Loaded)?.notes?.firstOrNull { it.id == id }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Words said in the preview are being added to the card. */
+    private val _appending = MutableStateFlow(false)
+    val appending: StateFlow<Boolean> = _appending.asStateFlow()
+
     /** The last card deleted from the stack, while "undo" is still offered. */
     private val _deleted = MutableStateFlow<Note?>(null)
     val deleted: StateFlow<Note?> = _deleted.asStateFlow()
@@ -160,19 +173,22 @@ class HomeViewModel(
     }
 
     /** No offline language pack: the user agreed to online recognition - always from now on. */
-    fun allowOnlineAlways() {
+    fun allowOnlineAlways(appendTo: Long? = null) {
         viewModelScope.launch {
             try {
                 store.update { it.copy(onlineSpeech = OnlineSpeech.ALWAYS) }
             } catch (e: IOException) {
                 // Not remembered, but the consent still covers this recording.
             }
-            startRecording(allowOnlineOnce = true)
+            startRecording(allowOnlineOnce = true, appendTo = appendTo)
         }
     }
 
-    /** @param allowOnlineOnce the user agreed to online recognition for this one recording. */
-    fun startRecording(allowOnlineOnce: Boolean = false) {
+    /**
+     * @param allowOnlineOnce the user agreed to online recognition for this one recording.
+     * @param appendTo id of a saved card: what is said is added to it, with no review window.
+     */
+    fun startRecording(allowOnlineOnce: Boolean = false, appendTo: Long? = null) {
         if (session?.isActive == true) return
         // Cards still waiting for a decision are never replaced by a new recording.
         if (_recording.value is RecordingState.Review || _recording.value is RecordingState.Structuring) return
@@ -218,7 +234,7 @@ class HomeViewModel(
                         is SpeechEvent.Partial -> _recording.update {
                             if (it is RecordingState.Active) it.copy(text = e.text) else it
                         }
-                        is SpeechEvent.Done -> onTranscript(e.text)
+                        is SpeechEvent.Done -> if (appendTo != null) appendSpoken(appendTo, e.text) else onTranscript(e.text)
                         is SpeechEvent.Failed -> _recording.value = RecordingState.Failed(e.error)
                     }
                 }
@@ -277,6 +293,69 @@ class HomeViewModel(
                 ?: listOf(Note(title = firstWords(transcript), body = transcript, createdAtMillis = now))
             _recording.value = RecordingState.Review(transcript, cards, result?.aiError)
         }
+    }
+
+    /**
+     * Adds what was said in the preview to a saved card: to a list as new items (split and grouped like a
+     * new list of that type - by the rules or the chosen AI), to any other card as a new line of text.
+     */
+    private fun appendSpoken(id: Long, text: String) {
+        val spoken = text.trim()
+        if (spoken.isEmpty()) {
+            _recording.value = RecordingState.Failed(SpeechError.NO_SPEECH)
+            return
+        }
+        _recording.value = RecordingState.Idle
+        _appending.value = true
+        viewModelScope.launch {
+            try {
+                val note = notes.observeAll().first().firstOrNull { it.id == id } ?: return@launch
+                val updated = if (note.type.hasItems) {
+                    val s = settings.value ?: AppSettings()
+                    val result = try {
+                        structurer.structure(
+                            transcript = spoken,
+                            provider = s.aiProvider,
+                            chosenType = note.type,
+                            defaultPriority = s.defaultPriority,
+                            listTitles = listTitles,
+                            todayEpochDay = todayEpochDay(),
+                            nowMillis = nowMillis(),
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                    val group = if (note.type == NoteType.SHOPPING) ShoppingGroup.OTHER else null
+                    val added = result?.notes?.flatMap { it.items }.orEmpty()
+                        .ifEmpty { listOf(ChecklistItem(spoken, group = group)) }
+                    note.copy(items = note.items + added)
+                } else {
+                    note.copy(body = listOf(note.body.trim(), spoken).filter { it.isNotEmpty() }.joinToString("\n"))
+                }
+                write { notes.save(updated) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _actionFailed.value = true
+            } finally {
+                _appending.value = false
+            }
+        }
+    }
+
+    // --- Preview ---
+
+    fun openPreview(note: Note) {
+        previewId.value = note.id
+    }
+
+    /** Back from the preview; a recording still running there ends and its words are still added. */
+    fun closePreview() {
+        if (_recording.value is RecordingState.Active) speech.stop()
+        dismissError()
+        previewId.value = null
     }
 
     // --- Review window ---
@@ -361,7 +440,11 @@ class HomeViewModel(
         when (val e = _editing.value) {
             null -> Unit
             is Editing.Draft -> removeCard(e.index)
-            is Editing.Saved -> delete(e.note)
+            is Editing.Saved -> {
+                // Back to the stack, not to the preview of a deleted card (undo would bring it back on screen).
+                previewId.value = null
+                delete(e.note)
+            }
         }
         _editing.value = null
     }

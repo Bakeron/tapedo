@@ -52,6 +52,7 @@ import io.github.bakeron.tapedo.ui.components.LabelTape
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.SlideSelector
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLicenses: () -> Unit = {}) {
@@ -233,7 +234,10 @@ fun SettingsScreen(
 
             // The note type is picked on the home screen, right before recording.
             Section(stringResource(R.string.settings_section_notes)) {
-                Setting(title = stringResource(R.string.settings_default_priority)) {
+                Setting(
+                    title = stringResource(R.string.settings_default_priority),
+                    hint = stringResource(R.string.settings_default_priority_hint),
+                ) {
                     SlideSelector(
                         options = Priority.entries,
                         selected = settings.defaultPriority,
@@ -244,6 +248,18 @@ fun SettingsScreen(
             }
 
             Section(stringResource(R.string.settings_section_look)) {
+                Setting(
+                    title = stringResource(R.string.settings_text_size),
+                    hint = stringResource(R.string.settings_text_size_hint),
+                ) {
+                    SlideSelector(
+                        options = AppSettings.TEXT_SCALES,
+                        selected = settings.textScale,
+                        label = { stringResource(R.string.settings_percent, (it * 100).roundToInt()) },
+                        onSelect = { v -> onChange { it.copy(textScale = v) } },
+                    )
+                }
+                Rule()
                 Setting(title = stringResource(R.string.settings_theme)) {
                     SlideSelector(
                         options = ThemeMode.entries,

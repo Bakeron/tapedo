@@ -74,18 +74,20 @@ fun <T> SlideSelector(
             label = "knob",
         )
 
-        // The knob - drawn under the labels so text stays on top.
-        Box(
-            Modifier
-                .offset(x = knobX)
-                .width(segment)
-                .fillMaxHeight()
-                .heightIn(min = 46.dp)
-                .shadow(2.dp, RoundedCornerShape(4.dp))
-                .background(colors.card, RoundedCornerShape(4.dp))
-                // Full-contrast edge: the knob stands out from the track in both themes.
-                .border(1.5.dp, scheme.outline, RoundedCornerShape(4.dp)),
-        )
+        // The knob - drawn under the labels so text stays on top. It takes the track's real height:
+        // in a scrolling screen fillMaxHeight alone has no limit, so a two-line label stuck out of the knob.
+        Box(Modifier.matchParentSize()) {
+            Box(
+                Modifier
+                    .offset(x = knobX)
+                    .width(segment)
+                    .fillMaxHeight()
+                    .shadow(2.dp, RoundedCornerShape(4.dp))
+                    .background(colors.card, RoundedCornerShape(4.dp))
+                    // Full-contrast edge: the knob stands out from the track in both themes.
+                    .border(1.5.dp, scheme.outline, RoundedCornerShape(4.dp)),
+            )
+        }
 
         Row(Modifier.fillMaxWidth().heightIn(min = 46.dp).selectableGroup()) {
             options.forEachIndexed { i, option ->

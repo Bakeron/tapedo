@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">Tapedo</string>
-    <string name="tagline">Mów w biegu - Tapedo rozpisze to na fiszki.</string>
+    <string name="tagline">Mów w biegu - Tapedo rozpisze to na karteczki.</string>
     <string name="back">Wstecz</string>
 
     <!-- Home -->
@@ -52,14 +52,18 @@
     <string name="settings_online_speech_never">Nigdy</string>
     <string name="settings_online_speech_hint">Gdy telefon nie ma pakietu offline dla języka mowy, rozpoznawanie przez internet wysyła głos do Google. Na telefonach z rozpoznawaniem na urządzeniu (zwykle Android 12 i nowszy) głos bez Twojej zgody nie wychodzi z telefonu. Na pozostałych system może sam użyć internetu.</string>
     <string name="settings_save_failed">Nie udało się zapisać zmiany. Spróbuj jeszcze raz.</string>
-    <string name="settings_default_priority">Priorytet, gdy nie padnie „pilne”</string>
+    <string name="settings_default_priority">Domyślny priorytet</string>
+    <string name="settings_default_priority_hint">Taki priorytet (kolorowa taśma w rogu karteczki) dostaje każda nowa karteczka. Wyjątki: gdy w nagraniu powiesz „pilne” albo „ważne”, dostaje wysoki, a gdy „kiedyś” albo „na spokojnie” - niski. Pomysły nie mają priorytetu.</string>
+    <string name="settings_text_size">Wielkość tekstu</string>
+    <string name="settings_text_size_hint">Powiększa albo zmniejsza tekst w Tapedo - dodatkowo do wielkości tekstu ustawionej w telefonie.</string>
+    <string name="settings_percent" translatable="false">%d%%</string>
     <string name="settings_theme">Motyw</string>
     <string name="settings_theme_system">Jak w systemie</string>
     <string name="settings_theme_light">Papier</string>
     <string name="settings_theme_dark">Panel</string>
     <string name="settings_app_language">Język aplikacji</string>
     <string name="settings_reduce_motion">Ogranicz animacje</string>
-    <string name="settings_reduce_motion_hint">Fiszki i przełączniki zmieniają się od razu, bez ruchu. Działa też samo, gdy animacje są wyłączone w systemie.</string>
+    <string name="settings_reduce_motion_hint">Karteczki i przełączniki zmieniają się od razu, bez ruchu. Działa też samo, gdy animacje są wyłączone w systemie.</string>
     <string name="settings_off">Wyłączone</string>
     <string name="settings_on">Włączone</string>
     <string name="settings_footer">Notatki są zaszyfrowane i zapisane tylko na tym telefonie. Tapedo nie zapisuje dźwięku - zostaje sam tekst. Z telefonu wychodzi tylko to, na co się zgodzisz: tekst notatki do wybranego dostawcy AI i głos do Google przy rozpoznawaniu przez internet.</string>
@@ -117,7 +121,7 @@
     <string name="ai_key_test">Sprawdź</string>
     <string name="ai_test_sample">jutro kupić chleb i mleko a w piątek zadzwonić do hydraulika to pilne</string>
     <string name="ai_test_running">Sprawdzam…</string>
-    <string name="ai_test_ok">Działa. Pierwsza fiszka z próbnej notatki: „%s”.</string>
+    <string name="ai_test_ok">Działa. Pierwsza karteczka z próbnej notatki: „%s”.</string>
     <string name="ai_error_missing_key">Najpierw wklej i zapisz klucz.</string>
     <string name="ai_error_invalid_key">Dostawca odrzucił klucz. Sprawdź, czy skopiowałeś go w całości.</string>
     <string name="ai_error_rate_limited">Wyczerpany darmowy limit - spróbuj później. Do tego czasu działają reguły bez AI.</string>
@@ -129,30 +133,30 @@
     <string name="home_dismiss">Zamknij</string>
     <string name="record_state">nagrywanie, %1$s z %2$s</string>
     <string name="review_heard">Usłyszane</string>
-    <string name="review_structuring">Rozpisuję na fiszki…</string>
+    <string name="review_structuring">Rozpisuję na karteczki…</string>
     <plurals name="review_count">
-        <item quantity="one">Wyszła %d fiszka</item>
-        <item quantity="few">Wyszły %d fiszki</item>
-        <item quantity="many">Wyszło %d fiszek</item>
-        <item quantity="other">Wyszło %d fiszki</item>
+        <item quantity="one">Wyszła %d karteczka</item>
+        <item quantity="few">Wyszły %d karteczki</item>
+        <item quantity="many">Wyszło %d karteczek</item>
+        <item quantity="other">Wyszło %d karteczki</item>
     </plurals>
-    <string name="review_ai_failed">Fiszki rozpisały proste reguły zamiast AI. Powód: %s</string>
+    <string name="review_ai_failed">Karteczki rozpisały proste reguły zamiast AI. Powód: %s</string>
     <string name="review_edit">Popraw</string>
-    <string name="review_remove_card">Wyrzuć tę fiszkę</string>
-    <string name="review_save_failed">Nie udało się zapisać fiszek. Nic nie zginęło - spróbuj jeszcze raz.</string>
+    <string name="review_remove_card">Wyrzuć tę karteczkę</string>
+    <string name="review_save_failed">Nie udało się zapisać karteczek. Nic nie zginęło - spróbuj jeszcze raz.</string>
     <string name="review_save_retry">Spróbuj jeszcze raz</string>
     <plurals name="review_save">
-        <item quantity="one">Zapisz fiszkę</item>
-        <item quantity="few">Zapisz fiszki</item>
-        <item quantity="many">Zapisz fiszki</item>
-        <item quantity="other">Zapisz fiszki</item>
+        <item quantity="one">Zapisz karteczkę</item>
+        <item quantity="few">Zapisz karteczki</item>
+        <item quantity="many">Zapisz karteczki</item>
+        <item quantity="other">Zapisz karteczki</item>
     </plurals>
     <string name="review_discard">Wyrzuć</string>
     <string name="review_discard_confirm">Na pewno wyrzucić?</string>
 
     <!-- Card stack -->
-    <string name="stack_open_card">otwórz fiszkę</string>
-    <string name="stack_empty_title">Pusta fiszka</string>
+    <string name="stack_open_card">otwórz karteczkę</string>
+    <string name="stack_empty_title">Pusta karteczka</string>
     <string name="stack_failed">Nie da się teraz otworzyć notatek. Nic nie zostało usunięte - spróbuj ponownie.</string>
     <string name="stack_retry">Spróbuj ponownie</string>
     <string name="stack_action_failed">Nie udało się zapisać zmiany. Spróbuj jeszcze raz.</string>
@@ -191,7 +195,7 @@
     <string name="group_other">Inne</string>
 
     <!-- Card editor -->
-    <string name="editor_title">Fiszka</string>
+    <string name="editor_title">Karteczka</string>
     <string name="editor_done">Gotowe</string>
     <string name="editor_field_title">Tytuł</string>
     <string name="editor_field_body">Treść</string>
@@ -207,5 +211,13 @@
     <string name="editor_item_label">Punkt %d</string>
     <string name="editor_remove_item">Usuń punkt %d</string>
     <string name="editor_add_item">Dodaj punkt</string>
-    <string name="editor_delete">Usuń fiszkę</string>
+    <string name="editor_delete">Usuń karteczkę</string>
+
+    <!-- Preview (one saved card on the whole screen) -->
+    <string name="preview_title">Podgląd</string>
+    <string name="preview_add_voice">Dopisz głosem</string>
+    <string name="preview_add_stop">Zakończ dopisywanie</string>
+    <string name="preview_add_hint_list">Powiedz, co dopisać do listy, np. „masło i jajka”.</string>
+    <string name="preview_add_hint_text">To, co powiesz, dopisze się na końcu tekstu.</string>
+    <string name="preview_adding">Dopisuję…</string>
 </resources>

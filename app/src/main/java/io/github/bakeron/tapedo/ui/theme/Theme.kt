@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.bakeron.tapedo.core.settings.ThemeMode
 
@@ -78,13 +80,17 @@ fun ThemeMode.isDark(): Boolean = when (this) {
 fun TapedoTheme(
     mode: ThemeMode = ThemeMode.SYSTEM,
     reduceMotion: Boolean = false,
+    /** Tapedo's own text size, multiplied with the phone's font scale (sp only - layout in dp stays). */
+    textScale: Float = 1f,
     content: @Composable () -> Unit,
 ) {
     val dark = mode.isDark()
     val scheme = if (dark) DarkScheme else LightScheme
+    val density = LocalDensity.current
     CompositionLocalProvider(
         LocalTapedoColors provides if (dark) DarkTapedoColors else LightTapedoColors,
         LocalReduceMotion provides reduceMotion,
+        LocalDensity provides Density(density.density, density.fontScale * textScale),
     ) {
         MaterialTheme(
             colorScheme = scheme,

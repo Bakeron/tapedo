@@ -46,7 +46,7 @@ import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 import java.time.LocalDate
 
 /**
- * One index card: type and date in small capitals, the title, typed text on ruled lines or ticks on
+ * One index card: type and date in small capitals, the title, typed text by a red margin line or ticks on
  * squared paper, a priority tape on the corner and a blue "AI" stamp when the AI wrote it.
  *
  * @param compact the stack shows a few lines; the review window shows everything.
@@ -106,7 +106,7 @@ fun IndexCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .padding(top = 6.dp)
-                        .then(if (listPaper) Modifier else Modifier.ruledLines(colors.rule, 22.dp)),
+                        .then(if (listPaper) Modifier else Modifier.marginLine(colors.record.copy(alpha = 0.5f))),
                 )
             }
 
