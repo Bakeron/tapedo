@@ -18,7 +18,7 @@ import io.github.bakeron.tapedo.ui.theme.TapedoTheme
  * The card adds the priority in words for screen readers.
  */
 @Composable
-fun PriorityTape(priority: Priority, modifier: Modifier = Modifier) {
+fun PriorityTape(priority: Priority, modifier: Modifier = Modifier, angle: Float = 38f) {
     val colors = TapedoTheme.colors
     val fill = when (priority) {
         Priority.HIGH -> colors.tapeHigh
@@ -26,7 +26,7 @@ fun PriorityTape(priority: Priority, modifier: Modifier = Modifier) {
         Priority.LOW -> colors.tapeLow
     }
     val ink = colors.tapeInk.copy(alpha = 0.42f)
-    Canvas(modifier.size(width = 64.dp, height = 20.dp).rotate(38f)) {
+    Canvas(modifier.size(width = 64.dp, height = 20.dp).rotate(angle)) {
         val w = size.width
         val h = size.height
         val tooth = 2.5.dp.toPx()

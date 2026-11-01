@@ -71,6 +71,20 @@ fun groupedItems(note: Note): List<Pair<ShoppingGroup?, List<IndexedValue<Checkl
             .map { (group, items) -> group to items }
     }
 
+/** A task ticked off, or a list with every item ticked - it moves to the "Done" divider. */
+fun Note.isDone(): Boolean =
+    (type == NoteType.TASK && done) || (type.hasItems && items.isNotEmpty() && items.all { it.checked })
+
+/** Search: the words anywhere in the title, text, place or list items, ignoring case. */
+fun Note.matches(query: String): Boolean {
+    val q = query.trim()
+    if (q.isEmpty()) return true
+    return title.contains(q, ignoreCase = true) ||
+        body.contains(q, ignoreCase = true) ||
+        place?.contains(q, ignoreCase = true) == true ||
+        items.any { it.text.contains(q, ignoreCase = true) }
+}
+
 /** The rules often keep the whole sentence as the body - no need to print the title twice. */
 fun bodyRepeatsTitle(note: Note): Boolean {
     fun norm(s: String) = s.trim().trimEnd('.', '!', '?', '…').trim().lowercase()

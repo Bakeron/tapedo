@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
@@ -149,7 +151,6 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onOnlineAlways = viewModel::allowOnlineAlways,
             onDismissError = viewModel::dismissError,
             onOpenCard = viewModel::openPreview,
-            onToggleItem = viewModel::toggleItem,
             onToggleDone = viewModel::toggleDone,
             onRetryStack = viewModel::retryStack,
             deleted = deleted,
@@ -166,6 +167,7 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
  * Home: the card stack (or the live recording) in the middle; type bar and record key where the thumb is -
  * at the bottom in portrait, in a column on the right in landscape, so the middle never shrinks to nothing.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     typeChoice: NoteType?,
@@ -182,7 +184,6 @@ fun HomeScreen(
     onOnlineAlways: () -> Unit = {},
     onDismissError: () -> Unit = {},
     onOpenCard: (Note) -> Unit = {},
-    onToggleItem: (Note, Int) -> Unit = { _, _ -> },
     onToggleDone: (Note) -> Unit = {},
     onRetryStack: () -> Unit = {},
     deleted: Note? = null,
@@ -222,7 +223,6 @@ fun HomeScreen(
                 CardStack(
                     stack = stack,
                     onOpen = onOpenCard,
-                    onToggleItem = onToggleItem,
                     onToggleDone = onToggleDone,
                     onRetry = onRetryStack,
                     modifier = Modifier.fillMaxSize(),
@@ -252,6 +252,8 @@ fun HomeScreen(
     ) {
         val landscape = maxWidth > maxHeight
         val controlsWidth = maxWidth * 0.42f
+        // While typing in the search line the record controls step aside, so the found cards have room.
+        val typing = WindowInsets.isImeVisible
         Column(Modifier.fillMaxSize()) {
             Row(
                 Modifier.fillMaxWidth().padding(start = 20.dp, end = 4.dp, top = 4.dp),
@@ -270,14 +272,16 @@ fun HomeScreen(
             if (landscape) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     middle(Modifier.weight(1f).fillMaxHeight())
-                    Column(
-                        Modifier.width(controlsWidth).fillMaxHeight().verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.Center,
-                    ) { controls(this) }
+                    if (!typing) {
+                        Column(
+                            Modifier.width(controlsWidth).fillMaxHeight().verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.Center,
+                        ) { controls(this) }
+                    }
                 }
             } else {
                 middle(Modifier.weight(1f).fillMaxWidth())
-                controls(this)
+                if (!typing) controls(this)
             }
         }
     }
