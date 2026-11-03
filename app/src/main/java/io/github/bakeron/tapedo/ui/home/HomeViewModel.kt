@@ -58,14 +58,15 @@ sealed interface RecordingState {
     data class Structuring(val transcript: String) : RecordingState
 
     /**
-     * Cards waiting for the user: save, edit or throw away. Nothing is stored yet -
-     * leaving the window with "back" saves them (notes are kept by default).
+     * The cards of a recording, already written to the database (a card with id 0 is not saved yet -
+     * see [saveFailed]). The user can still edit them, record more or delete them.
      */
     data class Review(
         val transcript: String,
         val cards: List<Note>,
         /** AI was chosen but failed - the rules wrote these cards instead. */
         val aiError: AiError? = null,
+        /** Some cards could not be written - they are only on screen until "try again" works. */
         val saveFailed: Boolean = false,
         /** "Record more" heard nothing usable (or could not start) - the cards are unchanged. */
         val moreFailed: SpeechError? = null,
@@ -86,7 +87,7 @@ sealed interface StackState {
 sealed interface Editing {
     val note: Note
 
-    /** A card from the review window, not saved yet. */
+    /** A card from the review window (saved right after the recording, unless the save failed). */
     data class Draft(val index: Int, override val note: Note) : Editing
 
     /** A card from the stack. */
@@ -282,7 +283,7 @@ class HomeViewModel(
     fun recordMore(allowOnlineOnce: Boolean = false) {
         val review = _recording.value as? RecordingState.Review ?: return
         if (saving || session?.isActive == true) return
-        continuing = review.copy(saveFailed = false, moreFailed = null)
+        continuing = review.copy(moreFailed = null)
         _recording.value = RecordingState.Idle
         startRecording(allowOnlineOnce)
     }
@@ -307,14 +308,14 @@ class HomeViewModel(
         val transcript = Phrases.join(listOf(review.transcript, spoken))
         val listIndex = review.cards.indexOfLast { it.type.hasItems }
         if (listIndex < 0) {
-            onTranscript(transcript)
+            onTranscript(transcript, replacing = review.cards)
             return
         }
         _recording.value = RecordingState.Structuring(transcript)
         viewModelScope.launch {
             val (added, aiError) = spokenItems(spoken, review.cards[listIndex].type)
             val cards = review.cards.mapIndexed { i, card -> if (i == listIndex) card.copy(items = card.items + added) else card }
-            _recording.value = review.copy(transcript = transcript, cards = cards, aiError = aiError ?: review.aiError)
+            _recording.value = persist(review.copy(transcript = transcript, cards = cards, aiError = aiError ?: review.aiError))
         }
     }
 
@@ -351,8 +352,11 @@ class HomeViewModel(
         if (_recording.value is RecordingState.Failed) _recording.value = RecordingState.Idle
     }
 
-    /** Cuts what was said into cards (rules or AI) and opens the review window. */
-    fun onTranscript(text: String) {
+    /**
+     * Cuts what was said into cards (rules or AI), writes them to the database at once and opens the review window.
+     * @param replacing saved cards of the same dictation that the new cards take the place of ("record more").
+     */
+    fun onTranscript(text: String, replacing: List<Note> = emptyList()) {
         val transcript = text.trim()
         if (transcript.isEmpty()) {
             _recording.value = RecordingState.Failed(SpeechError.NO_SPEECH)
@@ -380,7 +384,50 @@ class HomeViewModel(
             }
             val cards = result?.notes?.takeIf { it.isNotEmpty() }
                 ?: listOf(Note(title = firstWords(transcript), body = transcript, createdAtMillis = now))
-            _recording.value = RecordingState.Review(transcript, cards, result?.aiError)
+            val review = persist(RecordingState.Review(transcript, cards, result?.aiError))
+            _recording.value = review
+            // The old cards go only once the new ones are safely written.
+            if (!review.saveFailed) replacing.filter { it.id != 0L }.forEach { old -> write { notes.delete(old.id) } }
+        }
+    }
+
+    /**
+     * Writes the review cards to the database right away - a dictation must survive the phone closing the app
+     * in the background (it did: a shopping list said at home was gone in the shop). Saved cards are updated
+     * in place; on a failure the rest stay on screen, marked, and "try again" writes them.
+     */
+    private suspend fun persist(review: RecordingState.Review): RecordingState.Review {
+        val cards = review.cards.toMutableList()
+        return try {
+            // Last card first, so the first card lands on top of the stack.
+            for (i in cards.indices.reversed()) {
+                cards[i] = cards[i].copy(id = notes.save(cards[i]))
+            }
+            review.copy(cards = cards, saveFailed = false)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            review.copy(cards = cards, saveFailed = true)
+        }
+    }
+
+    /**
+     * The app goes to the background (screen off, another app): the card being edited and any card
+     * not saved yet are written now - the phone may close the app before the user comes back.
+     */
+    fun onBackground() {
+        val edited = _editing.value?.note?.tidy()
+        val review = _recording.value as? RecordingState.Review
+        viewModelScope.launch {
+            if (edited != null && edited.id != 0L) write { notes.save(edited) }
+            if (review != null && review.saveFailed && !saving) {
+                saving = true
+                try {
+                    _recording.value = persist(review)
+                } finally {
+                    saving = false
+                }
+            }
         }
     }
 
@@ -436,42 +483,41 @@ class HomeViewModel(
 
     // --- Review window ---
 
-    /** Saves every card; on a failure the unsaved ones stay on screen with a "try again" message. */
+    /** "Done" (or back): the cards are already saved - closes the window; a failed save is tried again first. */
     fun saveReview() {
         val review = _recording.value as? RecordingState.Review ?: return
         if (saving) return
+        if (!review.saveFailed) {
+            _recording.value = RecordingState.Idle
+            return
+        }
         saving = true
         viewModelScope.launch {
-            var left = review.cards
             try {
-                // Last card first, so the first card lands on top of the stack.
-                while (left.isNotEmpty()) {
-                    notes.save(left.last())
-                    left = left.dropLast(1)
-                }
-                _recording.value = RecordingState.Idle
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _recording.value = review.copy(cards = left, saveFailed = true)
+                val saved = persist(review)
+                _recording.value = if (saved.saveFailed) saved else RecordingState.Idle
             } finally {
                 saving = false
             }
         }
     }
 
+    /** "Delete" (two taps): removes the whole recording - the saved cards too. */
     fun discardReview() {
-        if (_recording.value is RecordingState.Review) _recording.value = RecordingState.Idle
+        val review = _recording.value as? RecordingState.Review ?: return
+        _recording.value = RecordingState.Idle
+        viewModelScope.launch {
+            review.cards.filter { it.id != 0L }.forEach { card -> write { notes.delete(card.id) } }
+        }
     }
 
+    /** "Delete this card": off the screen and out of the database. */
     fun removeCard(index: Int) {
-        _recording.update { st ->
-            if (st !is RecordingState.Review || index !in st.cards.indices) st
-            else {
-                val left = st.cards.filterIndexed { i, _ -> i != index }
-                if (left.isEmpty()) RecordingState.Idle else st.copy(cards = left)
-            }
-        }
+        val review = _recording.value as? RecordingState.Review ?: return
+        val card = review.cards.getOrNull(index) ?: return
+        val left = review.cards.filterIndexed { i, _ -> i != index }
+        _recording.value = if (left.isEmpty()) RecordingState.Idle else review.copy(cards = left)
+        if (card.id != 0L) viewModelScope.launch { write { notes.delete(card.id) } }
     }
 
     // --- Editor ---
@@ -500,11 +546,14 @@ class HomeViewModel(
         when (val e = _editing.value) {
             null -> Unit
             is Editing.Draft -> {
+                val card = e.note.tidy()
                 _recording.update { st ->
                     if (st !is RecordingState.Review || e.index !in st.cards.indices) st
-                    else st.copy(cards = st.cards.mapIndexed { i, c -> if (i == e.index) e.note.tidy() else c })
+                    else st.copy(cards = st.cards.mapIndexed { i, c -> if (i == e.index) card else c })
                 }
                 _editing.value = null
+                // Already in the database - the edit goes there too (a card not saved yet waits for "try again").
+                if (card.id != 0L) viewModelScope.launch { write { notes.save(card) } }
             }
             is Editing.Saved -> viewModelScope.launch {
                 if (write { notes.save(e.note.tidy()) }) _editing.value = null

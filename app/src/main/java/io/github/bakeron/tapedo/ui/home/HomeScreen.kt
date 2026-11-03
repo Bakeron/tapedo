@@ -69,6 +69,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.Note
@@ -102,6 +104,8 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
         checklist = stringResource(R.string.default_checklist_title),
     )
     SideEffect { viewModel.listTitles = listTitles }
+    // Screen off or another app: write what is open now - the phone may close Tapedo in the background.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onBackground() }
 
     var debugUsed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(debugTranscript, settings != null) {

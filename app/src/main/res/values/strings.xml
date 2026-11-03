@@ -163,19 +163,14 @@
     </plurals>
     <string name="review_ai_failed">Karteczki rozpisały proste reguły zamiast AI. Powód: %s</string>
     <string name="review_edit">Popraw</string>
-    <string name="review_remove_card">Wyrzuć tę karteczkę</string>
+    <string name="review_remove_card">Usuń tę karteczkę</string>
     <string name="review_save_failed">Nie udało się zapisać karteczek. Nic nie zginęło - spróbuj jeszcze raz.</string>
     <string name="review_save_retry">Spróbuj jeszcze raz</string>
-    <plurals name="review_save">
-        <item quantity="one">Zapisz karteczkę</item>
-        <item quantity="few">Zapisz karteczki</item>
-        <item quantity="many">Zapisz karteczki</item>
-        <item quantity="other">Zapisz karteczki</item>
-    </plurals>
-    <string name="review_discard">Wyrzuć</string>
+    <string name="review_saved">Już zapisane - możesz poprawić, nagrać dalej albo usunąć.</string>
+    <string name="review_discard">Usuń</string>
     <string name="review_record_more">Nagraj dalej</string>
     <string name="review_more_failed">%s Karteczki są bez zmian.</string>
-    <string name="review_discard_confirm">Na pewno wyrzucić?</string>
+    <string name="review_discard_confirm">Na pewno usunąć?</string>
 
     <!-- Card stack -->
     <string name="stack_open_card">otwórz karteczkę</string>

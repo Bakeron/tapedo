@@ -145,17 +145,14 @@
     </plurals>
     <string name="review_ai_failed">Simple rules wrote these cards instead of the AI. Reason: %s</string>
     <string name="review_edit">Edit</string>
-    <string name="review_remove_card">Remove this card</string>
+    <string name="review_remove_card">Delete this card</string>
     <string name="review_save_failed">Couldn’t save the cards. Nothing is lost - try again.</string>
     <string name="review_save_retry">Try again</string>
-    <plurals name="review_save">
-        <item quantity="one">Save card</item>
-        <item quantity="other">Save cards</item>
-    </plurals>
-    <string name="review_discard">Discard</string>
+    <string name="review_saved">Already saved - you can edit, record more or delete.</string>
+    <string name="review_discard">Delete</string>
     <string name="review_record_more">Record more</string>
     <string name="review_more_failed">%s The cards are unchanged.</string>
-    <string name="review_discard_confirm">Really discard?</string>
+    <string name="review_discard_confirm">Really delete?</string>
 
     <!-- Card stack -->
     <string name="stack_open_card">open card</string>

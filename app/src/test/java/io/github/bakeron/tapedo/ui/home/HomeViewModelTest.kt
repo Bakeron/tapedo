@@ -3,6 +3,7 @@ package io.github.bakeron.tapedo.ui.home
 import io.github.bakeron.tapedo.core.ai.NoteStructurer
 import io.github.bakeron.tapedo.core.ai.SecretStore
 import io.github.bakeron.tapedo.core.data.NoteRepository
+import io.github.bakeron.tapedo.core.model.ChecklistItem
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.settings.AiProvider
@@ -214,7 +215,8 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `speech goes to the review window and nothing is stored before the user decides`() = runTest(dispatcher) {
+    fun `a recording is saved the moment it ends, and Done only closes the window`() = runTest(dispatcher) {
+        // A list left in the review window was lost when the phone closed the app in the background.
         val notes = FakeNotes()
         val speech = FakeSpeech { flowOf(SpeechEvent.Done("kupić mleko i chleb")) }
         val vm = viewModel(FakeStore(AppSettings()), speech, notes)
@@ -223,7 +225,7 @@ class HomeViewModelTest {
         runCurrent()
         val review = vm.recording.value as RecordingState.Review
         assertEquals(NoteType.SHOPPING, review.cards.single().type)
-        assertTrue(notes.rows.value.isEmpty())
+        assertEquals(listOf(NoteType.SHOPPING), notes.rows.value.values.map { it.type })
 
         vm.saveReview()
         runCurrent()
@@ -232,24 +234,56 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `delete in the review window takes the saved recording back out`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        val vm = viewModel(FakeStore(AppSettings()), notes = notes)
+        vm.onTranscript("Jutro oddać raport szefowi. Zakupy: jajka, pomidory oraz kawa.")
+        runCurrent()
+        assertEquals(2, notes.rows.value.size)
+
+        vm.removeCard(0)
+        runCurrent()
+        assertEquals(listOf(NoteType.SHOPPING), notes.rows.value.values.map { it.type })
+
+        vm.discardReview()
+        runCurrent()
+        assertTrue(notes.rows.value.isEmpty())
+        assertEquals(RecordingState.Idle, vm.recording.value)
+    }
+
+    @Test
+    fun `going to the background writes the card being edited`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        val vm = viewModel(FakeStore(AppSettings()), notes = notes)
+        vm.onTranscript("kupić mleko")
+        runCurrent()
+
+        vm.editDraft(0)
+        val draft = vm.editing.value!!.note
+        vm.changeEditing(draft.copy(items = draft.items + ChecklistItem("Marchewki")))
+        vm.onBackground()
+        runCurrent()
+        assertEquals(listOf("Mleko", "Marchewki"), notes.rows.value.values.single().items.map { it.text })
+        assertTrue("the editor stays open", vm.editing.value != null)
+    }
+
+    @Test
     fun `a failed save keeps the unsaved cards, and trying again does not duplicate the saved ones`() = runTest(dispatcher) {
         val notes = FakeNotes().apply { failOnSave = 2 }
         val vm = viewModel(FakeStore(AppSettings()), notes = notes)
         vm.onTranscript("Jutro oddać raport szefowi. Zakupy: jajka, pomidory oraz kawa.")
         runCurrent()
-        assertEquals(listOf(NoteType.TASK, NoteType.SHOPPING), (vm.recording.value as RecordingState.Review).cards.map { it.type })
 
-        // The last card is saved first (so the first lands on top); then the disk fills up.
-        vm.saveReview()
-        runCurrent()
+        // Saved right away: the last card first (so the first lands on top); then the disk fills up.
         val after = vm.recording.value as RecordingState.Review
         assertTrue(after.saveFailed)
-        assertEquals(listOf(NoteType.TASK), after.cards.map { it.type })
+        assertEquals(listOf(NoteType.TASK, NoteType.SHOPPING), after.cards.map { it.type })
+        assertEquals(listOf(NoteType.SHOPPING), notes.rows.value.values.map { it.type })
 
         vm.saveReview()
         runCurrent()
         assertEquals(RecordingState.Idle, vm.recording.value)
-        assertEquals(listOf("Zakupy", "Jutro oddać raport szefowi"), notes.saved)
+        assertEquals(2, notes.rows.value.size)
         // Newest first: the first card of the recording is on top of the stack.
         assertEquals("Jutro oddać raport szefowi", (vm.stack.value as StackState.Loaded).notes.first().title)
     }
@@ -271,9 +305,11 @@ class HomeViewModelTest {
         val draft = vm.editing.value!!.note
         vm.changeEditing(draft.copy(title = "  ", body = "Zadzwonić do hydraulika w sprawie kranu"))
         vm.finishEditing()
+        runCurrent()
         val card = (vm.recording.value as RecordingState.Review).cards.single()
         assertEquals("Zadzwonić do hydraulika w sprawie kranu", card.title)
         assertEquals(null, vm.editing.value)
+        assertEquals(card, (vm.stack.value as StackState.Loaded).notes.single())
     }
 
     @Test
@@ -322,7 +358,8 @@ class HomeViewModelTest {
     fun `record more adds the new items to the list and keeps the edits`() = runTest(dispatcher) {
         val said = ArrayDeque(listOf("Lista zakupów, mleko", "marchewki, jajka"))
         val speech = FakeSpeech { flowOf(SpeechEvent.Done(said.removeFirst())) }
-        val vm = viewModel(FakeStore(AppSettings()), speech)
+        val notes = FakeNotes()
+        val vm = viewModel(FakeStore(AppSettings()), speech, notes)
 
         vm.startRecording()
         runCurrent()
@@ -338,6 +375,25 @@ class HomeViewModelTest {
         assertEquals(listOf("Mleko", "Marchewki", "Jajka"), list.items.map { it.text })
         assertEquals("Lista zakupów, mleko, marchewki, jajka", review.transcript)
         assertEquals(null, review.moreFailed)
+        assertEquals(list, notes.rows.value.values.single())
+    }
+
+    @Test
+    fun `record more with no list cuts the dictation again and replaces the old cards`() = runTest(dispatcher) {
+        val said = ArrayDeque(listOf("Lista zakupów", "marchewki, mleko"))
+        val speech = FakeSpeech { flowOf(SpeechEvent.Done(said.removeFirst())) }
+        val notes = FakeNotes()
+        val vm = viewModel(FakeStore(AppSettings()), speech, notes)
+
+        vm.startRecording()
+        runCurrent()
+        assertEquals(1, notes.rows.value.size)
+
+        vm.recordMore()
+        runCurrent()
+        val list = notes.rows.value.values.single()
+        assertEquals(NoteType.SHOPPING, list.type)
+        assertEquals(listOf("Marchewki", "Mleko"), list.items.map { it.text })
     }
 
     @Test

@@ -60,7 +60,8 @@ import kotlinx.coroutines.delay
 
 /**
  * The window after a recording: what was heard comes out of the typewriter letter by letter,
- * then it is cut into cards that drop in one by one. Save puts them on the stack; back saves too.
+ * then it is cut into cards that drop in one by one. They are already saved when they appear;
+ * "Done" or back closes the window, "Delete" takes the recording back out.
  * "Record more" keeps dictating into the same cards (e.g. the rest of a shopping list at the fridge).
  */
 @Composable
@@ -87,7 +88,7 @@ fun ReviewPanel(
         if (granted) onRecordMore() else onRecordMoreDenied()
     }
 
-    // Back keeps the cards; while they are still being written it simply waits.
+    // Back closes the window (the cards are saved); while they are still being written it simply waits.
     BackHandler(onBack = { if (review != null) onSave() })
 
     // Typewriter: letters appear over at most ~1.2 s; saved, so a rotation does not type again.
@@ -150,6 +151,14 @@ fun ReviewPanel(
                 .padding(horizontal = 20.dp, vertical = 4.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
         )
+        if (review != null && !review.saveFailed) {
+            Text(
+                stringResource(R.string.review_saved),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+        }
         review?.aiError?.let { error ->
             Text(
                 stringResource(R.string.review_ai_failed, aiErrorMessage(error)),
@@ -235,7 +244,7 @@ fun ReviewPanel(
             )
             PaperButton(
                 if (review?.saveFailed == true) stringResource(R.string.review_save_retry)
-                else pluralStringResource(R.plurals.review_save, cardCount.coerceAtLeast(1)),
+                else stringResource(R.string.editor_done),
                 onClick = onSave,
                 style = PaperButtonStyle.FILLED,
                 enabled = review != null,
