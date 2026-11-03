@@ -1,6 +1,8 @@
 package io.github.bakeron.tapedo.data.settings
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -18,12 +20,18 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
-private val Context.settingsDataStore by preferencesDataStore(name = "settings")
+/** A damaged settings file is replaced with defaults - otherwise every later save would fail too. */
+internal val settingsCorruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
+
+private val Context.settingsDataStore by preferencesDataStore(
+    name = "settings",
+    corruptionHandler = settingsCorruptionHandler,
+)
 
 /** Settings in Jetpack DataStore - small key-value file, read and written off the main thread. */
-class DataStoreSettings(context: Context) : SettingsStore {
+class DataStoreSettings(private val store: DataStore<Preferences>) : SettingsStore {
 
-    private val store = context.applicationContext.settingsDataStore
+    constructor(context: Context) : this(context.applicationContext.settingsDataStore)
 
     override val settings: Flow<AppSettings> = store.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }

@@ -22,8 +22,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -72,7 +78,7 @@ fun RecordButton(
         modifier
             .size(112.dp)
             .background(scheme.surfaceContainerHighest, CircleShape)
-            .border(if (focused) 3.dp else 1.dp, if (focused) scheme.primary else colors.rule, CircleShape)
+            .border(if (focused) 3.dp else 1.dp, if (focused) scheme.primary else colors.controlEdge, CircleShape)
             .semantics {
                 contentDescription = label
                 if (stateText != null) stateDescription = stateText
@@ -92,6 +98,20 @@ fun RecordButton(
                 .scale(sink)
                 .shadow(elevation, CircleShape)
                 .background(colors.record, CircleShape)
+                // A glint in the upper part of the dome - on the dark panel the shadow is invisible,
+                // so the light shows it is a raised key. Dimmer while the key is held down.
+                .drawBehind {
+                    val glint = Color.White.copy(alpha = if (down) 0.1f else 0.22f)
+                    drawArc(
+                        color = glint,
+                        startAngle = 215f,
+                        sweepAngle = 80f,
+                        useCenter = false,
+                        topLeft = Offset(size.width * 0.18f, size.height * 0.14f),
+                        size = Size(size.width * 0.64f, size.height * 0.56f),
+                        style = Stroke(width = size.width * 0.06f, cap = StrokeCap.Round),
+                    )
+                }
                 .border(2.dp, colors.card.copy(alpha = 0.35f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {

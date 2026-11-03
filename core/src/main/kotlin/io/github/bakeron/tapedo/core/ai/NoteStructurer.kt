@@ -10,6 +10,10 @@ import kotlinx.coroutines.CancellationException
 
 /** API keys, encrypted by the platform (Android Keystore). Keys never go to logs or to Git. */
 interface SecretStore {
+    /**
+     * Null when no usable key exists (none saved, or lost for good). Throws when reading failed only
+     * for now - the key is still there and the next try may work.
+     */
     suspend fun apiKey(provider: AiProvider): String?
 
     suspend fun setApiKey(provider: AiProvider, key: String?)
@@ -46,7 +50,14 @@ class NoteStructurer(
         }
         if (provider == AiProvider.NONE || transcript.isBlank()) return fallback(null)
 
-        val key = secrets.apiKey(provider)
+        val key = try {
+            secrets.apiKey(provider)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Not "no key": the saved key is fine, so the user should simply try again.
+            return fallback(AiError.KeyUnreadable)
+        }
         if (key.isNullOrBlank()) return fallback(AiError.MissingKey)
         val ai = providerFor(provider, key) ?: return fallback(null)
 

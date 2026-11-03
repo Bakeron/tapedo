@@ -63,6 +63,7 @@ import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.ui.cards.PencilBox
 import io.github.bakeron.tapedo.ui.cards.PriorityTape
+import io.github.bakeron.tapedo.ui.cards.RuledText
 import io.github.bakeron.tapedo.ui.cards.appLocale
 import io.github.bakeron.tapedo.ui.cards.handStrike
 import io.github.bakeron.tapedo.ui.cards.isDone
@@ -97,7 +98,7 @@ enum class StackTab(val type: NoteType?) {
 /**
  * The saved cards as a card box: dividers on top (with how many cards each holds), a search line,
  * and the cards as narrow strips - their top edges, as seen in the box - so ten fit on a screen.
- * Tap opens the card; tasks tick off right on the strip.
+ * Tap opens the card; tasks tick off right on the strip; the × throws a card out (undo on the bar below).
  */
 @Composable
 fun CardStack(
@@ -106,6 +107,7 @@ fun CardStack(
     onToggleDone: (Note) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    onDelete: (Note) -> Unit = {},
     top: @Composable () -> Unit = {},
 ) {
     val colors = TapedoTheme.colors
@@ -151,6 +153,7 @@ fun CardStack(
                                 note,
                                 onOpen = { onOpen(note) },
                                 onToggleDone = { onToggleDone(note) },
+                                onDelete = { onDelete(note) },
                                 modifier = if (reduceMotion) Modifier else Modifier.animateItem(),
                             )
                         }
@@ -192,7 +195,7 @@ private fun DividerTabs(tabs: List<StackTab>, selected: StackTab, counts: Map<St
                     Modifier
                         .height(if (isSelected) 46.dp else 38.dp)
                         .background(if (isSelected) colors.cardEdge else colors.card, shape)
-                        .then(if (isSelected) Modifier else Modifier.border(1.dp, scheme.outlineVariant, shape))
+                        .then(if (isSelected) Modifier else Modifier.border(1.dp, colors.controlEdge, shape))
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -266,7 +269,7 @@ private fun SearchLine(query: String, onChange: (String) -> Unit, modifier: Modi
  * Done cards (on the "Done" divider) have their title struck through.
  */
 @Composable
-private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, modifier: Modifier = Modifier) {
+private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
     val colors = TapedoTheme.colors
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
@@ -282,7 +285,7 @@ private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, 
                 .fillMaxWidth()
                 .padding(top = 4.dp, start = 4.dp)
                 .background(colors.card, shape)
-                .border(1.dp, scheme.outlineVariant, shape)
+                .border(1.dp, colors.controlEdge, shape)
                 .clickable(onClickLabel = stringResource(R.string.stack_open_card), onClick = onOpen)
                 .heightIn(min = 60.dp)
                 .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
@@ -333,8 +336,12 @@ private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, 
                 "›",
                 style = MaterialTheme.typography.titleLarge,
                 color = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp).clearAndSetSemantics { },
+                modifier = Modifier.padding(start = 8.dp).clearAndSetSemantics { },
             )
+            val deleteDesc = stringResource(R.string.strip_delete_desc, note.title)
+            IconButton(onClick = onDelete, modifier = Modifier.semantics { contentDescription = deleteDesc }) {
+                Text("×", style = MaterialTheme.typography.titleLarge, color = scheme.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics { })
+            }
         }
 
         // Ideas have no priority, so no tape.
@@ -396,11 +403,13 @@ private fun EmptyCard() {
             .padding(horizontal = 20.dp, vertical = 18.dp),
     ) {
         Text(stringResource(R.string.stack_empty_title), style = MaterialTheme.typography.titleMedium)
-        Text(
+        // Typed on the card's lines, next to its red margin.
+        RuledText(
             stringResource(R.string.home_empty),
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp).marginLine(colors.record.copy(alpha = 0.5f)),
+            MaterialTheme.typography.bodyMedium,
+            scheme.onSurfaceVariant,
+            colors.rule,
+            Modifier.padding(top = 8.dp).marginLine(colors.record.copy(alpha = 0.5f)),
         )
     }
 }

@@ -111,7 +111,15 @@ class SettingsViewModel(
 
     private suspend fun refreshKeys() {
         val suffixes = listOf(AiProvider.GEMINI, AiProvider.GROQ).mapNotNull { p ->
-            secrets.apiKey(p)?.takeIf { it.length >= 8 }?.let { p to it.takeLast(4) }
+            val key = try {
+                secrets.apiKey(p)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Read failed only for now - keep showing what was known, never "no key".
+                return@mapNotNull _keys.value.savedSuffix[p]?.let { p to it }
+            }
+            key?.takeIf { it.length >= 8 }?.let { p to it.takeLast(4) }
         }.toMap()
         _keys.update { it.copy(savedSuffix = suffixes) }
     }

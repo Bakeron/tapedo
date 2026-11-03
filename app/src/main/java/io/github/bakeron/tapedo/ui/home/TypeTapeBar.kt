@@ -110,8 +110,15 @@ private fun TypeTape(text: String, selected: Boolean, tilt: Float, onClick: () -
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            // LED: lit on the chosen tape, a dark socket on the others.
-            Box(Modifier.size(6.dp).background(if (selected) colors.record else colors.rule, CircleShape))
+            // LED in a bezel ring (paper-light on the dark tape, dark on amber) - lit on the chosen tape,
+            // a dark socket on the others.
+            Box(
+                Modifier
+                    .size(10.dp)
+                    .border(1.5.dp, if (selected) scheme.onPrimary else colors.controlEdge, CircleShape)
+                    .padding(2.dp)
+                    .background(if (selected) colors.record else colors.rule, CircleShape),
+            )
             Text(
                 text = text.uppercase(),
                 style = MaterialTheme.typography.labelLarge.copy(

@@ -49,5 +49,6 @@ val TapedoTypography = Typography(
     bodySmall = TextStyle(fontFamily = Typewriter, fontSize = 13.sp, lineHeight = 18.sp),
     labelLarge = base.labelLarge.copy(fontFamily = Bricolage, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp),
     labelMedium = base.labelMedium.copy(fontFamily = Bricolage, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp),
-    labelSmall = base.labelSmall.copy(fontFamily = Bricolage, fontWeight = FontWeight.Medium, letterSpacing = 1.sp),
+    // 12 sp, not Material's 11: this style carries the card's type and date, not decoration.
+    labelSmall = base.labelSmall.copy(fontFamily = Bricolage, fontWeight = FontWeight.Medium, fontSize = 12.sp, letterSpacing = 1.sp),
 )

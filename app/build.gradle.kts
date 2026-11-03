@@ -19,12 +19,19 @@ android {
         applicationId = "io.github.bakeron.tapedo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2"
+        versionCode = 3
+        versionName = "0.3"
+        // Instrumented tests (app/src/androidTest) - run on the emulator only, see docs/plan-1a.md.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
+            // Phones only: the x86 / x86_64 SQLCipher libraries (about 4.4 MB) are for emulators,
+            // which run the debug build. Debug keeps every ABI.
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -63,7 +70,6 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.sqlite)
     implementation(libs.sqlcipher.android)
@@ -71,9 +77,7 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
-    implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
-    debugImplementation(libs.compose.ui.tooling)
 
     implementation(project(":core"))
     // Android network engine for the shared Ktor client (iPhone would use the Darwin engine).
@@ -83,4 +87,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
 }

@@ -2,6 +2,7 @@ package io.github.bakeron.tapedo.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -11,10 +12,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -25,15 +28,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bakeron.tapedo.R
@@ -46,7 +55,9 @@ import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.settings.RecordingEnd
 import io.github.bakeron.tapedo.core.settings.ThemeMode
 import io.github.bakeron.tapedo.locale.AppLanguage
+import io.github.bakeron.tapedo.ui.cards.RuledText
 import io.github.bakeron.tapedo.ui.components.CounterSlider
+import io.github.bakeron.tapedo.ui.components.ToggleLever
 import io.github.bakeron.tapedo.ui.components.Tick
 import io.github.bakeron.tapedo.ui.components.LabelTape
 import io.github.bakeron.tapedo.ui.components.PaperButton
@@ -113,10 +124,11 @@ private fun ColumnScope.AiSection(
     Rule()
     Column(Modifier.padding(vertical = 10.dp)) {
         if (provider == AiProvider.NONE) {
-            Text(
+            RuledText(
                 stringResource(R.string.ai_none_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                MaterialTheme.typography.bodySmall,
+                MaterialTheme.colorScheme.onSurfaceVariant,
+                TapedoTheme.colors.rule,
             )
         } else {
             AiProviderCard(provider, keys, onEditKey, onSaveKey, onDeleteKey, onTest)
@@ -193,6 +205,11 @@ fun SettingsScreen(
                             if (s < 60) stringResource(R.string.settings_seconds, s)
                             else stringResource(R.string.settings_minutes, s / 60)
                         },
+                        // Screen readers get "12 minut", not "12 min".
+                        spokenLabel = { s ->
+                            if (s < 60) pluralStringResource(R.plurals.duration_seconds, s, s)
+                            else pluralStringResource(R.plurals.duration_minutes, s / 60, s / 60)
+                        },
                         // Scale under the track: short tick every 5 min, long every 15 min.
                         tick = { s -> if (s % 900 == 0) Tick.MAJOR else if (s % 300 == 0) Tick.MINOR else Tick.NONE },
                         onSelect = { v -> onChange { it.copy(maxRecordingSeconds = v) } },
@@ -202,11 +219,12 @@ fun SettingsScreen(
                 Setting(
                     title = stringResource(R.string.settings_speech_language),
                     hint = stringResource(R.string.settings_speech_language_hint),
+                    more = stringResource(R.string.settings_speech_language_more),
                 ) {
                     SlideSelector(
                         options = AppSettings.SPEECH_LANGUAGES,
                         selected = settings.speechLanguage,
-                        label = { languageName(it) },
+                        label = { speechLanguageName(it) },
                         onSelect = { v -> onChange { it.copy(speechLanguage = v) } },
                     )
                 }
@@ -214,6 +232,7 @@ fun SettingsScreen(
                 Setting(
                     title = stringResource(R.string.settings_online_speech),
                     hint = stringResource(R.string.settings_online_speech_hint),
+                    more = stringResource(R.string.settings_online_speech_more),
                 ) {
                     SlideSelector(
                         options = OnlineSpeech.entries,
@@ -237,6 +256,7 @@ fun SettingsScreen(
                 Setting(
                     title = stringResource(R.string.settings_default_priority),
                     hint = stringResource(R.string.settings_default_priority_hint),
+                    more = stringResource(R.string.settings_default_priority_more),
                 ) {
                     SlideSelector(
                         options = Priority.entries,
@@ -289,11 +309,10 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_reduce_motion),
                     hint = stringResource(R.string.settings_reduce_motion_hint),
                 ) {
-                    SlideSelector(
-                        options = listOf(false, true),
-                        selected = settings.reduceMotion,
-                        label = { stringResource(if (it) R.string.settings_on else R.string.settings_off) },
-                        onSelect = { v -> onChange { it.copy(reduceMotion = v) } },
+                    ToggleLever(
+                        checked = settings.reduceMotion,
+                        onChange = { v -> onChange { it.copy(reduceMotion = v) } },
+                        stateLabel = stringResource(if (settings.reduceMotion) R.string.settings_on else R.string.settings_off),
                     )
                 }
             }
@@ -322,13 +341,39 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
     }
 }
 
+/**
+ * One setting: title, control and a one-sentence hint written on the card's lines.
+ * The longer explanation ([more]) waits behind a small "more" note in the margin, like a pencilled footnote.
+ */
 @Composable
-private fun Setting(title: String, hint: String? = null, control: @Composable () -> Unit) {
+private fun Setting(title: String, hint: String? = null, more: String? = null, control: @Composable () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val rule = TapedoTheme.colors.rule
+    var expanded by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         control()
         if (hint != null) {
-            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // The "more" note sits in the right margin, at the hint's last line.
+            Row(verticalAlignment = Alignment.Bottom) {
+                RuledText(hint, MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule, Modifier.weight(1f))
+                if (more != null) {
+                    Text(
+                        stringResource(if (expanded) R.string.settings_less else R.string.settings_more),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = scheme.onSurface,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .clickable(role = Role.Button) { expanded = !expanded }
+                            .wrapContentHeight(Alignment.Bottom)
+                            .padding(start = 12.dp, end = 4.dp, bottom = 2.dp),
+                    )
+                }
+            }
+        }
+        if (more != null && expanded) {
+            RuledText(more, MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
         }
     }
 }
@@ -352,13 +397,20 @@ private fun Footer(onOpenLicenses: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Text(
             stringResource(R.string.settings_version, version),
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(12.dp))
         PaperButton(stringResource(R.string.settings_licenses), onClick = onOpenLicenses)
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/** Speech language named in the app's language ("Angielski" in Polish), unlike the app language list. */
+@Composable
+fun speechLanguageName(tag: String): String = when {
+    tag.startsWith("en") -> stringResource(R.string.speech_language_english)
+    else -> stringResource(R.string.speech_language_polish)
 }
 
 @Composable

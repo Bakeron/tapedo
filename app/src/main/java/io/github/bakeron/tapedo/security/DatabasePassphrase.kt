@@ -14,21 +14,22 @@ import java.security.SecureRandom
  */
 object DatabasePassphrase {
 
-    private const val FILE_NAME = "db.key"
-    private const val KEY_ALIAS = "tapedo_db_wrap"
+    const val FILE_NAME = "db.key"
+    const val KEY_ALIAS = "tapedo_db_wrap"
 
     // noBackupFilesDir: never included in backups, even if backup rules change later.
-    private fun file(context: Context) = File(context.noBackupFilesDir, FILE_NAME)
+    private fun file(context: Context, fileName: String) = File(context.noBackupFilesDir, fileName)
 
     /**
      * The passphrase as 64 hex characters, created on first launch.
      * @param mayCreate false when a database already exists - a new passphrase could never open it.
+     * @param fileName, alias only tests pass their own - so they never touch the real passphrase.
      * @throws KeyLostException the passphrase can never be read again (permanent).
      *   Any other exception is temporary (Keystore busy, I/O) - nothing was changed.
      */
-    fun get(context: Context, mayCreate: Boolean): ByteArray {
-        val stored = AtomicFile(file(context))
-        val cipher = KeystoreCipher(KEY_ALIAS)
+    fun get(context: Context, mayCreate: Boolean, fileName: String = FILE_NAME, alias: String = KEY_ALIAS): ByteArray {
+        val stored = AtomicFile(file(context, fileName))
+        val cipher = KeystoreCipher(alias)
         val blob = try {
             stored.readFully()
         } catch (e: FileNotFoundException) {
@@ -45,10 +46,11 @@ object DatabasePassphrase {
         return passphrase
     }
 
-    /** Moves the unreadable passphrase file aside under [suffix] - renamed, never deleted. */
-    fun setAside(context: Context, suffix: String) {
-        val current = file(context)
-        if (current.exists() && !current.renameTo(File(context.noBackupFilesDir, "db-$suffix.key"))) {
+    /** Moves the unreadable passphrase file aside under [suffix] ("db.key" -> "db-<suffix>.key") - renamed, never deleted. */
+    fun setAside(context: Context, suffix: String, fileName: String = FILE_NAME) {
+        val current = file(context, fileName)
+        val base = fileName.removeSuffix(".key")
+        if (current.exists() && !current.renameTo(File(context.noBackupFilesDir, "$base-$suffix.key"))) {
             throw IOException("Could not set the passphrase file aside")
         }
         // Leftovers of an interrupted write would otherwise be read back as the current file.

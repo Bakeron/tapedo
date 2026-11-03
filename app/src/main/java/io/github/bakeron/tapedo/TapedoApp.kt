@@ -17,6 +17,7 @@ import io.github.bakeron.tapedo.data.db.TapedoDatabase
 import io.github.bakeron.tapedo.data.settings.DataStoreSettings
 import io.github.bakeron.tapedo.security.KeystoreSecretStore
 import io.github.bakeron.tapedo.speech.AndroidSpeechInput
+import io.github.bakeron.tapedo.ui.theme.NightMode
 import io.ktor.client.engine.okhttp.OkHttp
 
 class TapedoApp : Application() {
@@ -25,6 +26,7 @@ class TapedoApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        NightMode.restore(this)
         container = AppContainer(this)
     }
 }

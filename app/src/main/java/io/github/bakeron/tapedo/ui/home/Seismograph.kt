@@ -13,11 +13,10 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.MaterialTheme
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 
 /**
- * The voice line: a strip of graph paper with a graphite pen scribbling a zigzag as loud as the voice,
+ * The voice line: a strip of graph paper with a pen (graphite on Paper, an amber trace on Panel) scribbling a zigzag as loud as the voice,
  * newest sample at the red pen tip on the right. Purely decorative for screen readers -
  * the counter and the "listening" text carry the information.
  *
@@ -27,26 +26,27 @@ import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 @Composable
 fun Seismograph(levels: List<Float>, sampleCount: Long, capacity: Int, modifier: Modifier = Modifier) {
     val colors = TapedoTheme.colors
-    val ink = MaterialTheme.colorScheme.onSurface
+    // Paper: graphite on graph paper. Panel: an amber trace on a dark oscilloscope screen.
+    val ink = colors.traceInk
     Canvas(
         modifier
             .fillMaxWidth()
             .height(120.dp)
             .clearAndSetSemantics { },
     ) {
-        drawRoundRect(colors.card, cornerRadius = CornerRadius(4.dp.toPx()))
+        drawRoundRect(colors.tracePaper, cornerRadius = CornerRadius(4.dp.toPx()))
         drawRoundRect(colors.cardEdge, cornerRadius = CornerRadius(4.dp.toPx()), style = Stroke(1.dp.toPx()))
 
         // Graph paper: faint grid, the middle line a little stronger.
         val step = 12.dp.toPx()
         var y = size.height / 2 % step
         while (y < size.height) {
-            drawLine(colors.rule, Offset(0f, y), Offset(size.width, y), strokeWidth = 0.5.dp.toPx())
+            drawLine(colors.traceGrid, Offset(0f, y), Offset(size.width, y), strokeWidth = 0.5.dp.toPx())
             y += step
         }
         var x = 0f
         while (x < size.width) {
-            drawLine(colors.rule, Offset(x, 0f), Offset(x, size.height), strokeWidth = 0.5.dp.toPx())
+            drawLine(colors.traceGrid, Offset(x, 0f), Offset(x, size.height), strokeWidth = 0.5.dp.toPx())
             x += step
         }
         val mid = size.height / 2

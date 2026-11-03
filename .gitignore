@@ -21,3 +21,40 @@ keystore.properties
 .claude/settings.local.json
 *.log
 hs_err_pid*
+
+# Temporary git worktrees of Claude Code agents
+.claude/worktrees/
+
+# Narzędzia Claude (skille, ustawienia, notatki) - nie część aplikacji
+.claude/
+CLAUDE.local.md
+# Wszystkie pliki .md poza README - notatki, audyty, plany, CLAUDE.md; zostają tylko na dysku (autor 3.11.2026)
+*.md
+!/README.md
+
+# Klucze podpisu, hasła, klucze i konta usług
+*.p12
+*.pfx
+*.pem
+*.key
+*.der
+*.crt
+HASLO*
+*haslo*
+*password*
+*secret*
+.env
+.env.*
+google-services.json
+GoogleService-Info.plist
+*service-account*.json
+*credentials*.json
+client_secret*.json
+# Zrzuty pamięci i kopie repozytorium
+*.dmp
+*.bundle
+*.orig
+*.bak
+# Kod aplikacji, który pasuje do wzorca *secret* - to nie sekret, tylko magazyn kluczy w Keystore
+!app/src/main/java/io/github/bakeron/tapedo/security/KeystoreSecretStore.kt
+!app/src/test/java/io/github/bakeron/tapedo/security/

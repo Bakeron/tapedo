@@ -19,16 +19,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -67,7 +76,7 @@ private fun infoFor(provider: AiProvider): ProviderInfo? = when (provider) {
 
 /**
  * What appears after picking a provider: what it is, where the text goes, how to get a key
- * step by step, and the key field. Shown only on demand, as zalozenia.md asks.
+ * step by step, and the key field. Shown only on demand, as docs/zalozenia.md asks.
  */
 @Composable
 fun AiProviderCard(
@@ -96,20 +105,7 @@ fun AiProviderCard(
             PaperButton(stringResource(info.open), onClick = { uri.openUri(info.url) })
         }
 
-        OutlinedTextField(
-            value = input,
-            onValueChange = { onEditKey(it.trim()) },
-            label = { Text(stringResource(R.string.ai_key_label)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            // Password keyboard: no suggestions, no learning - the key never reaches the keyboard's dictionary.
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                autoCorrectEnabled = false,
-                imeAction = ImeAction.Done,
-            ),
-            modifier = Modifier.fillMaxWidth(),
-        )
+        KeyLine(value = input, onValueChange = { onEditKey(it.trim()) }, label = stringResource(R.string.ai_key_label))
         Text(
             stringResource(R.string.ai_key_hint),
             style = MaterialTheme.typography.bodySmall,
@@ -171,6 +167,7 @@ private fun testMessage(test: KeyTest): String = when (test) {
 @Composable
 fun aiErrorMessage(error: AiError): String = when (error) {
     AiError.MissingKey -> stringResource(R.string.ai_error_missing_key)
+    AiError.KeyUnreadable -> stringResource(R.string.ai_error_key_unreadable)
     AiError.InvalidKey -> stringResource(R.string.ai_error_invalid_key)
     AiError.RateLimited -> stringResource(R.string.ai_error_rate_limited)
     is AiError.Network -> stringResource(R.string.ai_error_network)
@@ -201,5 +198,44 @@ private fun Step(number: Int, text: String) {
             Text("$number", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 4.dp))
         }
         Text(text, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f).padding(top = 3.dp))
+    }
+}
+
+/**
+ * The key field as a line on a paper form: a typed label above and a pencil line to write on -
+ * not Material's floating-label box. The line gets thicker and inked while the field has focus.
+ */
+@Composable
+private fun KeyLine(value: String, onValueChange: (String) -> Unit, label: String) {
+    val scheme = MaterialTheme.colorScheme
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            // Password keyboard: no suggestions, no learning - the key never reaches the keyboard's dictionary.
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                autoCorrectEnabled = false,
+                imeAction = ImeAction.Done,
+            ),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
+            cursorBrush = SolidColor(scheme.primary),
+            interactionSource = interaction,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .semantics { contentDescription = label }
+                .drawBehind {
+                    val stroke = (if (focused) 2.5.dp else 1.5.dp).toPx()
+                    val y = size.height - stroke / 2
+                    drawLine(if (focused) scheme.primary else scheme.outline, Offset(0f, y), Offset(size.width, y), stroke)
+                }
+                .padding(top = 12.dp, bottom = 8.dp),
+        )
     }
 }

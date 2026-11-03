@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -57,11 +58,14 @@ fun <T> CounterSlider(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     tick: (T) -> Tick = { Tick.NONE },
+    /** What screen readers say - full words instead of the short label on the dial. */
+    spokenLabel: @Composable (T) -> String = label,
 ) {
     val colors = TapedoTheme.colors
     val scheme = MaterialTheme.colorScheme
     var index by remember(selected, options) { mutableIntStateOf(options.indexOf(selected).coerceAtLeast(0)) }
     val text = label(options[index])
+    val spoken = spokenLabel(options[index])
     val last = options.lastIndex
     val fraction = if (last == 0) 0f else index.toFloat() / last
 
@@ -75,16 +79,16 @@ fun <T> CounterSlider(
         modifier = modifier
             .fillMaxWidth()
             .padding(top = 26.dp)
-            .semantics { stateDescription = text },
+            .semantics { stateDescription = spoken },
         thumb = {
             Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
-                // Counter text: zero-size in layout, drawn above the dot - centred mid-way,
-                // sliding to stay inside the track near the ends (left-aligned at min, right at max).
+                // Counter text in a small recessed display window (amber digits in Panel): zero-size in
+                // layout, drawn above the dot - centred mid-way, sliding to stay inside the track near the ends.
                 Text(
                     text,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = scheme.onSurface,
+                    color = colors.displayInk,
                     maxLines = 1,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -93,7 +97,10 @@ fun <T> CounterSlider(
                             val half = 15.dp.roundToPx() // half of the 30.dp thumb box
                             val x = -half + ((half * 2 - p.width) * fraction).roundToInt()
                             layout(0, 0) { p.place(x, -p.height - 2.dp.roundToPx()) }
-                        },
+                        }
+                        .background(colors.display, RoundedCornerShape(2.dp))
+                        .border(1.dp, colors.controlEdge, RoundedCornerShape(2.dp))
+                        .padding(horizontal = 5.dp),
                 )
                 Box(
                     Modifier
@@ -105,8 +112,8 @@ fun <T> CounterSlider(
             }
         },
         track = {
-            val groove = scheme.surfaceContainerHighest
-            val edge = colors.rule
+            val groove = colors.track
+            val edge = colors.controlEdge
             val wound = colors.record.copy(alpha = 0.35f)
             val tickColor = scheme.onSurfaceVariant
             Canvas(Modifier.fillMaxWidth().height(14.dp)) {

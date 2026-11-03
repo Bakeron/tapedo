@@ -9,6 +9,9 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import io.github.bakeron.tapedo.core.speech.RecognizerErrorKind
+import io.github.bakeron.tapedo.core.speech.RecognizerErrorPolicy
+import io.github.bakeron.tapedo.core.speech.RecognizerStep
 import io.github.bakeron.tapedo.core.speech.SpeechError
 import io.github.bakeron.tapedo.core.speech.SpeechEvent
 import io.github.bakeron.tapedo.core.speech.SpeechInput
@@ -114,14 +117,16 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             }
 
             override fun onError(error: Int) {
-                when {
-                    // No offline pack for this language: go online only when the user allowed it.
-                    offline && error in LANGUAGE_ERRORS && phrases.isEmpty() -> {
-                        if (!allowOnline) {
-                            trySend(SpeechEvent.Failed(SpeechError.OFFLINE_UNAVAILABLE))
-                            close()
-                            return
-                        }
+                val step = RecognizerErrorPolicy.decide(
+                    error = kindOf(error),
+                    offline = offline,
+                    phrasesHeard = phrases.isNotEmpty(),
+                    allowOnline = allowOnline,
+                    untilStopped = untilStopped,
+                    stopping = stopping,
+                )
+                when (step) {
+                    RecognizerStep.GoOnline -> {
                         offline = false
                         // Swapped outside the callback - the on-device recognizer cannot go online.
                         main.postDelayed({
@@ -131,13 +136,10 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                             start()
                         }, RESTART_DELAY_MS)
                     }
-                    // A pause with nothing said: keep listening in "stop button" mode.
-                    error in SILENCE_ERRORS && untilStopped && !stopping -> restart()
-                    error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY && untilStopped && !stopping -> restart()
-                    // Something went wrong later in a long recording - keep what was already heard.
-                    phrases.isNotEmpty() || error in SILENCE_ERRORS || stopping -> finish()
-                    else -> {
-                        trySend(SpeechEvent.Failed(errorOf(error)))
+                    RecognizerStep.Restart -> restart()
+                    RecognizerStep.FinishWithText -> finish()
+                    is RecognizerStep.Fail -> {
+                        trySend(SpeechEvent.Failed(step.error))
                         close()
                     }
                 }
@@ -165,13 +167,14 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
     private fun Bundle?.firstResult(): String? =
         this?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
 
-    private fun errorOf(code: Int): SpeechError = when (code) {
-        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> SpeechError.NO_PERMISSION
+    private fun kindOf(code: Int): RecognizerErrorKind = when (code) {
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> RecognizerErrorKind.NO_PERMISSION
         SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
-        SpeechRecognizer.ERROR_SERVER, SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> SpeechError.NETWORK
-        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> SpeechError.BUSY
-        in LANGUAGE_ERRORS -> SpeechError.NOT_AVAILABLE
-        else -> SpeechError.OTHER
+        SpeechRecognizer.ERROR_SERVER, SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> RecognizerErrorKind.NETWORK
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> RecognizerErrorKind.BUSY
+        in LANGUAGE_ERRORS -> RecognizerErrorKind.LANGUAGE_MISSING
+        in SILENCE_ERRORS -> RecognizerErrorKind.SILENCE
+        else -> RecognizerErrorKind.OTHER
     }
 
     private companion object {

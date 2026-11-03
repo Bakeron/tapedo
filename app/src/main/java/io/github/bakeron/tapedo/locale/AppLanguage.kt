@@ -17,7 +17,7 @@ object AppLanguage {
         return if (tags.startsWith(ENGLISH)) ENGLISH else POLISH
     }
 
-    /** Polish by default (zalozenia.md), even on a phone set to another language. */
+    /** Polish by default (docs/zalozenia.md), even on a phone set to another language. */
     fun applyDefaultIfUnset() {
         if (AppCompatDelegate.getApplicationLocales().isEmpty) set(POLISH)
     }

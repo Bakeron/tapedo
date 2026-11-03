@@ -149,11 +149,18 @@ class RuleBasedStructurer(
             val pm = m.groups["pm"]!!.value.startsWith("p", ignoreCase = true)
             return minutesOf(hour12 % 12 + if (pm) 12 else 0, m.groups["m"]?.value)
         }
-        val m = TIME_SAID.find(text) ?: TIME_COLON.find(text) ?: return null
+        val m = TIME_SAID.findAll(text).firstOrNull { !isCountOfThings(text, it) } ?: TIME_COLON.find(text) ?: return null
         var hour = m.groups["h"]!!.value.toInt()
         // "o 7 wieczorem" -> 19:00
         if (hour < 12 && EVENING_AFTER.containsMatchIn(text.substring(m.range.last + 1))) hour += 12
         return minutesOf(hour, m.groups["m"]?.value)
+    }
+
+    /** "pamiętaj o 5 zdjęciach", "zapytaj o 3 bilety", "kup o 2 więcej" - "o" + a number that counts things. */
+    private fun isCountOfThings(text: String, m: MatchResult): Boolean {
+        if (!m.groups["p"]!!.value.equals("o", ignoreCase = true)) return false
+        return COUNTED_AFTER.containsMatchIn(text.substring(m.range.last + 1)) ||
+            ABOUT_VERB_BEFORE.containsMatchIn(text.substring(0, m.range.first))
     }
 
     private fun minutesOf(hour: Int, minute: String?): Int? {
@@ -277,7 +284,14 @@ class RuleBasedStructurer(
 
         // Speech recognition writes hours as digits: "o 10", "o 10:30", "at 9".
         val TIME_SAID = Regex(
-            "(?iu)(?<!\\p{L})(?:o godzinie|na godzinę|godz\\.?|o|at)\\s+(?<h>\\d{1,2})(?:[:.](?<m>\\d{2}))?(?!\\d)",
+            "(?iu)(?<!\\p{L})(?<p>o godzinie|na godzinę|godz\\.?|o|at)\\s+(?<h>\\d{1,2})(?:[:.](?<m>\\d{2}))?(?!\\d)",
+        )
+        // After a plain "o": a locative plural ("o 3 fakturach") or a quantity word means a count, not an hour.
+        val COUNTED_AFTER = Regex("(?iu)^\\s+(\\p{L}+ach|więcej|wiecej|mniej|razy|sztuk|sztuki|procent)(?!\\p{L})")
+        // Verbs that take "o" as "about" / "for" - "o" + a number right after them is not an hour.
+        val ABOUT_VERB_BEFORE = Regex(
+            "(?iu)(?<!\\p{L})(pamiętaj|pamietaj|pamiętać|pamietac|zapomnij|zapomnieć|zapomniec|zapytaj|zapytać|zapytac|" +
+                "spytaj|spytać|spytac|dopytaj|poproś|popros|poprosić|poprosic|proś|pros|prosić|prosic|przypomnij)\\s+$",
         )
         // (?!\p{L}) at the end: "2 ampułki" is not 2 a.m.
         val TIME_AM_PM = Regex("(?iu)(?<![\\d:])(?<h>\\d{1,2})(?::(?<m>\\d{2}))?\\s*(?<pm>am|pm|a\\.m\\.|p\\.m\\.)(?!\\p{L})")

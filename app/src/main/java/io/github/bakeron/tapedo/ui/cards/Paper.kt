@@ -4,11 +4,17 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -30,6 +36,29 @@ fun Modifier.marginLine(color: Color): Modifier = drawBehind {
     val x = 1.dp.toPx()
     drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
 }.padding(start = 12.dp)
+
+/**
+ * Text written on the lines of an index card: a faint rule under every line of text.
+ * The rules follow the text's own layout (not a dp grid), so they stay under the words at any text size.
+ */
+@Composable
+fun RuledText(text: String, style: TextStyle, color: Color, rule: Color, modifier: Modifier = Modifier) {
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    Text(
+        text,
+        style = style,
+        color = color,
+        onTextLayout = { layout = it },
+        modifier = modifier.fillMaxWidth().drawBehind {
+            val text = layout ?: return@drawBehind
+            val stroke = 1.dp.toPx()
+            for (line in 0 until text.lineCount) {
+                val y = (text.getLineBaseline(line) + text.getLineBottom(line)) / 2f
+                drawLine(rule, Offset(0f, y), Offset(size.width, y), strokeWidth = stroke)
+            }
+        },
+    )
+}
 
 /** Squared paper (kratka) for lists. */
 fun Modifier.gridPaper(color: Color, cell: Dp): Modifier = drawBehind {

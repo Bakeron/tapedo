@@ -13,7 +13,7 @@ enum class AiProvider { NONE, GEMINI, GROQ }
 /** May speech go to the online recognizer (Google) when the phone has no offline language pack? */
 enum class OnlineSpeech { ASK, ALWAYS, NEVER }
 
-/** Everything the user can tune. Defaults follow zalozenia.md. */
+/** Everything the user can tune. Defaults follow docs/zalozenia.md. */
 data class AppSettings(
     val recordingEnd: RecordingEnd = RecordingEnd.SILENCE,
     val maxRecordingSeconds: Int = 60,

@@ -7,6 +7,12 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -22,10 +28,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -48,13 +54,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bakeron.tapedo.R
@@ -128,6 +141,7 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onEdit = { viewModel.editSaved(shown) },
             onToggleItem = { i -> viewModel.toggleItem(shown, i) },
             onToggleDone = { viewModel.toggleDone(shown) },
+            onDelete = { viewModel.deleteFromPreview(shown) },
             onStartAppend = { viewModel.startRecording(appendTo = shown.id) },
             onStopAppend = viewModel::stopRecording,
             onMicDenied = viewModel::micDenied,
@@ -152,6 +166,7 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onDismissError = viewModel::dismissError,
             onOpenCard = viewModel::openPreview,
             onToggleDone = viewModel::toggleDone,
+            onDeleteCard = viewModel::delete,
             onRetryStack = viewModel::retryStack,
             deleted = deleted,
             onUndoDelete = viewModel::undoDelete,
@@ -185,6 +200,7 @@ fun HomeScreen(
     onDismissError: () -> Unit = {},
     onOpenCard: (Note) -> Unit = {},
     onToggleDone: (Note) -> Unit = {},
+    onDeleteCard: (Note) -> Unit = {},
     onRetryStack: () -> Unit = {},
     deleted: Note? = null,
     onUndoDelete: () -> Unit = {},
@@ -226,6 +242,7 @@ fun HomeScreen(
                     onToggleDone = onToggleDone,
                     onRetry = onRetryStack,
                     modifier = Modifier.fillMaxSize(),
+                    onDelete = onDeleteCard,
                     top = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             if (recording is RecordingState.Failed) {
@@ -260,11 +277,7 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(
-                    stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.semantics { heading() },
-                )
+                Nameplate(stringResource(R.string.app_name))
                 IconButton(onClick = onOpenSettings) {
                     Icon(painterResource(R.drawable.ic_settings), contentDescription = stringResource(R.string.home_open_settings))
                 }
@@ -307,8 +320,10 @@ private fun ColumnScope.RecordControls(
         typeHint(typeChoice),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // Always two lines tall (in sp, so also with big text): switching types does not make the bar jump.
+        minLines = 2,
         maxLines = 3,
-        modifier = Modifier.padding(horizontal = 20.dp).heightIn(min = 36.dp),
+        modifier = Modifier.padding(horizontal = 20.dp),
     )
 
     Column(
@@ -327,32 +342,41 @@ private fun ColumnScope.RecordControls(
             onClick = onRecordKey,
         )
         Spacer(Modifier.height(8.dp))
-        // Tape counter while recording, the key's name otherwise. The key already says both to screen readers.
-        Text(
-            text = counter ?: stringResource(R.string.record_start),
-            style = if (isRecording) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.labelLarge,
-            modifier = Modifier.clearAndSetSemantics { },
-        )
+        // Tape counter in its display window while recording, the key's name otherwise.
+        // The key already says both to screen readers.
+        if (counter != null) {
+            CounterDisplay(counter, Modifier.clearAndSetSemantics { })
+        } else {
+            Text(
+                text = stringResource(R.string.record_start),
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.clearAndSetSemantics { },
+            )
+        }
     }
 }
 
 /** While recording: the seismograph and the words as they are recognised. */
 @Composable
 private fun ListeningPanel(state: RecordingState.Active, modifier: Modifier) {
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(modifier, verticalArrangement = Arrangement.Center) {
         Seismograph(state.levels, state.sampleCount, SEISMOGRAPH_SAMPLES)
         Spacer(Modifier.height(16.dp))
-        Text(
-            state.text.ifEmpty { stringResource(R.string.record_listening) },
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (state.text.isEmpty()) muted else MaterialTheme.colorScheme.onSurface,
-            // "Listening…" is announced; the growing text is not re-read on every word.
-            modifier = Modifier
-                .weight(1f, fill = false)
-                .verticalScroll(rememberScrollState())
-                .then(if (state.text.isEmpty()) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier),
-        )
+        if (state.text.isEmpty()) {
+            // Before the first words: a typed "Listening…" (announced once); the REC lamp blinks by the counter.
+            Text(
+                stringResource(R.string.record_listening),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        } else {
+            // The growing text is not re-read on every word.
+            Text(
+                state.text,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            )
+        }
     }
 }
 
@@ -479,15 +503,16 @@ private fun speechErrorText(error: SpeechError): String = stringResource(
 /** 75 -> "1:15" - like a tape counter. */
 private fun clock(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
 
-/** 75 -> "1 min 15 s" - how a screen reader should say the counter. */
+/** 75 -> "1 minuta 15 sekund" - how a screen reader should say the counter. */
 @Composable
 private fun spokenDuration(seconds: Int): String {
     val min = seconds / 60
     val sec = seconds % 60
     return when {
-        min == 0 -> stringResource(R.string.settings_seconds, sec)
-        sec == 0 -> stringResource(R.string.settings_minutes, min)
-        else -> stringResource(R.string.settings_minutes, min) + " " + stringResource(R.string.settings_seconds, sec)
+        min == 0 -> pluralStringResource(R.plurals.duration_seconds, sec, sec)
+        sec == 0 -> pluralStringResource(R.plurals.duration_minutes, min, min)
+        else -> pluralStringResource(R.plurals.duration_minutes, min, min) + " " +
+            pluralStringResource(R.plurals.duration_seconds, sec, sec)
     }
 }
 
@@ -504,3 +529,106 @@ private fun typeHint(type: NoteType?): String = stringResource(
         NoteType.SHOPPING -> R.string.type_hint_shopping
     },
 )
+
+/**
+ * The recorder's nameplate: the name engraved on a narrow metal strip held by two screws -
+ * part of the device, not an app bar title.
+ */
+@Composable
+private fun Nameplate(name: String) {
+    val colors = TapedoTheme.colors
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(2.dp)
+    Row(
+        Modifier
+            .background(colors.track, shape)
+            .border(1.dp, colors.controlEdge, shape)
+            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .clearAndSetSemantics {
+                heading()
+                contentDescription = name
+            },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Screw()
+        Text(
+            name.uppercase(),
+            style = MaterialTheme.typography.titleLarge.copy(
+                letterSpacing = 4.sp,
+                // Engraved: a light edge under each letter.
+                shadow = Shadow(colors.knobLight.copy(alpha = 0.8f), Offset(0f, 1.5f), 0f),
+            ),
+            fontWeight = FontWeight.Bold,
+            color = scheme.onSurface,
+        )
+        Screw()
+    }
+}
+
+@Composable
+private fun Screw() {
+    val colors = TapedoTheme.colors
+    Canvas(Modifier.size(9.dp)) {
+        drawCircle(colors.knob)
+        drawCircle(colors.controlEdge, style = Stroke(1.dp.toPx()))
+        // The slot, a little turned.
+        val r = size.minDimension / 2 * 0.7f
+        drawLine(
+            colors.controlEdge,
+            Offset(center.x - r * 0.8f, center.y - r * 0.6f),
+            Offset(center.x + r * 0.8f, center.y + r * 0.6f),
+            strokeWidth = 1.2.dp.toPx(),
+        )
+    }
+}
+
+/** The tape counter in a small recessed display window (amber digits in Panel, graphite in Paper), with the REC lamp. */
+@Composable
+private fun CounterDisplay(text: String, modifier: Modifier = Modifier) {
+    val colors = TapedoTheme.colors
+    val shape = RoundedCornerShape(3.dp)
+    Row(
+        modifier
+            .background(colors.display, shape)
+            .border(1.dp, colors.controlEdge, shape)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RecLamp()
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold,
+            color = colors.displayInk,
+        )
+    }
+}
+
+/** Red REC lamp: blinks once a second while recording; steady with "reduce motion". */
+@Composable
+private fun RecLamp() {
+    val colors = TapedoTheme.colors
+    val alpha = if (TapedoTheme.reduceMotion) {
+        1f
+    } else {
+        val blink = rememberInfiniteTransition(label = "rec")
+        val a by blink.animateFloat(
+            initialValue = 1f,
+            targetValue = 0.25f,
+            animationSpec = infiniteRepeatable(tween(durationMillis = 500), RepeatMode.Reverse),
+            label = "recAlpha",
+        )
+        a
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Canvas(Modifier.size(9.dp)) { drawCircle(colors.record.copy(alpha = alpha)) }
+        Text(
+            "REC",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = colors.record,
+        )
+    }
+}

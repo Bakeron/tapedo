@@ -84,6 +84,33 @@ class RuleBasedStructurerTest {
     }
 
     @Test
+    fun `o with a count of things is not an hour`() {
+        val sentences = listOf(
+            "pamiętaj o 2 rzeczach",
+            "zapytaj o 3 bilety",
+            "kup o 2 więcej",
+            "Pamiętaj o 5 zdjęciach do dowodu",
+            "nie zapomnij o 3 fakturach",
+        )
+        for (s in sentences) {
+            assertNull(s, rules.detectTime(s))
+            val cards = rules.structure(s, saturday, now)
+            assertTrue(s, cards.none { it.type == NoteType.EVENT || it.timeMinutes != null })
+        }
+        // A real hour in the same kind of sentence still counts.
+        assertEquals(9 * 60, rules.detectTime("pamiętaj o 2 rzeczach, spotkanie o 9"))
+        assertEquals(17 * 60, rules.detectTime("zapytaj o bilety o 17"))
+    }
+
+    @Test
+    fun `event chosen by hand takes the hour from the whole recording`() {
+        val event = rules.structure("jutro o 9 dentysta", saturday, now, NoteType.EVENT).single()
+        assertEquals(NoteType.EVENT, event.type)
+        assertEquals(9 * 60, event.timeMinutes)
+        assertEquals(saturday + 1, event.dueEpochDay)
+    }
+
+    @Test
     fun `shopping words produce a shopping list with shop sections`() {
         val cards = rules.structure("Kup mleko, chleb, pomidory i papier toaletowy", saturday, now)
         val list = cards.single()

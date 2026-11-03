@@ -191,6 +191,59 @@ class AiTest {
         assertNull(AiContract.parse(reply, request).single().timeMinutes)
     }
 
+    private suspend fun geminiError(status: HttpStatusCode, body: String): AiError {
+        val engine = MockEngine { respond(body, status, jsonHeaders) }
+        try {
+            GeminiStructurer(aiHttpClient(engine), "k").structure(request)
+        } catch (e: AiError) {
+            return e
+        }
+        fail("expected an AiError"); throw IllegalStateException()
+    }
+
+    @Test
+    fun `gemini answer blocked by the safety filter is a bad response, not a crash`() = runTest {
+        // A blocked answer has a candidate without "content", or no candidates at all.
+        val noContent = """{"candidates":[{"finishReason":"SAFETY","index":0,"safetyRatings":[]}]}"""
+        assertTrue(geminiError(HttpStatusCode.OK, noContent) is AiError.BadResponse)
+        val blockedPrompt = """{"promptFeedback":{"blockReason":"SAFETY"}}"""
+        assertTrue(geminiError(HttpStatusCode.OK, blockedPrompt) is AiError.BadResponse)
+    }
+
+    @Test
+    fun `http 403 means a wrong key`() = runTest {
+        assertEquals(AiError.InvalidKey, geminiError(HttpStatusCode.Forbidden, """{"error":{"code":403}}"""))
+    }
+
+    @Test
+    fun `a bare array or null cards is a bad response`() {
+        for (reply in listOf("""[{"title":"Mleko","type":"note"}]""", """{"cards":null}""", """{}""", "")) {
+            try {
+                AiContract.parse(reply, request)
+                fail("expected BadResponse for: $reply")
+            } catch (e: AiError) {
+                assertTrue(reply, e is AiError.BadResponse)
+            }
+        }
+    }
+
+    @Test
+    fun `oversized answers are trimmed to the limits`() {
+        val longText = "x".repeat(5_000)
+        val items = (1..500).joinToString(",") { "\"Punkt $it ${"y".repeat(100)}\"" }
+        val card = """{"title":"${"T".repeat(200)}","type":"checklist","body":"$longText","items":[$items]}"""
+        val reply = """{"cards":[${List(15) { card }.joinToString(",")}]}"""
+        val notes = AiContract.parse(reply, request)
+
+        assertEquals(10, notes.size)
+        val first = notes.first()
+        assertEquals(80, first.title.length)
+        assertEquals(4_000, first.body.length)
+        assertEquals(50, first.items.size)
+        assertTrue(first.items.all { it.text.length == 80 })
+        assertEquals("Punkt 1 ", first.items.first().text.take(8))
+    }
+
     // --- NoteStructurer: AI with fallback to rules ---
 
     private class FakeSecrets(val key: String?) : SecretStore {
@@ -214,6 +267,17 @@ class AiTest {
     fun `missing key falls back to rules and says why`() = runTest {
         val result = structurer(null, failingAi(AiError.RateLimited)).run(AiProvider.GEMINI)
         assertEquals(AiError.MissingKey, result.aiError)
+        assertEquals(listOf("Mleko"), result.notes.single().items.map { it.text })
+    }
+
+    @Test
+    fun `a key that cannot be read right now is not reported as missing`() = runTest {
+        val unreadable = object : SecretStore {
+            override suspend fun apiKey(provider: AiProvider): String? = throw IOException("keystore busy")
+            override suspend fun setApiKey(provider: AiProvider, key: String?) = Unit
+        }
+        val result = NoteStructurer(unreadable) { _, _ -> failingAi(AiError.RateLimited) }.run(AiProvider.GEMINI)
+        assertEquals(AiError.KeyUnreadable, result.aiError)
         assertEquals(listOf("Mleko"), result.notes.single().items.map { it.text })
     }
 

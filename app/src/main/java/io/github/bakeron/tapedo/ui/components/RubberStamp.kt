@@ -24,7 +24,7 @@ fun RubberStamp(text: String, modifier: Modifier = Modifier, tilt: Float = -4f) 
     Text(
         text = text.uppercase(),
         color = ink,
-        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.6.sp),
+        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.6.sp),
         fontWeight = FontWeight.Bold,
         modifier = modifier
             .rotate(tilt)

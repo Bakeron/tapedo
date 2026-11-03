@@ -99,6 +99,8 @@ class HomeViewModel(
     private val lockedNotice: LockedNotesNotice,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val todayEpochDay: () -> Long = { LocalDate.now().toEpochDay() },
+    /** Clock for the recording limit - a virtual one in tests. */
+    private val timeSource: TimeSource = TimeSource.Monotonic,
 ) : ViewModel() {
 
     /** Default list titles in the app language - set by the screen, which can read resources. */
@@ -202,7 +204,7 @@ class HomeViewModel(
             // Fixed-rate sampling: the pen keeps moving in silence, like paper under a seismograph.
             val sampler = launch {
                 // Real elapsed time: delay() runs a little late each tick, so counting ticks drifts behind the clock.
-                val started = TimeSource.Monotonic.markNow()
+                val started = timeSource.markNow()
                 var limitHit = false
                 while (true) {
                     delay(TICK_MS)
@@ -286,7 +288,7 @@ class HomeViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // E.g. the Keystore failed while reading the API key - the words are kept as one plain card.
+                // Anything unexpected (e.g. the rules crashed) - the words are kept as one plain card.
                 null
             }
             val cards = result?.notes?.takeIf { it.isNotEmpty() }
@@ -356,6 +358,12 @@ class HomeViewModel(
         if (_recording.value is RecordingState.Active) speech.stop()
         dismissError()
         previewId.value = null
+    }
+
+    /** Back to the stack first, so undo there brings the card back in the box, not on a preview. */
+    fun deleteFromPreview(note: Note) {
+        closePreview()
+        delete(note)
     }
 
     // --- Review window ---

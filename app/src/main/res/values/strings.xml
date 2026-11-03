@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">Tapedo</string>
-    <string name="tagline">Mów w biegu - Tapedo rozpisze to na karteczki.</string>
     <string name="back">Wstecz</string>
 
     <!-- Home -->
@@ -13,9 +12,9 @@
     <string name="record_counter">%1$s / %2$s</string>
     <string name="record_listening">Słucham…</string>
     <string name="mic_open_settings">Otwórz ustawienia telefonu</string>
-    <string name="speech_error_permission">Bez dostępu do mikrofonu Tapedo nie usłyszy notatki. Zezwól na mikrofon w ustawieniach telefonu.</string>
+    <string name="speech_error_permission">Tapedo nie usłyszy notatki bez dostępu do mikrofonu. Zezwól na mikrofon w ustawieniach telefonu.</string>
     <string name="speech_error_not_available">Ten telefon nie ma rozpoznawania mowy. Zainstaluj albo włącz aplikację Google.</string>
-    <string name="speech_error_no_speech">Nic nie usłyszałem. Naciśnij przycisk i powiedz to jeszcze raz.</string>
+    <string name="speech_error_no_speech">Nic nie słychać. Naciśnij przycisk i powiedz to jeszcze raz.</string>
     <string name="speech_error_network">Rozpoznawanie mowy nie połączyło się z internetem. Sprawdź połączenie albo pobierz język offline w ustawieniach rozpoznawania mowy telefonu - wtedy internet nie jest potrzebny.</string>
     <string name="speech_error_busy">Rozpoznawanie mowy jest zajęte przez inną aplikację. Spróbuj za chwilę.</string>
     <string name="speech_error_other">Coś poszło nie tak z mikrofonem. Spróbuj jeszcze raz.</string>
@@ -23,9 +22,9 @@
     <string name="speech_error_offline_never">Telefon nie ma pakietu offline dla tego języka, a rozpoznawanie przez internet jest wyłączone w Ustawieniach. Pobierz pakiet offline w ustawieniach rozpoznawania mowy telefonu.</string>
     <string name="speech_online_once">Tym razem przez internet</string>
     <string name="speech_online_always">Zawsze przez internet</string>
-    <string name="type_hint_auto">Tapedo samo wybierze typ z tego, co powiesz: „kup” to zakupy, „o 10” to spotkanie, „pomysł” to pomysł.</string>
+    <string name="type_hint_auto">Tapedo samo wybierze typ: „kup” to zakupy, „o 10” to wydarzenie.</string>
     <string name="type_hint_note">Zwykła notatka - tekst tak, jak go powiesz.</string>
-    <string name="type_hint_checklist">Każda rzecz osobno, do odhaczania. Np. „lista na wyjazd: ręczniki, krem, ładowarka”.</string>
+    <string name="type_hint_checklist">Każda rzecz osobno, do odhaczania: „ręczniki, krem, ładowarka”.</string>
     <string name="type_hint_task">Jedna rzecz do zrobienia, z terminem, jeśli go powiesz („w piątek”).</string>
     <string name="type_hint_idea">Luźna myśl na później - bez terminu i priorytetu.</string>
     <string name="type_hint_event">Data, godzina i miejsce, np. „we wtorek o 10 u dentysty”.</string>
@@ -39,21 +38,37 @@
     <string name="settings_recording_end">Koniec nagrania</string>
     <string name="settings_recording_end_silence">Po ciszy</string>
     <string name="settings_recording_end_stop">Przyciskiem stop</string>
-    <string name="settings_recording_end_hint">„Po ciszy” kończy nagranie, gdy przestaniesz mówić. „Przyciskiem stop” słucha, aż sam zatrzymasz.</string>
+    <string name="settings_recording_end_hint">„Po ciszy” kończy nagranie, gdy przestaniesz mówić. „Przyciskiem stop” słucha, dopóki go nie naciśniesz.</string>
     <string name="settings_max_length">Najdłuższe nagranie</string>
     <string name="settings_max_length_hint">Zabezpieczenie, gdy zapomnisz zatrzymać nagrywanie.</string>
     <string name="settings_seconds">%d s</string>
+    <!-- Spoken by screen readers instead of the short "10 s" / "12 min" -->
+    <plurals name="duration_seconds">
+        <item quantity="one">%d sekunda</item>
+        <item quantity="few">%d sekundy</item>
+        <item quantity="many">%d sekund</item>
+        <item quantity="other">%d sekundy</item>
+    </plurals>
+    <plurals name="duration_minutes">
+        <item quantity="one">%d minuta</item>
+        <item quantity="few">%d minuty</item>
+        <item quantity="many">%d minut</item>
+        <item quantity="other">%d minuty</item>
+    </plurals>
     <string name="settings_minutes">%d min</string>
     <string name="settings_speech_language">Język mowy</string>
-    <string name="settings_speech_language_hint">W tym języku telefon rozpoznaje mowę. Notatki mieszane (np. angielskie słowa w polskim zdaniu) zwykle też przechodzą.</string>
+    <string name="settings_speech_language_hint">W tym języku telefon rozpoznaje mowę.</string>
+    <string name="settings_speech_language_more">Notatki mieszane (np. angielskie słowa w polskim zdaniu) zwykle też przechodzą.</string>
     <string name="settings_online_speech">Rozpoznawanie przez internet</string>
     <string name="settings_online_speech_ask">Pytaj</string>
     <string name="settings_online_speech_always">Zawsze</string>
     <string name="settings_online_speech_never">Nigdy</string>
-    <string name="settings_online_speech_hint">Gdy telefon nie ma pakietu offline dla języka mowy, rozpoznawanie przez internet wysyła głos do Google. Na telefonach z rozpoznawaniem na urządzeniu (zwykle Android 12 i nowszy) głos bez Twojej zgody nie wychodzi z telefonu. Na pozostałych system może sam użyć internetu.</string>
+    <string name="settings_online_speech_hint">Gdy telefon nie ma pakietu offline dla języka mowy, rozpoznawanie przez internet wysyła głos do Google.</string>
+    <string name="settings_online_speech_more">Na telefonach z rozpoznawaniem na urządzeniu (zwykle Android 12 i nowszy) głos bez Twojej zgody nie wychodzi z telefonu. Na pozostałych system może sam użyć internetu.</string>
     <string name="settings_save_failed">Nie udało się zapisać zmiany. Spróbuj jeszcze raz.</string>
     <string name="settings_default_priority">Domyślny priorytet</string>
-    <string name="settings_default_priority_hint">Taki priorytet (kolorowa taśma w rogu karteczki) dostaje każda nowa karteczka. Wyjątki: gdy w nagraniu powiesz „pilne” albo „ważne”, dostaje wysoki, a gdy „kiedyś” albo „na spokojnie” - niski. Pomysły nie mają priorytetu.</string>
+    <string name="settings_default_priority_hint">Taki priorytet (kolorowa taśma w rogu karteczki) dostaje każda nowa karteczka.</string>
+    <string name="settings_default_priority_more">Wyjątki: gdy w nagraniu powiesz „pilne” albo „ważne”, dostaje wysoki, a gdy „kiedyś” albo „na spokojnie” - niski. Pomysły nie mają priorytetu.</string>
     <string name="settings_text_size">Wielkość tekstu</string>
     <string name="settings_text_size_hint">Powiększa albo zmniejsza tekst w Tapedo - dodatkowo do wielkości tekstu ustawionej w telefonie.</string>
     <string name="settings_percent" translatable="false">%d%%</string>
@@ -64,6 +79,8 @@
     <string name="settings_app_language">Język aplikacji</string>
     <string name="settings_reduce_motion">Ogranicz animacje</string>
     <string name="settings_reduce_motion_hint">Karteczki i przełączniki zmieniają się od razu, bez ruchu. Działa też samo, gdy animacje są wyłączone w systemie.</string>
+    <string name="settings_more">więcej</string>
+    <string name="settings_less">zwiń</string>
     <string name="settings_off">Wyłączone</string>
     <string name="settings_on">Włączone</string>
     <string name="settings_footer">Notatki są zaszyfrowane i zapisane tylko na tym telefonie. Tapedo nie zapisuje dźwięku - zostaje sam tekst. Z telefonu wychodzi tylko to, na co się zgodzisz: tekst notatki do wybranego dostawcy AI i głos do Google przy rozpoznawaniu przez internet.</string>
@@ -75,12 +92,15 @@
     <!-- Values -->
     <string name="language_polish" translatable="false">Polski</string>
     <string name="language_english" translatable="false">English</string>
+    <!-- Speech language: named in the app language (the app language list keeps each name in its own language) -->
+    <string name="speech_language_polish">Polski</string>
+    <string name="speech_language_english">Angielski</string>
     <string name="note_type_note">Notatka</string>
     <string name="note_type_checklist">Lista punktów</string>
-    <string name="note_type_auto">Sam pozna</string>
+    <string name="note_type_auto">Samo pozna</string>
     <string name="note_type_task">Zadanie</string>
     <string name="note_type_idea">Pomysł</string>
-    <string name="note_type_event">Spotkanie</string>
+    <string name="note_type_event">Wydarzenie</string>
     <string name="note_type_shopping">Zakupy</string>
     <string name="priority_high">Wysoki</string>
     <string name="priority_medium">Średni</string>
@@ -94,13 +114,13 @@
     <string name="ai_none">Bez AI</string>
     <string name="ai_gemini" translatable="false">Gemini</string>
     <string name="ai_groq" translatable="false">Groq</string>
-    <string name="ai_none_hint">Notatki rozpisują proste reguły: zakupy po słowie „kup”, spotkanie po „o 10”, priorytet po „pilne”, termin po „jutro”. Działa bez internetu, a tekst notatki nie wychodzi z telefonu.</string>
+    <string name="ai_none_hint">Notatki rozpisują proste reguły: zakupy po słowie „kup”, wydarzenie po „o 10”, priorytet po „pilne”, termin po „jutro”. Działa bez internetu, a tekst notatki nie wychodzi z telefonu.</string>
     <string name="ai_free_stamp">Darmowy plan</string>
     <string name="ai_what_title">Co to jest</string>
     <string name="ai_privacy_title">Gdzie trafiają dane</string>
     <string name="ai_steps_title">Jak zdobyć klucz</string>
-    <string name="ai_gemini_what">Model AI od Google. Rozpisuje notatkę na osobne zadania i listy, poprawia przekręcone słowa. Darmowy plan ma dzienny limit zapytań - aktualny widać w Google AI Studio.</string>
-    <string name="ai_gemini_privacy">Do Google trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. W UE, Szwajcarii i Wielkiej Brytanii Google nie używa go do ulepszania swoich modeli, także na darmowym planie. Poza tymi krajami darmowy plan pozwala Google używać tekstu i dawać go do przeczytania ludziom - wtedy nie dyktuj danych wrażliwych.</string>
+    <string name="ai_gemini_what">Model AI od Google. Rozpisuje notatkę na osobne zadania i listy, poprawia przekręcone słowa. Darmowy plan ma dzienny limit zapytań - aktualny widać w Google AI Studio. Tylko dla osób pełnoletnich (18+): klucz zakładasz na własnym koncie Google i korzystasz z niego na warunkach Google.</string>
+    <string name="ai_gemini_privacy">Do Google trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. W EOG (UE, Norwegia, Islandia, Liechtenstein), Szwajcarii i Wielkiej Brytanii Google nie używa go do ulepszania swoich modeli, także na darmowym planie. Poza tymi miejscami darmowy plan pozwala Google używać tekstu i dawać go do przeczytania ludziom - wtedy nie dyktuj danych wrażliwych.</string>
     <string name="ai_gemini_step1">Otwórz Google AI Studio przyciskiem poniżej i zaloguj się kontem Google.</string>
     <string name="ai_gemini_step2">Kliknij „Create API key” (utwórz klucz).</string>
     <string name="ai_gemini_step3">Skopiuj klucz - zaczyna się od „AIza” - i wklej go niżej.</string>
@@ -112,7 +132,7 @@
     <string name="ai_groq_step3">Skopiuj klucz - zaczyna się od „gsk_” - i wklej go niżej.</string>
     <string name="ai_groq_open">Otwórz konsolę Groq</string>
     <string name="ai_key_label">Klucz API</string>
-    <string name="ai_key_hint">Klucz jest zaszyfrowany na tym telefonie i nigdzie nie jest wysyłany poza wybranego dostawcę.</string>
+    <string name="ai_key_hint">Klucz jest zaszyfrowany na tym telefonie i trafia tylko do wybranego dostawcy.</string>
     <string name="ai_key_saved">Klucz zapisany: ••••%s</string>
     <string name="ai_key_none">Brak klucza - do czasu wklejenia działają reguły bez AI.</string>
     <string name="ai_key_save">Zapisz klucz</string>
@@ -123,7 +143,8 @@
     <string name="ai_test_running">Sprawdzam…</string>
     <string name="ai_test_ok">Działa. Pierwsza karteczka z próbnej notatki: „%s”.</string>
     <string name="ai_error_missing_key">Najpierw wklej i zapisz klucz.</string>
-    <string name="ai_error_invalid_key">Dostawca odrzucił klucz. Sprawdź, czy skopiowałeś go w całości.</string>
+    <string name="ai_error_key_unreadable">Nie udało się odczytać zapisanego klucza - spróbuj jeszcze raz. Klucz nie zginął. Jeśli to się powtarza, wklej go ponownie w Ustawieniach.</string>
+    <string name="ai_error_invalid_key">Dostawca odrzucił klucz. Sprawdź, czy klucz jest skopiowany w całości.</string>
     <string name="ai_error_rate_limited">Wyczerpany darmowy limit - spróbuj później. Do tego czasu działają reguły bez AI.</string>
     <string name="ai_error_network">Brak połączenia z dostawcą. Sprawdź internet.</string>
     <string name="ai_error_server">Dostawca ma chwilowy problem (błąd %d). Spróbuj później.</string>
@@ -162,11 +183,12 @@
     <string name="stack_action_failed">Nie udało się zapisać zmiany. Spróbuj jeszcze raz.</string>
     <string name="stack_deleted">Usunięto „%s”</string>
     <string name="stack_undo">Cofnij</string>
+    <string name="strip_delete_desc">Usuń „%s”</string>
     <string name="tab_all">Wszystkie</string>
     <string name="tab_shopping">Zakupy</string>
     <string name="tab_checklist">Listy</string>
     <string name="tab_task">Zadania</string>
-    <string name="tab_event">Spotkania</string>
+    <string name="tab_event">Wydarzenia</string>
     <string name="tab_note">Notatki</string>
     <string name="tab_idea">Pomysły</string>
     <string name="tab_done">Zrobione</string>

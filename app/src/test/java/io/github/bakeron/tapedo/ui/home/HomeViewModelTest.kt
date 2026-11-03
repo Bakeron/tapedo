@@ -8,6 +8,7 @@ import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
+import io.github.bakeron.tapedo.core.settings.RecordingEnd
 import io.github.bakeron.tapedo.core.settings.SettingsStore
 import io.github.bakeron.tapedo.core.speech.SpeechError
 import io.github.bakeron.tapedo.core.speech.SpeechEvent
@@ -16,16 +17,19 @@ import io.github.bakeron.tapedo.data.LockedNotesNotice
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -60,7 +64,10 @@ class HomeViewModelTest {
             this.allowOnline += allowOnline
             return events()
         }
-        override fun stop() = Unit
+        var stops = 0
+        override fun stop() {
+            stops++
+        }
     }
 
     /** In-memory notes. Save number [failOnSave] throws once, like a full disk; [failOpen] breaks reading. */
@@ -117,10 +124,41 @@ class HomeViewModelTest {
         notice,
         nowMillis = { 1_000L },
         todayEpochDay = { 20_000L },
+        timeSource = testScheduler.timeSource,
     ).also { vm ->
         backgroundScope.launch { vm.settings.collect { } }
         backgroundScope.launch { vm.stack.collect { } }
         runCurrent()
+    }
+
+    @Test
+    fun `the recording limit stops listening exactly once`() = runTest(dispatcher) {
+        // The recognizer keeps listening until the test closes it - like "stop button" mode.
+        val events = Channel<SpeechEvent>(Channel.UNLIMITED)
+        val speech = FakeSpeech { events.receiveAsFlow() }
+        val vm = viewModel(FakeStore(AppSettings(recordingEnd = RecordingEnd.STOP_BUTTON, maxRecordingSeconds = 10)), speech)
+
+        vm.startRecording()
+        runCurrent()
+        advanceTimeBy(9_900)
+        runCurrent()
+        assertEquals("no stop before the limit", 0, speech.stops)
+
+        advanceTimeBy(200) // 10.1 s
+        runCurrent()
+        assertEquals(1, speech.stops)
+        val active = vm.recording.value as RecordingState.Active
+        assertEquals(10, active.elapsedSeconds)
+        assertEquals(10, active.limitSeconds)
+
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals("the limit is hit once, not on every tick", 1, speech.stops)
+        assertEquals(15, (vm.recording.value as RecordingState.Active).elapsedSeconds)
+
+        events.close()
+        runCurrent()
+        assertEquals(RecordingState.Idle, vm.recording.value)
     }
 
     @Test
@@ -254,6 +292,30 @@ class HomeViewModelTest {
         runCurrent()
         assertEquals(setOf(id), notes.rows.value.keys)
         assertEquals(null, vm.deleted.value)
+    }
+
+    @Test
+    fun `deleting from the preview closes it and offers undo`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        val vm = viewModel(FakeStore(AppSettings()), notes = notes)
+        val id = notes.save(Note(title = "Zakupy", createdAtMillis = 1))
+        runCurrent()
+        val note = notes.rows.value.getValue(id)
+
+        vm.openPreview(note)
+        vm.deleteFromPreview(note)
+        runCurrent()
+        assertTrue(notes.rows.value.isEmpty())
+        assertEquals("Zakupy", vm.deleted.value?.title)
+
+        // Undo brings the card back to the stack, not onto a preview screen.
+        vm.undoDelete()
+        runCurrent()
+        assertEquals(setOf(id), notes.rows.value.keys)
+        val preview = backgroundScope.launch { vm.preview.collect {} }
+        runCurrent()
+        assertEquals(null, vm.preview.value)
+        preview.cancel()
     }
 
     @Test

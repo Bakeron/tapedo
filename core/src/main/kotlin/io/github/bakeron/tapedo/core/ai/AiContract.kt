@@ -26,6 +26,8 @@ data class StructureRequest(
 /** Why an AI call failed - shown to the user in plain words, never with the key or the note text. */
 sealed class AiError(message: String) : Exception(message) {
     object MissingKey : AiError("No API key")
+    /** A key is saved, but reading it failed for now (even after retries) - it is not lost. */
+    object KeyUnreadable : AiError("API key could not be read")
     object InvalidKey : AiError("API key rejected")
     object RateLimited : AiError("Free limit reached")
     class Network(cause: Throwable) : AiError("Network problem: ${cause::class.simpleName}")

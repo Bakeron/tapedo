@@ -45,7 +45,8 @@ import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 
 /**
  * One saved card on the whole screen - e.g. the shopping list in the shop, without the rest of the stack.
- * Items tick off here; "Add by voice" records more and adds it to this card; "Edit" opens the editor.
+ * Items tick off here; "Add by voice" records more and adds it to this card; "Edit" opens the editor;
+ * "Delete" (under the card, away from the ticks) goes back to the stack, where undo is offered.
  */
 @Composable
 fun PreviewScreen(
@@ -58,6 +59,7 @@ fun PreviewScreen(
     onEdit: () -> Unit,
     onToggleItem: (Int) -> Unit,
     onToggleDone: () -> Unit,
+    onDelete: () -> Unit,
     onStartAppend: () -> Unit,
     onStopAppend: () -> Unit,
     onMicDenied: () -> Unit,
@@ -134,6 +136,7 @@ fun PreviewScreen(
                 onToggleItem = onToggleItem,
                 onToggleDone = onToggleDone,
             )
+            PaperButton(stringResource(R.string.editor_delete), onClick = onDelete, style = PaperButtonStyle.DANGER)
         }
 
         // Add by voice: the live line and words while recording, a short hint otherwise.

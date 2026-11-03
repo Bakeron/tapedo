@@ -29,7 +29,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -60,8 +62,8 @@ fun <T> SlideSelector(
         modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
-            .background(scheme.surfaceContainerHighest, trackShape)
-            .border(1.dp, colors.rule, trackShape)
+            .background(colors.track, trackShape)
+            .border(1.dp, colors.controlEdge, trackShape)
             .padding(3.dp),
     ) {
         val segment = maxWidth / options.size
@@ -83,7 +85,17 @@ fun <T> SlideSelector(
                     .width(segment)
                     .fillMaxHeight()
                     .shadow(2.dp, RoundedCornerShape(4.dp))
-                    .background(colors.card, RoundedCornerShape(4.dp))
+                    .background(colors.knob, RoundedCornerShape(4.dp))
+                    // Light catching the top edge - the knob reads as raised also on the dark panel.
+                    .drawBehind {
+                        val inset = 3.dp.toPx()
+                        drawLine(
+                            colors.knobLight,
+                            Offset(inset, 1.5.dp.toPx()),
+                            Offset(size.width - inset, 1.5.dp.toPx()),
+                            strokeWidth = 1.dp.toPx(),
+                        )
+                    }
                     // Full-contrast edge: the knob stands out from the track in both themes.
                     .border(1.5.dp, scheme.outline, RoundedCornerShape(4.dp)),
             )
