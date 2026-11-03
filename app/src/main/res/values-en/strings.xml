@@ -153,6 +153,8 @@
         <item quantity="other">Save cards</item>
     </plurals>
     <string name="review_discard">Discard</string>
+    <string name="review_record_more">Record more</string>
+    <string name="review_more_failed">%s The cards are unchanged.</string>
     <string name="review_discard_confirm">Really discard?</string>
 
     <!-- Card stack -->

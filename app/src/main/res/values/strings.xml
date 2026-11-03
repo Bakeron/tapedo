@@ -173,6 +173,8 @@
         <item quantity="other">Zapisz karteczki</item>
     </plurals>
     <string name="review_discard">Wyrzuć</string>
+    <string name="review_record_more">Nagraj dalej</string>
+    <string name="review_more_failed">%s Karteczki są bez zmian.</string>
     <string name="review_discard_confirm">Na pewno wyrzucić?</string>
 
     <!-- Card stack -->

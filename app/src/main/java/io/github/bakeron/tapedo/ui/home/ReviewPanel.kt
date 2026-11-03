@@ -1,6 +1,10 @@
 package io.github.bakeron.tapedo.ui.home
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.tween
@@ -34,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -42,6 +47,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.ui.cards.IndexCard
 import io.github.bakeron.tapedo.ui.cards.marginLine
@@ -55,6 +61,7 @@ import kotlinx.coroutines.delay
 /**
  * The window after a recording: what was heard comes out of the typewriter letter by letter,
  * then it is cut into cards that drop in one by one. Save puts them on the stack; back saves too.
+ * "Record more" keeps dictating into the same cards (e.g. the rest of a shopping list at the fridge).
  */
 @Composable
 fun ReviewPanel(
@@ -63,6 +70,8 @@ fun ReviewPanel(
     onDiscard: () -> Unit,
     onEdit: (Int) -> Unit,
     onRemove: (Int) -> Unit,
+    onRecordMore: () -> Unit = {},
+    onRecordMoreDenied: () -> Unit = {},
 ) {
     val transcript = when (state) {
         is RecordingState.Structuring -> state.transcript
@@ -73,6 +82,10 @@ fun ReviewPanel(
     val scheme = MaterialTheme.colorScheme
     val colors = TapedoTheme.colors
     val reduceMotion = TapedoTheme.reduceMotion
+    val context = LocalContext.current
+    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) onRecordMore() else onRecordMoreDenied()
+    }
 
     // Back keeps the cards; while they are still being written it simply waits.
     BackHandler(onBack = { if (review != null) onSave() })
@@ -186,6 +199,28 @@ fun ReviewPanel(
                     .semantics { liveRegion = LiveRegionMode.Assertive },
             )
         }
+        review?.moreFailed?.let { error ->
+            Text(
+                stringResource(R.string.review_more_failed, speechErrorText(error)),
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.record,
+                modifier = Modifier
+                    .padding(horizontal = 20.dp, vertical = 4.dp)
+                    .semantics { liveRegion = LiveRegionMode.Assertive },
+            )
+        }
+        PaperButton(
+            stringResource(R.string.review_record_more),
+            onClick = {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    onRecordMore()
+                } else {
+                    askMic.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            },
+            enabled = review != null,
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp),
+        )
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),

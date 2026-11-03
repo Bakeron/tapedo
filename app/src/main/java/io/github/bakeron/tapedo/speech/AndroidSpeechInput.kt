@@ -9,6 +9,7 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import io.github.bakeron.tapedo.core.speech.Phrases
 import io.github.bakeron.tapedo.core.speech.RecognizerErrorKind
 import io.github.bakeron.tapedo.core.speech.RecognizerErrorPolicy
 import io.github.bakeron.tapedo.core.speech.RecognizerStep
@@ -30,7 +31,8 @@ import kotlinx.coroutines.flow.flowOn
  * pack is missing. No audio is saved.
  *
  * The recognizer stops by itself after a pause. In "stop button" mode it is restarted after each
- * phrase and the phrases are joined, so one recording can last up to the user's limit.
+ * phrase and the phrases are joined (a pause becomes a comma, so items said one by one stay separate),
+ * so one recording can last up to the user's limit.
  * SpeechRecognizer must be used on the main thread - hence [flowOn] Main and the [main] handler.
  */
 class AndroidSpeechInput(private val context: Context) : SpeechInput {
@@ -68,8 +70,16 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         var stopping = false
         var closed = false
         var offline = true
+        // The words on screen for the phrase being spoken. Some recognizers end a phrase with "no match"
+        // (or an empty result) after showing it - what the user saw on screen is still kept.
+        var shown = ""
 
-        fun soFar(current: String = "") = (phrases + current).filter { it.isNotBlank() }.joinToString(" ")
+        fun soFar(current: String = "") = Phrases.join(phrases + current)
+
+        fun keepShown() {
+            if (shown.isNotBlank()) phrases += shown
+            shown = ""
+        }
 
         fun finish() {
             trySend(if (phrases.isEmpty()) SpeechEvent.Failed(SpeechError.NO_SPEECH) else SpeechEvent.Done(soFar()))
@@ -108,15 +118,21 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
 
             override fun onPartialResults(partialResults: Bundle?) {
                 val text = partialResults.firstResult()
-                if (!text.isNullOrBlank()) trySend(SpeechEvent.Partial(soFar(text)))
+                if (!text.isNullOrBlank()) {
+                    shown = text
+                    trySend(SpeechEvent.Partial(soFar(text)))
+                }
             }
 
             override fun onResults(results: Bundle?) {
-                results.firstResult()?.takeIf { it.isNotBlank() }?.let { phrases += it }
+                val text = results.firstResult()
+                if (text.isNullOrBlank()) keepShown() else phrases += text
+                shown = ""
                 if (untilStopped && !stopping) restart() else finish()
             }
 
             override fun onError(error: Int) {
+                keepShown()
                 val step = RecognizerErrorPolicy.decide(
                     error = kindOf(error),
                     offline = offline,

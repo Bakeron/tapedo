@@ -319,6 +319,48 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `record more adds the new items to the list and keeps the edits`() = runTest(dispatcher) {
+        val said = ArrayDeque(listOf("Lista zakupów, mleko", "marchewki, jajka"))
+        val speech = FakeSpeech { flowOf(SpeechEvent.Done(said.removeFirst())) }
+        val vm = viewModel(FakeStore(AppSettings()), speech)
+
+        vm.startRecording()
+        runCurrent()
+        vm.editDraft(0)
+        vm.changeEditing(vm.editing.value!!.note.copy(title = "Sklep"))
+        vm.finishEditing()
+
+        vm.recordMore()
+        runCurrent()
+        val review = vm.recording.value as RecordingState.Review
+        val list = review.cards.single()
+        assertEquals("Sklep", list.title)
+        assertEquals(listOf("Mleko", "Marchewki", "Jajka"), list.items.map { it.text })
+        assertEquals("Lista zakupów, mleko, marchewki, jajka", review.transcript)
+        assertEquals(null, review.moreFailed)
+    }
+
+    @Test
+    fun `record more that hears nothing brings the same cards back`() = runTest(dispatcher) {
+        var calls = 0
+        val speech = FakeSpeech {
+            calls++
+            if (calls == 1) flowOf(SpeechEvent.Done("Zadzwonić do mamy w niedzielę")) else flowOf(SpeechEvent.Failed(SpeechError.NO_SPEECH))
+        }
+        val vm = viewModel(FakeStore(AppSettings()), speech)
+
+        vm.startRecording()
+        runCurrent()
+        val before = (vm.recording.value as RecordingState.Review).cards
+
+        vm.recordMore()
+        runCurrent()
+        val review = vm.recording.value as RecordingState.Review
+        assertEquals(before, review.cards)
+        assertEquals(SpeechError.NO_SPEECH, review.moreFailed)
+    }
+
+    @Test
     fun `ticking an item saves the card with only that item changed`() = runTest(dispatcher) {
         val notes = FakeNotes()
         val vm = viewModel(FakeStore(AppSettings()), notes = notes)

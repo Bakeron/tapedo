@@ -14,6 +14,7 @@ import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.settings.RecordingEnd
 import io.github.bakeron.tapedo.core.settings.SettingsStore
+import io.github.bakeron.tapedo.core.speech.Phrases
 import io.github.bakeron.tapedo.core.speech.SpeechError
 import io.github.bakeron.tapedo.core.speech.SpeechEvent
 import io.github.bakeron.tapedo.core.speech.SpeechInput
@@ -66,6 +67,8 @@ sealed interface RecordingState {
         /** AI was chosen but failed - the rules wrote these cards instead. */
         val aiError: AiError? = null,
         val saveFailed: Boolean = false,
+        /** "Record more" heard nothing usable (or could not start) - the cards are unchanged. */
+        val moreFailed: SpeechError? = null,
     ) : RecordingState
 
     data class Failed(val error: SpeechError) : RecordingState
@@ -153,6 +156,9 @@ class HomeViewModel(
     private var undoTimer: Job? = null
     private var saving = false
 
+    /** The review window put aside while "record more" listens - it comes back whatever happens. */
+    private var continuing: RecordingState.Review? = null
+
     init {
         // The set-aside happens while the database opens, so look for it after the first good read.
         viewModelScope.launch {
@@ -236,16 +242,20 @@ class HomeViewModel(
                         is SpeechEvent.Partial -> _recording.update {
                             if (it is RecordingState.Active) it.copy(text = e.text) else it
                         }
-                        is SpeechEvent.Done -> if (appendTo != null) appendSpoken(appendTo, e.text) else onTranscript(e.text)
-                        is SpeechEvent.Failed -> _recording.value = RecordingState.Failed(e.error)
+                        is SpeechEvent.Done -> when {
+                            appendTo != null -> appendSpoken(appendTo, e.text)
+                            continuing != null -> continueReview(e.text)
+                            else -> onTranscript(e.text)
+                        }
+                        is SpeechEvent.Failed -> endRecording(e.error)
                     }
                 }
-                if (_recording.value is RecordingState.Active) _recording.value = RecordingState.Idle
+                if (_recording.value is RecordingState.Active) endRecording(null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 // The recognizer itself crashed - a message instead of closing the app.
-                _recording.value = RecordingState.Failed(SpeechError.OTHER)
+                endRecording(SpeechError.OTHER)
             } finally {
                 sampler.cancel()
             }
@@ -253,6 +263,83 @@ class HomeViewModel(
     }
 
     fun stopRecording() = speech.stop()
+
+    /** Back to the review window when "record more" was listening; otherwise the error (or nothing) on the stack. */
+    private fun endRecording(error: SpeechError?) {
+        val review = continuing
+        continuing = null
+        _recording.value = when {
+            review != null -> review.copy(moreFailed = error)
+            error != null -> RecordingState.Failed(error)
+            else -> RecordingState.Idle
+        }
+    }
+
+    /**
+     * "Record more" in the review window: keeps listening for the same dictation, e.g. a shopping list
+     * finished at the open fridge. The cards on screen are never lost - they come back even if nothing is heard.
+     */
+    fun recordMore(allowOnlineOnce: Boolean = false) {
+        val review = _recording.value as? RecordingState.Review ?: return
+        if (saving || session?.isActive == true) return
+        continuing = review.copy(saveFailed = false, moreFailed = null)
+        _recording.value = RecordingState.Idle
+        startRecording(allowOnlineOnce)
+    }
+
+    /** The microphone was refused for "record more" - the review stays, with the reason. */
+    fun recordMoreDenied() {
+        _recording.update { if (it is RecordingState.Review) it.copy(moreFailed = SpeechError.NO_PERMISSION) else it }
+    }
+
+    /**
+     * Adds what was said to the review: to the list card as new items (keeping the user's edits),
+     * or - with no list among the cards - cuts the whole dictation again, as if it had been one recording.
+     */
+    private fun continueReview(text: String) {
+        val review = continuing ?: return
+        continuing = null
+        val spoken = text.trim()
+        if (spoken.isEmpty()) {
+            _recording.value = review.copy(moreFailed = SpeechError.NO_SPEECH)
+            return
+        }
+        val transcript = Phrases.join(listOf(review.transcript, spoken))
+        val listIndex = review.cards.indexOfLast { it.type.hasItems }
+        if (listIndex < 0) {
+            onTranscript(transcript)
+            return
+        }
+        _recording.value = RecordingState.Structuring(transcript)
+        viewModelScope.launch {
+            val (added, aiError) = spokenItems(spoken, review.cards[listIndex].type)
+            val cards = review.cards.mapIndexed { i, card -> if (i == listIndex) card.copy(items = card.items + added) else card }
+            _recording.value = review.copy(transcript = transcript, cards = cards, aiError = aiError ?: review.aiError)
+        }
+    }
+
+    /** Items said for a list of [type], split and grouped like a new list (rules or the chosen AI); never empty. */
+    private suspend fun spokenItems(spoken: String, type: NoteType): Pair<List<ChecklistItem>, AiError?> {
+        val s = settings.value ?: AppSettings()
+        val result = try {
+            structurer.structure(
+                transcript = spoken,
+                provider = s.aiProvider,
+                chosenType = type,
+                defaultPriority = s.defaultPriority,
+                listTitles = listTitles,
+                todayEpochDay = todayEpochDay(),
+                nowMillis = nowMillis(),
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        val group = if (type == NoteType.SHOPPING) ShoppingGroup.OTHER else null
+        val items = result?.notes?.flatMap { it.items }.orEmpty().ifEmpty { listOf(ChecklistItem(spoken, group = group)) }
+        return items to result?.aiError
+    }
 
     /** The user refused the microphone permission. */
     fun micDenied() {
@@ -313,26 +400,7 @@ class HomeViewModel(
             try {
                 val note = notes.observeAll().first().firstOrNull { it.id == id } ?: return@launch
                 val updated = if (note.type.hasItems) {
-                    val s = settings.value ?: AppSettings()
-                    val result = try {
-                        structurer.structure(
-                            transcript = spoken,
-                            provider = s.aiProvider,
-                            chosenType = note.type,
-                            defaultPriority = s.defaultPriority,
-                            listTitles = listTitles,
-                            todayEpochDay = todayEpochDay(),
-                            nowMillis = nowMillis(),
-                        )
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        null
-                    }
-                    val group = if (note.type == NoteType.SHOPPING) ShoppingGroup.OTHER else null
-                    val added = result?.notes?.flatMap { it.items }.orEmpty()
-                        .ifEmpty { listOf(ChecklistItem(spoken, group = group)) }
-                    note.copy(items = note.items + added)
+                    note.copy(items = note.items + spokenItems(spoken, note.type).first)
                 } else {
                     note.copy(body = listOf(note.body.trim(), spoken).filter { it.isNotEmpty() }.joinToString("\n"))
                 }

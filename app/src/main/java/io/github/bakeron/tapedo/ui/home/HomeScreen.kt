@@ -129,6 +129,8 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onDiscard = viewModel::discardReview,
             onEdit = viewModel::editDraft,
             onRemove = viewModel::removeCard,
+            onRecordMore = { viewModel.recordMore() },
+            onRecordMoreDenied = viewModel::recordMoreDenied,
         )
 
         shown != null -> PreviewScreen(
@@ -488,7 +490,7 @@ private fun UndoBar(note: Note, onUndo: () -> Unit, modifier: Modifier = Modifie
 }
 
 @Composable
-private fun speechErrorText(error: SpeechError): String = stringResource(
+internal fun speechErrorText(error: SpeechError): String = stringResource(
     when (error) {
         SpeechError.NO_PERMISSION -> R.string.speech_error_permission
         SpeechError.NOT_AVAILABLE -> R.string.speech_error_not_available

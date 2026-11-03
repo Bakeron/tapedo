@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -29,10 +31,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -140,13 +149,17 @@ fun NoteEditor(
                     textStyle = MaterialTheme.typography.titleLarge,
                     singleLine = true,
                 )
-                PaperField(
-                    label = stringResource(R.string.editor_field_body),
-                    value = note.body,
-                    onValueChange = { onChange(note.copy(body = it)) },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    minLines = 3,
-                )
+                // A list is its items - an empty "text" field above them only takes room.
+                // Text a list already has (e.g. from the AI) stays visible and editable.
+                if (!note.type.hasItems || note.body.isNotBlank()) {
+                    PaperField(
+                        label = stringResource(R.string.editor_field_body),
+                        value = note.body,
+                        onValueChange = { onChange(note.copy(body = it)) },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        minLines = if (note.type.hasItems) 1 else 3,
+                    )
+                }
                 if (note.type.hasItems) {
                     ItemsEditor(note.items, note.type == NoteType.SHOPPING) { onChange(note.copy(items = it)) }
                 }
@@ -274,21 +287,51 @@ private fun PaperField(
     }
 }
 
+/**
+ * The list items as ruled lines: tick box, text and x sit on one line, with the rule under the whole row -
+ * not under the text field alone, which centred the rule on the tick box and left the text floating above it.
+ */
 @Composable
 private fun ItemsEditor(items: List<ChecklistItem>, shopping: Boolean, onChange: (List<ChecklistItem>) -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // "Add item" puts the cursor on the new line, so typing can start at once.
+    var focusIndex by remember { mutableStateOf<Int?>(null) }
+    val newItem = remember { FocusRequester() }
+    LaunchedEffect(focusIndex, items.size) {
+        if (focusIndex != null && focusIndex in items.indices) {
+            newItem.requestFocus()
+            focusIndex = null
+        }
+    }
+    Column {
         Text(stringResource(R.string.editor_field_items), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
         items.forEachIndexed { i, item ->
             val itemLabel = stringResource(R.string.editor_item_label, i + 1)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val state = stringResource(if (item.checked) R.string.card_item_checked else R.string.card_item_unchecked)
-                IconButton(
-                    onClick = { onChange(items.mapIndexed { j, it -> if (j == i) it.copy(checked = !it.checked) else it }) },
-                    modifier = Modifier.semantics {
-                        contentDescription = itemLabel
-                        stateDescription = state
+            val rule = scheme.outlineVariant
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 44.dp)
+                    .drawBehind {
+                        val y = size.height - 0.5.dp.toPx()
+                        drawLine(rule, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
                     },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val state = stringResource(if (item.checked) R.string.card_item_checked else R.string.card_item_unchecked)
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .toggleable(
+                            value = item.checked,
+                            role = Role.Checkbox,
+                            onValueChange = { checked -> onChange(items.mapIndexed { j, it -> if (j == i) it.copy(checked = checked) else it }) },
+                        )
+                        .semantics {
+                            contentDescription = itemLabel
+                            stateDescription = state
+                        },
+                    contentAlignment = Alignment.Center,
                 ) { PencilBox(item.checked, scheme.onSurface) }
                 BasicTextField(
                     value = item.text,
@@ -296,22 +339,16 @@ private fun ItemsEditor(items: List<ChecklistItem>, shopping: Boolean, onChange:
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
                     singleLine = true,
                     cursorBrush = SolidColor(scheme.primary),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 40.dp)
+                        .then(if (i == items.lastIndex) Modifier.focusRequester(newItem) else Modifier)
                         .semantics { contentDescription = itemLabel },
-                    decorationBox = { inner ->
-                        Column {
-                            inner()
-                            Spacer(Modifier.height(4.dp))
-                            Spacer(Modifier.fillMaxWidth().height(1.dp).background(scheme.outlineVariant))
-                        }
-                    },
                 )
                 val removeLabel = stringResource(R.string.editor_remove_item, i + 1)
                 IconButton(
                     onClick = { onChange(items.filterIndexed { j, _ -> j != i }) },
-                    modifier = Modifier.semantics { contentDescription = removeLabel },
+                    modifier = Modifier.size(44.dp).semantics { contentDescription = removeLabel },
                 ) {
                     Text(
                         "×",
@@ -324,7 +361,11 @@ private fun ItemsEditor(items: List<ChecklistItem>, shopping: Boolean, onChange:
         }
         PaperButton(
             stringResource(R.string.editor_add_item),
-            onClick = { onChange(items + ChecklistItem("", group = if (shopping) ShoppingGroup.OTHER else null)) },
+            onClick = {
+                onChange(items + ChecklistItem("", group = if (shopping) ShoppingGroup.OTHER else null))
+                focusIndex = items.size
+            },
+            modifier = Modifier.padding(top = 8.dp),
         )
     }
 }
