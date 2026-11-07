@@ -22,9 +22,10 @@ import io.github.bakeron.tapedo.ui.theme.TapedoTheme
  *
  * @param levels voice levels 0..1, oldest first
  * @param sampleCount total samples so far - the zigzag direction follows it, so the line does not flicker as it scrolls
+ * @param penUp the microphone is closed for a moment: the pen lifts off the paper (a hollow ring above the line)
  */
 @Composable
-fun Seismograph(levels: List<Float>, sampleCount: Long, capacity: Int, modifier: Modifier = Modifier) {
+fun Seismograph(levels: List<Float>, sampleCount: Long, capacity: Int, modifier: Modifier = Modifier, penUp: Boolean = false) {
     val colors = TapedoTheme.colors
     // Paper: graphite on graph paper. Panel: an amber trace on a dark oscilloscope screen.
     val ink = colors.traceInk
@@ -67,7 +68,12 @@ fun Seismograph(levels: List<Float>, sampleCount: Long, capacity: Int, modifier:
         }
         drawPath(path, ink, style = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
 
-        val tipY = mid + (if ((sampleCount - 1) % 2 == 0L) -1f else 1f) * levels.last() * amp
-        drawCircle(colors.record, radius = 4.dp.toPx(), center = Offset(size.width - pad, tipY))
+        if (penUp) {
+            // Lifted pen: off the trace, near the top edge, hollow - nothing is being written.
+            drawCircle(colors.record, radius = 5.dp.toPx(), center = Offset(size.width - pad, pad + 5.dp.toPx()), style = Stroke(2.dp.toPx()))
+        } else {
+            val tipY = mid + (if ((sampleCount - 1) % 2 == 0L) -1f else 1f) * levels.last() * amp
+            drawCircle(colors.record, radius = 4.dp.toPx(), center = Offset(size.width - pad, tipY))
+        }
     }
 }

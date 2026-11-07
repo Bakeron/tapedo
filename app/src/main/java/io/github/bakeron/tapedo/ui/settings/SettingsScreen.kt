@@ -48,11 +48,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.model.Priority
-import io.github.bakeron.tapedo.core.rules.ListTitles
-import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.settings.RecordingEnd
+import io.github.bakeron.tapedo.core.speech.ListeningMode
 import io.github.bakeron.tapedo.core.settings.ThemeMode
 import io.github.bakeron.tapedo.locale.AppLanguage
 import io.github.bakeron.tapedo.ui.cards.RuledText
@@ -68,13 +67,23 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLicenses: () -> Unit = {}) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val keys by viewModel.keys.collectAsStateWithLifecycle()
+    val ai by viewModel.ai.collectAsStateWithLifecycle()
     val saveFailed by viewModel.saveFailed.collectAsStateWithLifecycle()
-    val sample = stringResource(R.string.ai_test_sample)
-    val listTitles = ListTitles(
-        shopping = stringResource(R.string.default_shopping_title),
-        checklist = stringResource(R.string.default_checklist_title),
-    )
+    val listeningMode by viewModel.listeningMode.collectAsStateWithLifecycle()
+    val actions = remember(viewModel) {
+        AiActions(
+            toggle = viewModel::toggle,
+            editKey = viewModel::editKey,
+            showKey = viewModel::showKey,
+            saveKey = viewModel::saveKey,
+            deleteKey = viewModel::deleteKey,
+            keyNoteSeen = viewModel::keyNoteSeen,
+            setModel = viewModel::setModel,
+            check = viewModel::check,
+            fetchModels = viewModel::fetchModels,
+            setDailyLimit = { v -> viewModel.update { it.copy(aiDailyLimit = v) } },
+        )
+    }
     settings?.let {
         SettingsScreen(
             settings = it,
@@ -82,57 +91,9 @@ fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLicens
             onBack = onBack,
             onOpenLicenses = onOpenLicenses,
             saveFailed = saveFailed,
-            aiSection = {
-                AiSection(
-                    provider = it.aiProvider,
-                    keys = keys,
-                    onProvider = { p -> viewModel.update { s -> s.copy(aiProvider = p) } },
-                    onEditKey = { text -> viewModel.editKey(it.aiProvider, text) },
-                    onSaveKey = { key -> viewModel.saveKey(it.aiProvider, key) },
-                    onDeleteKey = { viewModel.deleteKey(it.aiProvider) },
-                    onTest = { viewModel.testKey(it.aiProvider, sample, listTitles) },
-                )
-            },
+            listeningMode = listeningMode,
+            aiSection = { AiSection(it, ai, actions) },
         )
-    }
-}
-
-@Composable
-private fun ColumnScope.AiSection(
-    provider: AiProvider,
-    keys: AiKeyState,
-    onProvider: (AiProvider) -> Unit,
-    onEditKey: (String) -> Unit,
-    onSaveKey: (String) -> Unit,
-    onDeleteKey: () -> Unit,
-    onTest: () -> Unit,
-) {
-    Setting(title = stringResource(R.string.ai_provider)) {
-        SlideSelector(
-            options = AiProvider.entries,
-            selected = provider,
-            label = {
-                when (it) {
-                    AiProvider.NONE -> stringResource(R.string.ai_none)
-                    AiProvider.GEMINI -> stringResource(R.string.ai_gemini)
-                    AiProvider.GROQ -> stringResource(R.string.ai_groq)
-                }
-            },
-            onSelect = onProvider,
-        )
-    }
-    Rule()
-    Column(Modifier.padding(vertical = 10.dp)) {
-        if (provider == AiProvider.NONE) {
-            RuledText(
-                stringResource(R.string.ai_none_hint),
-                MaterialTheme.typography.bodySmall,
-                MaterialTheme.colorScheme.onSurfaceVariant,
-                TapedoTheme.colors.rule,
-            )
-        } else {
-            AiProviderCard(provider, keys, onEditKey, onSaveKey, onDeleteKey, onTest)
-        }
     }
 }
 
@@ -143,6 +104,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenLicenses: () -> Unit = {},
     saveFailed: Boolean = false,
+    listeningMode: ListeningMode = ListeningMode.UNKNOWN,
     aiSection: @Composable ColumnScope.() -> Unit = {},
 ) {
     Column(
@@ -192,6 +154,36 @@ fun SettingsScreen(
                         },
                         onSelect = { v -> onChange { it.copy(recordingEnd = v) } },
                     )
+                }
+                // Which way this phone went in the last recording - continuous or restarted after pauses.
+                RuledText(
+                    stringResource(
+                        when (listeningMode) {
+                            ListeningMode.CONTINUOUS -> R.string.settings_listening_continuous
+                            ListeningMode.RESUMING -> R.string.settings_listening_resuming
+                            ListeningMode.UNKNOWN -> R.string.settings_listening_unknown
+                        },
+                    ),
+                    MaterialTheme.typography.bodySmall,
+                    MaterialTheme.colorScheme.onSurface,
+                    TapedoTheme.colors.rule,
+                    Modifier.padding(bottom = 10.dp),
+                )
+                if (settings.recordingEnd == RecordingEnd.SILENCE) {
+                    Rule()
+                    Setting(
+                        title = stringResource(R.string.settings_silence_length),
+                        hint = stringResource(R.string.settings_silence_length_hint),
+                    ) {
+                        CounterSlider(
+                            options = AppSettings.SILENCE_OPTIONS,
+                            selected = settings.silenceSeconds,
+                            label = { s -> stringResource(R.string.settings_seconds, s) },
+                            spokenLabel = { s -> pluralStringResource(R.plurals.duration_seconds, s, s) },
+                            tick = { s -> if (s % 10 == 0) Tick.MAJOR else if (s % 5 == 0) Tick.MINOR else Tick.NONE },
+                            onSelect = { v -> onChange { it.copy(silenceSeconds = v) } },
+                        )
+                    }
                 }
                 Rule()
                 Setting(

@@ -19,6 +19,12 @@ sealed interface SpeechEvent {
     /** Voice loudness 0..1 - drives the seismograph line. */
     data class Level(val value: Float) : SpeechEvent
 
+    /**
+     * The microphone closed for a moment (the phone restarts its recognizer after a pause) or opened again.
+     * Only on phones without a continuous session - there the user should wait for the pen to come down.
+     */
+    data class Listening(val on: Boolean) : SpeechEvent
+
     /** Text so far: every finished phrase plus the one being spoken. */
     data class Partial(val text: String) : SpeechEvent
 
@@ -29,6 +35,18 @@ sealed interface SpeechEvent {
     data class Failed(val error: SpeechError) : SpeechEvent
 }
 
+/** How the phone's recognizer keeps a long recording going. */
+enum class ListeningMode {
+    /** Not known yet - found out during the first recording. */
+    UNKNOWN,
+
+    /** One session from "record" to "stop": pauses never close the microphone. */
+    CONTINUOUS,
+
+    /** The recognizer ends after each pause and is started again - a short gap without listening. */
+    RESUMING,
+}
+
 /**
  * Speech-to-text of the platform (Android's recognizer; on iPhone it would be Apple's).
  * Kept behind this interface so `core` stays free of Android code. Audio is never stored -
@@ -36,13 +54,17 @@ sealed interface SpeechEvent {
  */
 interface SpeechInput {
     /**
-     * Starts listening when collected; cancelling the collection aborts without a result.
-     * @param untilStopped keep listening across pauses until [stop]; otherwise end at the first silence.
+     * Starts listening when collected and keeps listening across pauses, like a dictaphone, until [stop]
+     * (the stop button, the time limit or Tapedo's own silence countdown call it).
+     * Cancelling the collection aborts without a result.
      * @param allowOnline recognition always starts offline; only with true may it fall back to the online
      *   recognizer when the offline language pack is missing. Otherwise it ends with [SpeechError.OFFLINE_UNAVAILABLE].
      */
-    fun listen(languageTag: String, untilStopped: Boolean, allowOnline: Boolean): Flow<SpeechEvent>
+    fun listen(languageTag: String, allowOnline: Boolean): Flow<SpeechEvent>
 
     /** Ends listening gracefully: what was said so far still arrives as [SpeechEvent.Done]. */
     fun stop()
+
+    /** What the last recordings showed about this phone - for one line in Settings. */
+    suspend fun listeningMode(): ListeningMode
 }

@@ -54,7 +54,7 @@ import io.github.bakeron.tapedo.ui.cards.marginLine
 import io.github.bakeron.tapedo.ui.components.LabelTape
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
-import io.github.bakeron.tapedo.ui.settings.aiErrorMessage
+import io.github.bakeron.tapedo.ui.settings.ProblemView
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 import kotlinx.coroutines.delay
 
@@ -159,13 +159,16 @@ fun ReviewPanel(
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
         }
-        review?.aiError?.let { error ->
-            Text(
-                stringResource(R.string.review_ai_failed, aiErrorMessage(error)),
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
+        if (!review?.aiProblems.isNullOrEmpty()) {
+            // Every provider that failed and what to do - the same words as in Settings.
+            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    stringResource(R.string.review_ai_rules),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+                review.aiProblems.forEach { ProblemView(it) }
+            }
         }
 
         LazyColumn(

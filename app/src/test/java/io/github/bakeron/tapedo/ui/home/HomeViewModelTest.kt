@@ -1,5 +1,8 @@
 package io.github.bakeron.tapedo.ui.home
 
+import io.github.bakeron.tapedo.core.ai.AiChat
+import io.github.bakeron.tapedo.core.ai.AiGateway
+import io.github.bakeron.tapedo.core.ai.MemoryAiUsage
 import io.github.bakeron.tapedo.core.ai.NoteStructurer
 import io.github.bakeron.tapedo.core.ai.SecretStore
 import io.github.bakeron.tapedo.core.data.NoteRepository
@@ -11,6 +14,7 @@ import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.settings.RecordingEnd
 import io.github.bakeron.tapedo.core.settings.SettingsStore
+import io.github.bakeron.tapedo.core.speech.ListeningMode
 import io.github.bakeron.tapedo.core.speech.SpeechError
 import io.github.bakeron.tapedo.core.speech.SpeechEvent
 import io.github.bakeron.tapedo.core.speech.SpeechInput
@@ -61,7 +65,7 @@ class HomeViewModelTest {
     /** Records what each recording was allowed to do and replays [events]. */
     private class FakeSpeech(private val events: () -> Flow<SpeechEvent>) : SpeechInput {
         val allowOnline = mutableListOf<Boolean>()
-        override fun listen(languageTag: String, untilStopped: Boolean, allowOnline: Boolean): Flow<SpeechEvent> {
+        override fun listen(languageTag: String, allowOnline: Boolean): Flow<SpeechEvent> {
             this.allowOnline += allowOnline
             return events()
         }
@@ -69,6 +73,7 @@ class HomeViewModelTest {
         override fun stop() {
             stops++
         }
+        override suspend fun listeningMode() = ListeningMode.UNKNOWN
     }
 
     /** In-memory notes. Save number [failOnSave] throws once, like a full disk; [failOpen] breaks reading. */
@@ -111,6 +116,11 @@ class HomeViewModelTest {
         }
     }
 
+    private object NoGateway : AiGateway {
+        override fun chat(provider: AiProvider, model: String, key: String) = AiChat { _, _, _ -> error("no AI in these tests") }
+        override suspend fun freeModels(provider: AiProvider, key: String?) = emptyList<String>()
+    }
+
     private val noOfflinePack = { flowOf<SpeechEvent>(SpeechEvent.Failed(SpeechError.OFFLINE_UNAVAILABLE)) }
 
     /** The screen collects settings and the stack while visible - without that, the view model reads none. */
@@ -121,7 +131,7 @@ class HomeViewModelTest {
         notice: FakeNotice = FakeNotice(),
     ) = HomeViewModel(
         store, speech, notes,
-        NoteStructurer(NoSecrets()) { _, _ -> null },
+        NoteStructurer(NoSecrets(), MemoryAiUsage(), NoGateway),
         notice,
         nowMillis = { 1_000L },
         todayEpochDay = { 20_000L },
@@ -160,6 +170,62 @@ class HomeViewModelTest {
         events.close()
         runCurrent()
         assertEquals(RecordingState.Idle, vm.recording.value)
+    }
+
+    @Test
+    fun `on silence the recording ends only after the set seconds without new words`() = runTest(dispatcher) {
+        // The bug from 07.11.2026: a 2 s pause before each item ended the recording (and lost the items).
+        val events = Channel<SpeechEvent>(Channel.UNLIMITED)
+        val speech = FakeSpeech { events.receiveAsFlow() }
+        val vm = viewModel(FakeStore(AppSettings(recordingEnd = RecordingEnd.SILENCE, silenceSeconds = 7)), speech)
+
+        vm.startRecording()
+        runCurrent()
+        events.send(SpeechEvent.Partial("Lista zakupów"))
+        for (item in listOf("mleko", "chleb", "jajka")) {
+            advanceTimeBy(2_000) // a pause to think
+            runCurrent()
+            events.send(SpeechEvent.Partial("Lista zakupów, $item"))
+            runCurrent()
+        }
+        advanceTimeBy(6_900)
+        runCurrent()
+        assertEquals("6.9 s of quiet is not the end yet", 0, speech.stops)
+        advanceTimeBy(200)
+        runCurrent()
+        assertEquals(1, speech.stops)
+        events.close()
+    }
+
+    @Test
+    fun `stop button mode never ends on silence`() = runTest(dispatcher) {
+        val events = Channel<SpeechEvent>(Channel.UNLIMITED)
+        val speech = FakeSpeech { events.receiveAsFlow() }
+        val vm = viewModel(FakeStore(AppSettings(recordingEnd = RecordingEnd.STOP_BUTTON, silenceSeconds = 3)), speech)
+
+        vm.startRecording()
+        runCurrent()
+        advanceTimeBy(30_000)
+        runCurrent()
+        assertEquals(0, speech.stops)
+        events.close()
+    }
+
+    @Test
+    fun `the screen shows when the microphone is closed for a restart`() = runTest(dispatcher) {
+        val events = Channel<SpeechEvent>(Channel.UNLIMITED)
+        val vm = viewModel(FakeStore(AppSettings(recordingEnd = RecordingEnd.STOP_BUTTON)), FakeSpeech { events.receiveAsFlow() })
+
+        vm.startRecording()
+        runCurrent()
+        assertTrue((vm.recording.value as RecordingState.Active).listening)
+        events.send(SpeechEvent.Listening(false))
+        runCurrent()
+        assertEquals(false, (vm.recording.value as RecordingState.Active).listening)
+        events.send(SpeechEvent.Listening(true))
+        runCurrent()
+        assertTrue((vm.recording.value as RecordingState.Active).listening)
+        events.close()
     }
 
     @Test

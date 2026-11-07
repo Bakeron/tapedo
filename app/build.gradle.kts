@@ -19,8 +19,8 @@ android {
         applicationId = "io.github.bakeron.tapedo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = 5
+        versionName = "0.5"
         // Instrumented tests (app/src/androidTest) - run on the emulator only, see docs/plan-1a.md.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

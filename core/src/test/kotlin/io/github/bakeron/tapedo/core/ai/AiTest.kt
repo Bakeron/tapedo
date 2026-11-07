@@ -36,79 +36,6 @@ class AiTest {
     private val jsonHeaders = headersOf(HttpHeaders.ContentType, "application/json")
 
     @Test
-    fun `gemini reply becomes cards and the key goes in a header, not the url`() = runTest {
-        var url = ""
-        var keyHeader: String? = null
-        val engine = MockEngine { req ->
-            url = req.url.toString()
-            keyHeader = req.headers["x-goog-api-key"]
-            respond("""{"candidates":[{"content":{"parts":[{"text":${json(cardsJson)}}]}}]}""", headers = jsonHeaders)
-        }
-        val notes = GeminiStructurer(aiHttpClient(engine), "secret-key").structure(request)
-
-        assertEquals(2, notes.size)
-        assertEquals(NoteType.CHECKLIST, notes[0].type)
-        assertEquals(listOf("Mleko"), notes[0].items.map { it.text })
-        assertEquals(Priority.HIGH, notes[1].priority)
-        assertEquals(saturday + 1, notes[1].dueEpochDay)
-        assertTrue(notes.all { it.byAi })
-        assertEquals("secret-key", keyHeader)
-        assertFalse("key must not be in the URL", "secret-key" in url)
-    }
-
-    @Test
-    fun `gemini thought parts are skipped`() = runTest {
-        val engine = MockEngine {
-            respond(
-                """{"candidates":[{"content":{"parts":[{"text":"thinking...","thought":true},{"text":${json(cardsJson)}}]}}]}""",
-                headers = jsonHeaders,
-            )
-        }
-        assertEquals(2, GeminiStructurer(aiHttpClient(engine), "k").structure(request).size)
-    }
-
-    @Test
-    fun `groq reply becomes cards with a bearer token`() = runTest {
-        var auth: String? = null
-        val engine = MockEngine { req ->
-            auth = req.headers[HttpHeaders.Authorization]
-            respond("""{"choices":[{"message":{"role":"assistant","content":${json(cardsJson)}}}]}""", headers = jsonHeaders)
-        }
-        val notes = GroqStructurer(aiHttpClient(engine), "gsk_123").structure(request)
-        assertEquals(2, notes.size)
-        assertEquals("Bearer gsk_123", auth)
-    }
-
-    @Test
-    fun `http errors map to plain error kinds`() = runTest {
-        suspend fun errorFor(status: HttpStatusCode, body: String = "{}"): AiError {
-            val engine = MockEngine { respond(body, status, jsonHeaders) }
-            try {
-                GeminiStructurer(aiHttpClient(engine), "k").structure(request)
-            } catch (e: AiError) {
-                return e
-            }
-            fail("expected an AiError"); throw IllegalStateException()
-        }
-        assertEquals(AiError.RateLimited, errorFor(HttpStatusCode.TooManyRequests))
-        assertEquals(AiError.InvalidKey, errorFor(HttpStatusCode.Unauthorized))
-        assertEquals(AiError.InvalidKey, errorFor(HttpStatusCode.BadRequest, """{"error":{"status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}"""))
-        assertTrue(errorFor(HttpStatusCode.InternalServerError) is AiError.Server)
-        assertTrue(errorFor(HttpStatusCode.OK, """{"candidates":[]}""") is AiError.BadResponse)
-    }
-
-    @Test
-    fun `network failure is reported as network error`() = runTest {
-        val engine = MockEngine { throw IOException("offline") }
-        try {
-            GroqStructurer(aiHttpClient(engine), "k").structure(request)
-            fail("expected an AiError")
-        } catch (e: AiError) {
-            assertTrue(e is AiError.Network)
-        }
-    }
-
-    @Test
     fun `parser cleans up odd model output`() {
         val messy = "```json\n" +
             """{"cards":[{"title":"  Lista  ","type":"checklist","items":[" ","Chleb"],"due":"2026-02-30","priority":"urgent"},""" +
@@ -191,38 +118,14 @@ class AiTest {
         assertNull(AiContract.parse(reply, request).single().timeMinutes)
     }
 
-    private suspend fun geminiError(status: HttpStatusCode, body: String): AiError {
-        val engine = MockEngine { respond(body, status, jsonHeaders) }
-        try {
-            GeminiStructurer(aiHttpClient(engine), "k").structure(request)
-        } catch (e: AiError) {
-            return e
-        }
-        fail("expected an AiError"); throw IllegalStateException()
-    }
-
-    @Test
-    fun `gemini answer blocked by the safety filter is a bad response, not a crash`() = runTest {
-        // A blocked answer has a candidate without "content", or no candidates at all.
-        val noContent = """{"candidates":[{"finishReason":"SAFETY","index":0,"safetyRatings":[]}]}"""
-        assertTrue(geminiError(HttpStatusCode.OK, noContent) is AiError.BadResponse)
-        val blockedPrompt = """{"promptFeedback":{"blockReason":"SAFETY"}}"""
-        assertTrue(geminiError(HttpStatusCode.OK, blockedPrompt) is AiError.BadResponse)
-    }
-
-    @Test
-    fun `http 403 means a wrong key`() = runTest {
-        assertEquals(AiError.InvalidKey, geminiError(HttpStatusCode.Forbidden, """{"error":{"code":403}}"""))
-    }
-
     @Test
     fun `a bare array or null cards is a bad response`() {
         for (reply in listOf("""[{"title":"Mleko","type":"note"}]""", """{"cards":null}""", """{}""", "")) {
             try {
                 AiContract.parse(reply, request)
-                fail("expected BadResponse for: $reply")
-            } catch (e: AiError) {
-                assertTrue(reply, e is AiError.BadResponse)
+                fail("expected a broken answer for: $reply")
+            } catch (e: AiException) {
+                assertEquals(reply, Problem.ANSWER, e.problem)
             }
         }
     }
@@ -244,61 +147,17 @@ class AiTest {
         assertEquals("Punkt 1 ", first.items.first().text.take(8))
     }
 
-    // --- NoteStructurer: AI with fallback to rules ---
-
-    private class FakeSecrets(val key: String?) : SecretStore {
-        override suspend fun apiKey(provider: AiProvider) = key
-        override suspend fun setApiKey(provider: AiProvider, key: String?) = Unit
-    }
-
-    private fun structurer(key: String?, ai: AiStructurer) = NoteStructurer(FakeSecrets(key)) { _, _ -> ai }
-
-    private suspend fun NoteStructurer.run(provider: AiProvider) =
-        structure("kup mleko", provider, null, Priority.MEDIUM, ListTitles(), saturday, 0L)
-
     @Test
-    fun `no provider uses rules without error`() = runTest {
-        val result = structurer("k", failingAi(AiError.RateLimited)).run(AiProvider.NONE)
-        assertNull(result.aiError)
-        assertFalse(result.notes.single().byAi)
-    }
-
-    @Test
-    fun `missing key falls back to rules and says why`() = runTest {
-        val result = structurer(null, failingAi(AiError.RateLimited)).run(AiProvider.GEMINI)
-        assertEquals(AiError.MissingKey, result.aiError)
-        assertEquals(listOf("Mleko"), result.notes.single().items.map { it.text })
-    }
-
-    @Test
-    fun `a key that cannot be read right now is not reported as missing`() = runTest {
-        val unreadable = object : SecretStore {
-            override suspend fun apiKey(provider: AiProvider): String? = throw IOException("keystore busy")
-            override suspend fun setApiKey(provider: AiProvider, key: String?) = Unit
+    fun `json is found in a chatty answer`() {
+        val notes = AiContract.parse("Sure! Here you go:\n```json\n$cardsJson\n```\nHope it helps {:", request)
+        assertEquals(2, notes.size)
+        for (text in listOf("no json here", "} {")) {
+            try {
+                AiContract.parse(text, request)
+                fail("expected a broken answer for: $text")
+            } catch (e: AiException) {
+                assertEquals(Problem.ANSWER, e.problem)
+            }
         }
-        val result = NoteStructurer(unreadable) { _, _ -> failingAi(AiError.RateLimited) }.run(AiProvider.GEMINI)
-        assertEquals(AiError.KeyUnreadable, result.aiError)
-        assertEquals(listOf("Mleko"), result.notes.single().items.map { it.text })
-    }
-
-    @Test
-    fun `ai failure falls back to rules`() = runTest {
-        val result = structurer("k", failingAi(AiError.RateLimited)).run(AiProvider.GROQ)
-        assertEquals(AiError.RateLimited, result.aiError)
-        assertFalse(result.notes.single().byAi)
-    }
-
-    @Test
-    fun `unexpected crash in the ai path still gives the note from rules`() = runTest {
-        val crashing = object : AiStructurer {
-            override suspend fun structure(request: StructureRequest): List<Note> = throw IllegalStateException("boom")
-        }
-        val result = structurer("k", crashing).run(AiProvider.GEMINI)
-        assertTrue(result.aiError is AiError.BadResponse)
-        assertEquals(listOf("Mleko"), result.notes.single().items.map { it.text })
-    }
-
-    private fun failingAi(error: AiError) = object : AiStructurer {
-        override suspend fun structure(request: StructureRequest) = throw error
     }
 }

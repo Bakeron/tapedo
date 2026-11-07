@@ -2,8 +2,9 @@ package io.github.bakeron.tapedo.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.github.bakeron.tapedo.core.ai.AiError
+import io.github.bakeron.tapedo.core.ai.AiProblem
 import io.github.bakeron.tapedo.core.ai.NoteStructurer
+import io.github.bakeron.tapedo.core.ai.StructureResult
 import io.github.bakeron.tapedo.core.data.NoteRepository
 import io.github.bakeron.tapedo.core.model.ChecklistItem
 import io.github.bakeron.tapedo.core.model.Note
@@ -15,6 +16,7 @@ import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.settings.RecordingEnd
 import io.github.bakeron.tapedo.core.settings.SettingsStore
 import io.github.bakeron.tapedo.core.speech.Phrases
+import io.github.bakeron.tapedo.core.speech.SilenceCountdown
 import io.github.bakeron.tapedo.core.speech.SpeechError
 import io.github.bakeron.tapedo.core.speech.SpeechEvent
 import io.github.bakeron.tapedo.core.speech.SpeechInput
@@ -52,6 +54,8 @@ sealed interface RecordingState {
         val levels: List<Float>,
         /** How many samples were ever taken - keeps the zigzag stable while the line scrolls. */
         val sampleCount: Long,
+        /** False while the phone restarts its recognizer after a pause - the pen lifts, "one moment". */
+        val listening: Boolean = true,
     ) : RecordingState
 
     /** Speech is done; the rules or the AI are cutting the text into cards. */
@@ -64,8 +68,8 @@ sealed interface RecordingState {
     data class Review(
         val transcript: String,
         val cards: List<Note>,
-        /** AI was chosen but failed - the rules wrote these cards instead. */
-        val aiError: AiError? = null,
+        /** AI was turned on but every provider failed - the rules wrote these cards; each reason is listed. */
+        val aiProblems: List<AiProblem> = emptyList(),
         /** Some cards could not be written - they are only on screen until "try again" works. */
         val saveFailed: Boolean = false,
         /** "Record more" heard nothing usable (or could not start) - the cards are unchanged. */
@@ -93,6 +97,10 @@ sealed interface Editing {
     /** A card from the stack. */
     data class Saved(override val note: Note) : Editing
 }
+
+/** Reasons are shown only when the rules had to write the cards - a provider that took over hides the others. */
+private fun StructureResult.rulesProblems(): List<AiProblem>? =
+    if (notes.any { it.byAi }) null else problems.ifEmpty { null }
 
 /** Home screen: type choice, recording, the review window after it and the card stack. */
 class HomeViewModel(
@@ -204,14 +212,16 @@ class HomeViewModel(
         val s = settings.value ?: AppSettings()
         val allowOnline = allowOnlineOnce || s.onlineSpeech == OnlineSpeech.ALWAYS
         val limit = s.maxRecordingSeconds
+        // "On silence" is counted here, not by the recognizer - its own pause is far too short to think.
+        val silence = if (s.recordingEnd == RecordingEnd.SILENCE) SilenceCountdown(s.silenceSeconds * 1000L) else null
         _recording.value = RecordingState.Active(0, limit, "", emptyList(), 0)
 
         session = viewModelScope.launch {
             var level = 0f
+            // Real elapsed time: delay() runs a little late each tick, so counting ticks drifts behind the clock.
+            val started = timeSource.markNow()
             // Fixed-rate sampling: the pen keeps moving in silence, like paper under a seismograph.
             val sampler = launch {
-                // Real elapsed time: delay() runs a little late each tick, so counting ticks drifts behind the clock.
-                val started = timeSource.markNow()
                 var limitHit = false
                 while (true) {
                     delay(TICK_MS)
@@ -226,22 +236,24 @@ class HomeViewModel(
                         )
                     }
                     level *= DECAY // falls back between words
-                    if (!limitHit && elapsedMs >= limit * 1000L) {
+                    if (!limitHit && (elapsedMs >= limit * 1000L || silence?.isOver(elapsedMs) == true)) {
                         limitHit = true
-                        speech.stop() // the limit ends the recording like the stop button would
+                        speech.stop() // the limit or the silence ends the recording like the stop button would
                     }
                 }
             }
             try {
-                speech.listen(
-                    s.speechLanguage,
-                    untilStopped = s.recordingEnd == RecordingEnd.STOP_BUTTON,
-                    allowOnline = allowOnline,
-                ).collect { e ->
+                speech.listen(s.speechLanguage, allowOnline = allowOnline).collect { e ->
                     when (e) {
                         is SpeechEvent.Level -> level = max(level, e.value)
-                        is SpeechEvent.Partial -> _recording.update {
-                            if (it is RecordingState.Active) it.copy(text = e.text) else it
+                        is SpeechEvent.Partial -> {
+                            silence?.heard(e.text, started.elapsedNow().inWholeMilliseconds)
+                            _recording.update { if (it is RecordingState.Active) it.copy(text = e.text) else it }
+                        }
+                        is SpeechEvent.Listening -> {
+                            // Back to listening: a short jolt of the pen shows "you can speak again".
+                            if (e.on && !s.reduceMotion) level = max(level, LISTENING_AGAIN_JOLT)
+                            _recording.update { if (it is RecordingState.Active) it.copy(listening = e.on) else it }
                         }
                         is SpeechEvent.Done -> when {
                             appendTo != null -> appendSpoken(appendTo, e.text)
@@ -313,21 +325,20 @@ class HomeViewModel(
         }
         _recording.value = RecordingState.Structuring(transcript)
         viewModelScope.launch {
-            val (added, aiError) = spokenItems(spoken, review.cards[listIndex].type)
+            val (added, problems) = spokenItems(spoken, review.cards[listIndex].type)
             val cards = review.cards.mapIndexed { i, card -> if (i == listIndex) card.copy(items = card.items + added) else card }
-            _recording.value = persist(review.copy(transcript = transcript, cards = cards, aiError = aiError ?: review.aiError))
+            _recording.value = persist(review.copy(transcript = transcript, cards = cards, aiProblems = problems ?: review.aiProblems))
         }
     }
 
     /** Items said for a list of [type], split and grouped like a new list (rules or the chosen AI); never empty. */
-    private suspend fun spokenItems(spoken: String, type: NoteType): Pair<List<ChecklistItem>, AiError?> {
+    private suspend fun spokenItems(spoken: String, type: NoteType): Pair<List<ChecklistItem>, List<AiProblem>?> {
         val s = settings.value ?: AppSettings()
         val result = try {
             structurer.structure(
                 transcript = spoken,
-                provider = s.aiProvider,
+                settings = s,
                 chosenType = type,
-                defaultPriority = s.defaultPriority,
                 listTitles = listTitles,
                 todayEpochDay = todayEpochDay(),
                 nowMillis = nowMillis(),
@@ -339,7 +350,7 @@ class HomeViewModel(
         }
         val group = if (type == NoteType.SHOPPING) ShoppingGroup.OTHER else null
         val items = result?.notes?.flatMap { it.items }.orEmpty().ifEmpty { listOf(ChecklistItem(spoken, group = group)) }
-        return items to result?.aiError
+        return items to result?.rulesProblems()
     }
 
     /** The user refused the microphone permission. */
@@ -369,9 +380,8 @@ class HomeViewModel(
             val result = try {
                 structurer.structure(
                     transcript = transcript,
-                    provider = s.aiProvider,
+                    settings = s,
                     chosenType = s.noteTypeChoice,
-                    defaultPriority = s.defaultPriority,
                     listTitles = listTitles,
                     todayEpochDay = todayEpochDay(),
                     nowMillis = now,
@@ -384,7 +394,7 @@ class HomeViewModel(
             }
             val cards = result?.notes?.takeIf { it.isNotEmpty() }
                 ?: listOf(Note(title = firstWords(transcript), body = transcript, createdAtMillis = now))
-            val review = persist(RecordingState.Review(transcript, cards, result?.aiError))
+            val review = persist(RecordingState.Review(transcript, cards, result?.rulesProblems().orEmpty()))
             _recording.value = review
             // The old cards go only once the new ones are safely written.
             if (!review.saveFailed) replacing.filter { it.id != 0L }.forEach { old -> write { notes.delete(old.id) } }
@@ -641,6 +651,7 @@ class HomeViewModel(
     private companion object {
         const val TICK_MS = 50L
         const val DECAY = 0.75f
+        const val LISTENING_AGAIN_JOLT = 0.5f
         const val UNDO_MS = 10_000L
     }
 }

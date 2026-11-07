@@ -366,8 +366,18 @@ private fun ColumnScope.RecordControls(
 @Composable
 private fun ListeningPanel(state: RecordingState.Active, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.Center) {
-        Seismograph(state.levels, state.sampleCount, SEISMOGRAPH_SAMPLES)
+        Seismograph(state.levels, state.sampleCount, SEISMOGRAPH_SAMPLES, penUp = !state.listening)
         Spacer(Modifier.height(16.dp))
+        if (!state.listening) {
+            // The phone restarts its recognizer after a pause - words said now would be lost.
+            Text(
+                stringResource(R.string.record_wait),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = TapedoTheme.colors.record,
+                modifier = Modifier.padding(bottom = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
         if (state.text.isEmpty()) {
             // Before the first words: a typed "Listening…" (announced once); the REC lamp blinks by the counter.
             Text(

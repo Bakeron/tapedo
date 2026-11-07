@@ -9,6 +9,7 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import io.github.bakeron.tapedo.core.speech.ListeningMode
 import io.github.bakeron.tapedo.core.speech.Phrases
 import io.github.bakeron.tapedo.core.speech.RecognizerErrorKind
 import io.github.bakeron.tapedo.core.speech.RecognizerErrorPolicy
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 
 /**
  * Android's built-in speech recognizer. Always starts offline: on Android 12+ with the on-device
@@ -30,9 +32,11 @@ import kotlinx.coroutines.flow.flowOn
  * Only with `allowOnline` does it fall back to the online recognizer when the offline language
  * pack is missing. No audio is saved.
  *
- * The recognizer stops by itself after a pause. In "stop button" mode it is restarted after each
- * phrase and the phrases are joined (a pause becomes a comma, so items said one by one stay separate),
- * so one recording can last up to the user's limit.
+ * Works like a dictaphone: from "record" to [stop] nothing said is lost. On Android 13+ it asks for a
+ * segmented session - one open microphone, a result after every pause. A recognizer that ignores that
+ * (or an older phone) ends after each pause; it is then restarted at once and the phrases are joined
+ * (a pause becomes a comma, so items said one by one stay separate). During that restart the microphone
+ * is closed for a moment - [SpeechEvent.Listening] tells the screen.
  * SpeechRecognizer must be used on the main thread - hence [flowOn] Main and the [main] handler.
  */
 class AndroidSpeechInput(private val context: Context) : SpeechInput {
@@ -42,8 +46,21 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
     /** Set while a session runs; called on the main thread. */
     private var stopRequest: (() -> Unit)? = null
 
+    /** Only "which way this phone went" - no speech, nothing personal. */
+    private val prefs by lazy { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+
     override fun stop() {
         main.post { stopRequest?.invoke() }
+    }
+
+    override suspend fun listeningMode(): ListeningMode = withContext(Dispatchers.IO) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@withContext ListeningMode.RESUMING
+        ListeningMode.entries.firstOrNull { it.name == prefs.getString(KEY_MODE, null) } ?: ListeningMode.UNKNOWN
+    }
+
+    private fun remember(mode: ListeningMode) {
+        // apply() writes off the main thread.
+        prefs.edit().putString(KEY_MODE, mode.name).apply()
     }
 
     private fun onDeviceAvailable() =
@@ -56,7 +73,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             SpeechRecognizer.createSpeechRecognizer(context)
         }
 
-    override fun listen(languageTag: String, untilStopped: Boolean, allowOnline: Boolean): Flow<SpeechEvent> = callbackFlow {
+    override fun listen(languageTag: String, allowOnline: Boolean): Flow<SpeechEvent> = callbackFlow {
         val onDevice = onDeviceAvailable()
         if (!onDevice && !SpeechRecognizer.isRecognitionAvailable(context)) {
             trySend(SpeechEvent.Failed(SpeechError.NOT_AVAILABLE))
@@ -70,6 +87,11 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         var stopping = false
         var closed = false
         var offline = true
+        var listening = true
+        // Errors other than silence since the last new words - a recognizer that keeps failing ends the recording.
+        var failuresInRow = 0
+        // A segment arrived: this recognizer really keeps one session open.
+        var segmentsSeen = false
         // The words on screen for the phrase being spoken. Some recognizers end a phrase with "no match"
         // (or an empty result) after showing it - what the user saw on screen is still kept.
         var shown = ""
@@ -81,7 +103,13 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             shown = ""
         }
 
+        fun addPhrase(text: String?) {
+            if (text.isNullOrBlank()) keepShown() else phrases += text
+            shown = ""
+        }
+
         fun finish() {
+            if (closed) return
             trySend(if (phrases.isEmpty()) SpeechEvent.Failed(SpeechError.NO_SPEECH) else SpeechEvent.Done(soFar()))
             close()
         }
@@ -97,19 +125,48 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, offline)
                     putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        // One session for the whole recording; [stop] ends it. Recognizers that do not
+                        // support this ignore it and end after a pause as before.
+                        putExtra(
+                            RecognizerIntent.EXTRA_SEGMENTED_SESSION,
+                            RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS,
+                        )
+                        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, SESSION_MS)
+                    } else {
+                        // Older phones: wait a little longer before ending a phrase, fewer restart gaps.
+                        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, PHRASE_SILENCE_MS)
+                        putExtra(
+                            RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
+                            PHRASE_SILENCE_MS,
+                        )
+                    }
                 },
             )
         }
 
         // A short gap before restarting - starting again inside a callback often gives "busy".
-        fun restart() = main.postDelayed({ start() }, RESTART_DELAY_MS)
+        // The microphone is closed until onReadyForSpeech.
+        fun restart(block: () -> Unit = { start() }) {
+            if (listening) {
+                listening = false
+                trySend(SpeechEvent.Listening(false))
+            }
+            main.postDelayed({ if (!closed) block() }, RESTART_DELAY_MS)
+        }
 
         val listener = object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) = Unit
             override fun onBeginningOfSpeech() = Unit
             override fun onBufferReceived(buffer: ByteArray?) = Unit
             override fun onEndOfSpeech() = Unit
             override fun onEvent(eventType: Int, params: Bundle?) = Unit
+
+            override fun onReadyForSpeech(params: Bundle?) {
+                if (!listening) {
+                    listening = true
+                    trySend(SpeechEvent.Listening(true))
+                }
+            }
 
             override fun onRmsChanged(rmsdB: Float) {
                 // Typical range is about -2..10 dB.
@@ -120,37 +177,61 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                 val text = partialResults.firstResult()
                 if (!text.isNullOrBlank()) {
                     shown = text
+                    failuresInRow = 0
                     trySend(SpeechEvent.Partial(soFar(text)))
                 }
             }
 
+            /** Continuous session: one phrase after a pause; the microphone stays open. */
+            override fun onSegmentResults(segmentResults: Bundle) {
+                if (!segmentsSeen) {
+                    segmentsSeen = true
+                    remember(ListeningMode.CONTINUOUS)
+                }
+                val text = segmentResults.firstResult()
+                if (!text.isNullOrBlank()) failuresInRow = 0
+                addPhrase(text)
+                trySend(SpeechEvent.Partial(soFar()))
+            }
+
+            override fun onEndOfSegmentedSession() {
+                keepShown()
+                // Ended by itself (e.g. the recognizer's own time limit) - the recording goes on.
+                if (stopping) finish() else restart()
+            }
+
+            /** The recognizer ended after a pause - a whole session in older phones. */
             override fun onResults(results: Bundle?) {
                 val text = results.firstResult()
-                if (text.isNullOrBlank()) keepShown() else phrases += text
-                shown = ""
-                if (untilStopped && !stopping) restart() else finish()
+                if (!text.isNullOrBlank()) failuresInRow = 0
+                addPhrase(text)
+                if (stopping) return finish()
+                if (!segmentsSeen) remember(ListeningMode.RESUMING)
+                trySend(SpeechEvent.Partial(soFar()))
+                restart()
             }
 
             override fun onError(error: Int) {
                 keepShown()
+                val kind = kindOf(error)
+                if (kind != RecognizerErrorKind.SILENCE) failuresInRow++
                 val step = RecognizerErrorPolicy.decide(
-                    error = kindOf(error),
+                    error = kind,
                     offline = offline,
                     phrasesHeard = phrases.isNotEmpty(),
                     allowOnline = allowOnline,
-                    untilStopped = untilStopped,
                     stopping = stopping,
+                    failuresInRow = failuresInRow,
                 )
                 when (step) {
                     RecognizerStep.GoOnline -> {
                         offline = false
                         // Swapped outside the callback - the on-device recognizer cannot go online.
-                        main.postDelayed({
-                            if (closed) return@postDelayed
+                        restart {
                             recognizer.destroy()
                             recognizer = newRecognizer(onDevice = false).also { it.setRecognitionListener(this) }
                             start()
-                        }, RESTART_DELAY_MS)
+                        }
                     }
                     RecognizerStep.Restart -> restart()
                     RecognizerStep.FinishWithText -> finish()
@@ -164,8 +245,15 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         recognizer.setRecognitionListener(listener)
 
         stopRequest = {
-            stopping = true
-            recognizer.stopListening()
+            if (!stopping) {
+                stopping = true
+                recognizer.stopListening()
+                // A recognizer that never answers the stop must not leave the recording hanging.
+                main.postDelayed({
+                    keepShown()
+                    finish()
+                }, STOP_GRACE_MS)
+            }
         }
         start()
 
@@ -195,6 +283,15 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
 
     private companion object {
         const val RESTART_DELAY_MS = 150L
+        const val STOP_GRACE_MS = 3_000L
+
+        /** Longer than the longest recording (60 min) - the session ends with [stop], not by itself. */
+        const val SESSION_MS = 61 * 60 * 1000
+
+        /** Fallback path: quiet before a phrase ends (the platform default is often about 1 s). */
+        const val PHRASE_SILENCE_MS = 2_500L
+        const val PREFS = "speech"
+        const val KEY_MODE = "listening_mode"
         val SILENCE_ERRORS = setOf(SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
         val LANGUAGE_ERRORS = setOf(
             SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,

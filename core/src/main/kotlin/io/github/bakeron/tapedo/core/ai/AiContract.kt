@@ -23,23 +23,6 @@ data class StructureRequest(
     val chosenType: NoteType? = null,
 )
 
-/** Why an AI call failed - shown to the user in plain words, never with the key or the note text. */
-sealed class AiError(message: String) : Exception(message) {
-    object MissingKey : AiError("No API key")
-    /** A key is saved, but reading it failed for now (even after retries) - it is not lost. */
-    object KeyUnreadable : AiError("API key could not be read")
-    object InvalidKey : AiError("API key rejected")
-    object RateLimited : AiError("Free limit reached")
-    class Network(cause: Throwable) : AiError("Network problem: ${cause::class.simpleName}")
-    class Server(val status: Int) : AiError("Provider error $status")
-    class BadResponse(detail: String) : AiError("Unexpected answer: $detail")
-}
-
-/** A provider that turns a transcript into cards (Gemini, Groq...). Strategy pattern - swappable. */
-interface AiStructurer {
-    suspend fun structure(request: StructureRequest): List<Note>
-}
-
 /**
  * The prompt and the JSON shape are shared by all providers, so switching providers
  * changes only the HTTP call, not the behaviour.
@@ -127,11 +110,26 @@ object AiContract {
     // coerceInputValues: a model that sends "items": null or "body": null gets the default instead of a failure.
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
-    /** Parses and sanitises the model's answer; anything unusable throws [AiError.BadResponse]. */
+    /**
+     * The JSON object inside an answer - models sometimes wrap it in ``` fences or add a sentence before
+     * or after it. Throws [AiException] with [Problem.ANSWER] when there is none.
+     */
+    fun jsonObject(text: String): String {
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        if (start < 0 || end < start) throw AiException(Problem.ANSWER, "the answer has no JSON")
+        return text.substring(start, end + 1)
+    }
+
+    /** Parses and sanitises the model's answer; anything unusable throws [AiException] with [Problem.ANSWER]. */
     fun parse(text: String, request: StructureRequest): List<Note> {
-        val raw = text.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-        val reply = runCatching { json.decodeFromString(Reply.serializer(), raw) }
-            .getOrElse { throw AiError.BadResponse("not the expected JSON") }
+        val reply = try {
+            json.decodeFromString(Reply.serializer(), jsonObject(text))
+        } catch (e: AiException) {
+            throw e
+        } catch (e: Exception) {
+            throw AiException(Problem.ANSWER, "broken JSON")
+        }
 
         // A type chosen by the user means one card, even if the model returned more.
         val limit = if (request.chosenType != null) 1 else MAX_CARDS
@@ -164,7 +162,7 @@ object AiContract {
                 createdAtMillis = request.nowMillis,
             )
         }
-        if (notes.isEmpty()) throw AiError.BadResponse("no cards")
+        if (notes.isEmpty()) throw AiException(Problem.ANSWER, "no cards")
         return notes
     }
 

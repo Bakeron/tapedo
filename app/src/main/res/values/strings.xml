@@ -11,6 +11,7 @@
     <string name="record_stop">Zatrzymaj nagrywanie</string>
     <string name="record_counter">%1$s / %2$s</string>
     <string name="record_listening">Słucham…</string>
+    <string name="record_wait">Chwila… mikrofon wraca</string>
     <string name="mic_open_settings">Otwórz ustawienia telefonu</string>
     <string name="speech_error_permission">Tapedo nie usłyszy notatki bez dostępu do mikrofonu. Zezwól na mikrofon w ustawieniach telefonu.</string>
     <string name="speech_error_not_available">Ten telefon nie ma rozpoznawania mowy. Zainstaluj albo włącz aplikację Google.</string>
@@ -38,7 +39,12 @@
     <string name="settings_recording_end">Koniec nagrania</string>
     <string name="settings_recording_end_silence">Po ciszy</string>
     <string name="settings_recording_end_stop">Przyciskiem stop</string>
-    <string name="settings_recording_end_hint">„Po ciszy” kończy nagranie, gdy przestaniesz mówić. „Przyciskiem stop” słucha, dopóki go nie naciśniesz.</string>
+    <string name="settings_recording_end_hint">„Po ciszy” kończy nagranie, gdy przez dłuższą chwilę nic nie mówisz. „Przyciskiem stop” słucha, dopóki go nie naciśniesz. Krótkie pauzy na myślenie niczego nie ucinają.</string>
+    <string name="settings_listening_continuous">Nagrywanie ciągłe - pauzy niczego nie ucinają.</string>
+    <string name="settings_listening_resuming">Ten telefon wznawia nasłuch po pauzie - mów dalej, gdy pióro wróci na papier.</string>
+    <string name="settings_listening_unknown">Po pierwszym nagraniu zobaczysz tu, czy pauzy przerywają nasłuch.</string>
+    <string name="settings_silence_length">Cisza przed końcem</string>
+    <string name="settings_silence_length_hint">Tyle sekund bez nowych słów kończy nagranie.</string>
     <string name="settings_max_length">Najdłuższe nagranie</string>
     <string name="settings_max_length_hint">Zabezpieczenie, gdy zapomnisz zatrzymać nagrywanie.</string>
     <string name="settings_seconds">%d s</string>
@@ -110,45 +116,106 @@
 
     <!-- AI -->
     <string name="settings_section_ai">Pomoc AI</string>
-    <string name="ai_provider">Kto rozpisuje notatki</string>
-    <string name="ai_none">Bez AI</string>
-    <string name="ai_gemini" translatable="false">Gemini</string>
-    <string name="ai_groq" translatable="false">Groq</string>
-    <string name="ai_none_hint">Notatki rozpisują proste reguły: zakupy po słowie „kup”, wydarzenie po „o 10”, priorytet po „pilne”, termin po „jutro”. Działa bez internetu, a tekst notatki nie wychodzi z telefonu.</string>
-    <string name="ai_free_stamp">Darmowy plan</string>
+    <string name="ai_p_groq" translatable="false">Groq</string>
+    <string name="ai_p_openrouter" translatable="false">OpenRouter</string>
+    <string name="ai_p_anthropic" translatable="false">Claude (Anthropic)</string>
+    <string name="ai_p_openai" translatable="false">OpenAI</string>
+    <string name="ai_p_gemini" translatable="false">Google Gemini</string>
+    <string name="ai_intro">AI rozpisuje notatkę na osobne karteczki i listy, rozpoznaje terminy i poprawia przekręcone słowa. Bez AI notatki rozpisują proste reguły: zakupy po słowie „kup”, wydarzenie po „o 10”, priorytet po „pilne”, termin po „jutro” - działa bez internetu, a tekst notatki nie wychodzi z telefonu.</string>
+    <string name="ai_queue">Możesz włączyć kilku dostawców - Tapedo pyta ich po kolei, w kolejności z tej listy. Gdy jeden wykorzysta dzienny limit, następne notatki idą do kolejnego. Gdy nikt nie odpowie, notatkę rozpisują reguły bez AI.</string>
+    <string name="ai_free">za darmo</string>
+    <string name="ai_paid">Płatne za zużycie</string>
+    <string name="ai_on">Włączone</string>
+    <string name="ai_off">Wyłączone</string>
+    <string name="ai_unfold">Pokaż</string>
+    <string name="ai_fold">Ukryj</string>
+    <string name="ai_p_groq_hint">Bardzo szybki, darmowy poziom (orientacyjnie ok. 1000 zapytań dziennie na model, 11.2026).</string>
+    <string name="ai_p_openrouter_hint">Wiele modeli; darmowe mają w nazwie „:free” i limit ok. 50 zapytań dziennie (11.2026).</string>
+    <string name="ai_p_anthropic_hint">Domyślny model Claude Opus 5.5; tańszy do takich zadań jest claude-haiku-5-5.</string>
+    <string name="ai_p_openai_hint">Klucz z platformy OpenAI.</string>
+    <string name="ai_p_gemini_hint">Darmowy plan Google dostaje tylko część kont i projektów. Klucz z Google AI Studio.</string>
     <string name="ai_what_title">Co to jest</string>
     <string name="ai_privacy_title">Gdzie trafiają dane</string>
-    <string name="ai_steps_title">Jak zdobyć klucz</string>
-    <string name="ai_gemini_what">Model AI od Google. Rozpisuje notatkę na osobne zadania i listy, poprawia przekręcone słowa. Darmowy plan ma dzienny limit zapytań - aktualny widać w Google AI Studio. Tylko dla osób pełnoletnich (18+): klucz zakładasz na własnym koncie Google i korzystasz z niego na warunkach Google.</string>
-    <string name="ai_gemini_privacy">Do Google trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. W EOG (UE, Norwegia, Islandia, Liechtenstein), Szwajcarii i Wielkiej Brytanii Google nie używa go do ulepszania swoich modeli, także na darmowym planie. Poza tymi miejscami darmowy plan pozwala Google używać tekstu i dawać go do przeczytania ludziom - wtedy nie dyktuj danych wrażliwych.</string>
-    <string name="ai_gemini_step1">Otwórz Google AI Studio przyciskiem poniżej i zaloguj się kontem Google.</string>
-    <string name="ai_gemini_step2">Kliknij „Create API key” (utwórz klucz).</string>
-    <string name="ai_gemini_step3">Skopiuj klucz - zaczyna się od „AIza” - i wklej go niżej.</string>
-    <string name="ai_gemini_open">Otwórz Google AI Studio</string>
     <string name="ai_groq_what">Usługa uruchamiająca otwarte modele AI bardzo szybko. Rozpisuje notatkę na osobne zadania i listy. Darmowy plan nie wymaga karty płatniczej; ma limit zapytań na minutę i na dzień.</string>
+    <string name="ai_openrouter_what">Jedno konto do wielu modeli AI różnych firm. Rozpisuje notatkę na osobne zadania i listy. Darmowe modele mają w nazwie „:free” - bez doładowania konta ok. 50 zapytań dziennie.</string>
+    <string name="ai_anthropic_what">Modele AI Claude od firmy Anthropic. Rozpisują notatkę na osobne zadania i listy i dobrze rozumieją polski. Płatne za zużycie - konto trzeba doładować; jedna notatka to orientacyjnie kilka groszy (11.2026).</string>
+    <string name="ai_openai_what">Modele AI GPT od OpenAI. Rozpisują notatkę na osobne zadania i listy. Płatne za zużycie - konto trzeba doładować.</string>
+    <string name="ai_gemini_what">Model AI od Google. Rozpisuje notatkę na osobne zadania i listy i poprawia przekręcone słowa. Darmowy plan Google dostaje tylko część kont i projektów - nowe projekty zwykle działają dopiero po podpięciu płatności, dlatego Gemini jest tu płatny i ostatni na liście. Tylko dla osób pełnoletnich (18+).</string>
     <string name="ai_groq_privacy">Do Groq (USA) trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. Według umowy Groq nie może używać go do trenowania modeli. Domyślnie nie przechowuje zapytań; przy awariach może trzymać logi do 30 dni - można to wyłączyć w panelu Groq (Data Controls, Zero Data Retention).</string>
-    <string name="ai_groq_step1">Otwórz konsolę Groq przyciskiem poniżej i załóż konto (e-mail albo konto Google).</string>
-    <string name="ai_groq_step2">W „API Keys” kliknij „Create API Key”.</string>
-    <string name="ai_groq_step3">Skopiuj klucz - zaczyna się od „gsk_” - i wklej go niżej.</string>
-    <string name="ai_groq_open">Otwórz konsolę Groq</string>
-    <string name="ai_key_label">Klucz API</string>
-    <string name="ai_key_hint">Klucz jest zaszyfrowany na tym telefonie i trafia tylko do wybranego dostawcy.</string>
-    <string name="ai_key_saved">Klucz zapisany: ••••%s</string>
-    <string name="ai_key_none">Brak klucza - do czasu wklejenia działają reguły bez AI.</string>
-    <string name="ai_key_save">Zapisz klucz</string>
-    <string name="ai_key_delete">Usuń klucz</string>
-    <string name="ai_key_buttons_hint">„Zapisz klucz” działa po wklejeniu klucza, a „Sprawdź” po jego zapisaniu.</string>
-    <string name="ai_key_test">Sprawdź</string>
-    <string name="ai_test_sample">jutro kupić chleb i mleko a w piątek zadzwonić do hydraulika to pilne</string>
-    <string name="ai_test_running">Sprawdzam…</string>
-    <string name="ai_test_ok">Działa. Pierwsza karteczka z próbnej notatki: „%s”.</string>
-    <string name="ai_error_missing_key">Najpierw wklej i zapisz klucz.</string>
-    <string name="ai_error_key_unreadable">Nie udało się odczytać zapisanego klucza - spróbuj jeszcze raz. Klucz nie zginął. Jeśli to się powtarza, wklej go ponownie w Ustawieniach.</string>
-    <string name="ai_error_invalid_key">Dostawca odrzucił klucz. Sprawdź, czy klucz jest skopiowany w całości.</string>
-    <string name="ai_error_rate_limited">Wyczerpany darmowy limit - spróbuj później. Do tego czasu działają reguły bez AI.</string>
-    <string name="ai_error_network">Brak połączenia z dostawcą. Sprawdź internet.</string>
-    <string name="ai_error_server">Dostawca ma chwilowy problem (błąd %d). Spróbuj później.</string>
-    <string name="ai_error_bad_response">Dostawca odpowiedział w nieoczekiwany sposób. Spróbuj ponownie.</string>
+    <string name="ai_openrouter_privacy">Do OpenRouter (USA) trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. OpenRouter sam nie zapisuje zapytań, jeśli nie włączysz tego na koncie, ale przekazuje je firmie, która uruchamia model - przy darmowych modelach część z nich może używać tekstu do trenowania. W ustawieniach prywatności OpenRouter można wyłączyć takie modele; nie dyktuj tam danych wrażliwych (stan 11.2026).</string>
+    <string name="ai_anthropic_privacy">Do Anthropic (USA) trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. Według warunków dla firm Anthropic nie trenuje modeli na danych z API, a zapytania kasuje automatycznie w ciągu 30 dni - dłużej tylko te oznaczone jako naruszenie zasad (stan 11.2026).</string>
+    <string name="ai_openai_privacy">Do OpenAI (USA) trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. Dane z API nie służą do trenowania modeli, jeśli sam się na to nie zgodzisz; OpenAI trzyma je do 30 dni do wykrywania nadużyć (stan 11.2026).</string>
+    <string name="ai_gemini_privacy">Do Google trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. Na płatnym planie Google nie używa go do ulepszania swoich produktów, a przechowuje przez ograniczony czas tylko do wykrywania nadużyć. Na darmowym planie (jeśli Twój projekt go ma) poza EOG, Szwajcarią i Wielką Brytanią Google może używać tekstu i dawać go do przeczytania ludziom - wtedy nie dyktuj danych wrażliwych (stan 11.2026).</string>
+    <string name="ai_how_key">Jak zdobyć klucz</string>
+    <string name="ai_get_key">Załóż klucz</string>
+    <string name="ai_how_groq_1">Dotknij „Załóż klucz” - otworzy się konsola Groq. Załóż konto (e-mail albo konto Google lub GitHub).</string>
+    <string name="ai_how_groq_2">W „API Keys” dotknij „Create API Key”, nadaj nazwę i skopiuj klucz - Groq pokazuje go tylko raz.</string>
+    <string name="ai_how_groq_3">Wklej klucz poniżej i dotknij „Sprawdź połączenie”. Darmowy plan nie wymaga karty.</string>
+    <string name="ai_how_openrouter_1">Dotknij „Załóż klucz” - otworzy się OpenRouter. Załóż konto.</string>
+    <string name="ai_how_openrouter_2">W „Keys” dotknij „Create Key” i skopiuj klucz - pokazuje się tylko raz.</string>
+    <string name="ai_how_openrouter_3">Wybierz model z „:free” w nazwie - tylko takie są darmowe (bez doładowania ok. 50 zapytań dziennie). Wklej klucz poniżej i dotknij „Sprawdź połączenie”.</string>
+    <string name="ai_how_anthropic_1">Dotknij „Załóż klucz” - otworzy się konsola Claude. Załóż konto.</string>
+    <string name="ai_how_anthropic_2">W „Billing” doładuj konto - bez środków klucz nie działa.</string>
+    <string name="ai_how_anthropic_3">W „API keys” dotknij „Create Key”, skopiuj klucz (pokazuje się tylko raz), wklej poniżej i dotknij „Sprawdź połączenie”.</string>
+    <string name="ai_how_openai_1">Dotknij „Załóż klucz” - otworzy się platforma OpenAI. Załóż konto.</string>
+    <string name="ai_how_openai_2">W „Billing” doładuj konto - bez środków klucz nie działa.</string>
+    <string name="ai_how_openai_3">W „API keys” dotknij „Create new secret key”, skopiuj klucz (pokazuje się tylko raz), wklej poniżej i dotknij „Sprawdź połączenie”.</string>
+    <string name="ai_how_gemini_1">Dotknij „Załóż klucz” - otworzy się Google AI Studio. Zaloguj się kontem Google.</string>
+    <string name="ai_how_gemini_2">Na stronie aistudio.google.com/billing podepnij płatności do projektu - bez nich Gemini działa tylko w projektach z darmowym planem (w kolumnie „Billing Tier” przy projekcie; „Free tier unavailable” = tylko płatnie).</string>
+    <string name="ai_how_gemini_3">Dotknij „Create API key”, skopiuj klucz, wklej poniżej i dotknij „Sprawdź połączenie”.</string>
+    <string name="ai_key">Klucz API</string>
+    <string name="ai_show_key">Pokaż klucz</string>
+    <string name="ai_hide_key">Ukryj klucz</string>
+    <string name="ai_key_save">Zapisz</string>
+    <string name="ai_key_delete">Usuń</string>
+    <string name="ai_key_delete_confirm">Na pewno usunąć?</string>
+    <string name="ai_key_set">zapisany: ••••%1$s</string>
+    <string name="ai_key_not_set">nie ustawiono</string>
+    <string name="ai_key_saved_note">Zapisano w sejfie telefonu</string>
+    <string name="ai_key_deleted_note">Usunięto z sejfu telefonu</string>
+    <string name="ai_key_hint">Klucz trzymam zaszyfrowany w sejfie telefonu (Android Keystore), nigdy w zwykłym pliku, i wysyłam tylko do tego dostawcy. Na ekranie widać 4 ostatnie znaki, cały klucz - po dotknięciu „Pokaż klucz”.</string>
+    <string name="ai_no_key">Brakuje klucza - bez niego AI nie działa.</string>
+    <string name="ai_used_up_app">Dzienny limit z ustawień wykorzystany (zapytań: %1$d) - jutro Tapedo zapyta znowu.</string>
+    <string name="ai_used_up_provider">%1$s odpowiada, że jego dzienny limit jest wykorzystany - jutro Tapedo zapyta znowu.</string>
+    <string name="ai_model">Model</string>
+    <string name="ai_model_hint">Puste = domyślny: %1$s. Nazwy modeli są na stronie dostawcy.</string>
+    <string name="ai_model_saved">✓ Zapisano</string>
+    <string name="ai_free_models_fetch">Pokaż darmowe modele</string>
+    <string name="ai_free_models_fetching">Pobieram listę od dostawcy…</string>
+    <string name="ai_free_models">Darmowe modele - dotknij, żeby wybrać:</string>
+    <string name="ai_free_models_saved">Lista zapisana w aplikacji 7.11.2026 - modele szybko się zmieniają, aktualną da dostawca.</string>
+    <string name="ai_free_models_live">Lista od dostawcy z dzisiaj.</string>
+    <string name="ai_free_models_failed">Lista od dostawcy niedostępna: %1$s Poniżej lista zapisana w aplikacji.</string>
+    <string name="ai_model_chosen">wybrany</string>
+    <string name="ai_test">Sprawdź połączenie</string>
+    <string name="ai_testing">Sprawdzam…</string>
+    <string name="ai_test_ok">Działa - odpowiedział model %1$s.</string>
+    <string name="ai_test_hint">Jedno małe zapytanie - liczy się do dziennego limitu.</string>
+    <string name="ai_usage">Zapytania dziś: %1$d z %2$d, w ostatnich 30 dniach: %3$d.</string>
+    <string name="ai_limit">Limit zapytań dziennie</string>
+    <string name="ai_limit_hint">Po tylu zapytaniach do jednego dostawcy Tapedo czeka do jutra - darmowy limit nie zostanie przekroczony.</string>
+    <string name="ai_limit_now">Dzienny limit wykorzystany: %1$s.</string>
+    <string name="ai_limit_app">limit z ustawień</string>
+    <string name="ai_limit_provider">limit dostawcy</string>
+    <string name="ai_limit_all">Wszyscy włączeni dostawcy czekają do jutra - notatki rozpisują reguły bez AI.</string>
+    <string name="ai_limit_next">Notatki idą do następnego dostawcy z listy.</string>
+    <string name="ai_privacy">Do AI trafia tylko tekst notatki. Nagranie, klucze, inne karteczki i dane o Tobie - nigdy.</string>
+    <string name="ai_problem_key">klucz nieprawidłowy - sprawdź, czy został skopiowany w całości, albo utwórz nowy.</string>
+    <string name="ai_problem_api_off">interfejs wyłączony w projekcie dostawcy - włącz go w projekcie albo utwórz klucz w nowym projekcie (zobacz „Jak zdobyć klucz”).</string>
+    <string name="ai_problem_no_free_tier">ten projekt Google nie ma darmowego planu - Gemini działa w nim tylko po podpięciu płatności (aistudio.google.com/billing), a nowy klucz w tym samym projekcie nie pomoże. Za darmo zostają Groq i OpenRouter.</string>
+    <string name="ai_problem_verify">Google chce potwierdzenia projektu telefonem - otwórz Google AI Studio („Załóż klucz”) i zrób weryfikację albo włącz innego darmowego dostawcę.</string>
+    <string name="ai_problem_denied">dostawca odmówił dostępu temu kontu albo projektowi - zajrzyj na jego stronę (konto, płatności, powiadomienia na e-mail) albo włącz innego dostawcę.</string>
+    <string name="ai_problem_model">model nie istnieje albo jest niedostępny dla tego konta - wybierz inny darmowy model.</string>
+    <string name="ai_problem_limit">limit u dostawcy wyczerpany - Tapedo zapyta znowu jutro albo od razu po zmianie modelu.</string>
+    <string name="ai_problem_cap">dzienny limit z ustawień wykorzystany - Tapedo zapyta znowu jutro.</string>
+    <string name="ai_problem_no_key">brakuje klucza.</string>
+    <string name="ai_problem_key_unreadable">nie udało się odczytać zapisanego klucza - spróbuj jeszcze raz. Klucz nie zginął; jeśli to się powtarza, wklej go ponownie.</string>
+    <string name="ai_problem_offline">brak połączenia albo dostawca nie odpowiada.</string>
+    <string name="ai_problem_answer">odpowiedź przyszła pusta albo niepełna - spróbuj jeszcze raz albo wybierz inny model.</string>
+    <string name="ai_problem_other">dostawca zgłosił błąd.</string>
+    <string name="ai_problem_line">%1$s (%2$s): %3$s</string>
+    <string name="ai_provider_answer">Odpowiedź dostawcy</string>
+    <string name="review_ai_rules">Karteczki rozpisały proste reguły zamiast AI:</string>
 
     <!-- Review window (after a recording) -->
     <string name="home_dismiss">Zamknij</string>
@@ -161,7 +228,6 @@
         <item quantity="many">Wyszło %d karteczek</item>
         <item quantity="other">Wyszło %d karteczki</item>
     </plurals>
-    <string name="review_ai_failed">Karteczki rozpisały proste reguły zamiast AI. Powód: %s</string>
     <string name="review_edit">Popraw</string>
     <string name="review_remove_card">Usuń tę karteczkę</string>
     <string name="review_save_failed">Nie udało się zapisać karteczek. Nic nie zginęło - spróbuj jeszcze raz.</string>

@@ -56,7 +56,7 @@ fun TapedoNavHost(container: AppContainer, debugTranscript: String? = null) {
             enterTransition = { cardIn(still) },
             popExitTransition = { cardOut(still) },
         ) {
-            val vm = viewModel { SettingsViewModel(container.settings, container.secrets, container.structurer) }
+            val vm = viewModel { SettingsViewModel(container.settings, container.secrets, container.aiUsage, container.aiConnection, container.speech) }
             SettingsRoute(vm, onBack = { nav.popBackStack() }, onOpenLicenses = { nav.navigate(LicensesDestination) })
         }
         composable<LicensesDestination>(

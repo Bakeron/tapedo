@@ -5,6 +5,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
@@ -15,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -38,6 +40,9 @@ fun ToggleLever(
     onChange: (Boolean) -> Unit,
     stateLabel: String,
     modifier: Modifier = Modifier,
+    // Every label the lever can show: the word keeps the widest one's room, so the lever does not jump
+    // sideways when "Off" turns into "On".
+    allLabels: List<String> = emptyList(),
 ) {
     val colors = TapedoTheme.colors
     val scheme = MaterialTheme.colorScheme
@@ -78,11 +83,21 @@ fun ToggleLever(
         Canvas(Modifier.size(8.dp).clearAndSetSemantics { }) {
             drawCircle(if (checked) colors.record else colors.rule)
         }
-        Text(
-            stateLabel,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = scheme.onSurface,
-        )
+        Box(contentAlignment = Alignment.CenterStart) {
+            allLabels.forEach {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.alpha(0f).clearAndSetSemantics { },
+                )
+            }
+            Text(
+                stateLabel,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = scheme.onSurface,
+            )
+        }
     }
 }

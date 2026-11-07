@@ -61,18 +61,22 @@ class DataStoreSettingsTest {
         val d = AppSettings()
         val variants = RecordingEnd.entries.map { d.copy(recordingEnd = it) } +
             AppSettings.MAX_RECORDING_OPTIONS.map { d.copy(maxRecordingSeconds = it) } +
+            AppSettings.SILENCE_OPTIONS.map { d.copy(silenceSeconds = it) } +
             AppSettings.SPEECH_LANGUAGES.map { d.copy(speechLanguage = it) } +
             OnlineSpeech.entries.map { d.copy(onlineSpeech = it) } +
             (NoteType.entries + null).map { d.copy(noteTypeChoice = it) } +
             Priority.entries.map { d.copy(defaultPriority = it) } +
             ThemeMode.entries.map { d.copy(theme = it) } +
             listOf(true, false).map { d.copy(reduceMotion = it) } +
-            AiProvider.entries.map { d.copy(aiProvider = it) } +
+            AiProvider.entries.map { d.copy(aiProviders = setOf(it)) } +
+            AiProvider.entries.map { d.copy(aiModels = mapOf(it to "model-${it.id}")) } +
+            AppSettings.AI_DAILY_LIMITS.map { d.copy(aiDailyLimit = it) } +
             AppSettings.TEXT_SCALES.map { d.copy(textScale = it) } +
             AppSettings(
-                recordingEnd = RecordingEnd.STOP_BUTTON, maxRecordingSeconds = 600, speechLanguage = "en-US",
+                recordingEnd = RecordingEnd.STOP_BUTTON, maxRecordingSeconds = 600, silenceSeconds = 12,
+                speechLanguage = "en-US",
                 onlineSpeech = OnlineSpeech.NEVER, noteTypeChoice = NoteType.EVENT, defaultPriority = Priority.LOW,
-                theme = ThemeMode.DARK, reduceMotion = true, aiProvider = AiProvider.GROQ, textScale = 1.3f,
+                theme = ThemeMode.DARK, reduceMotion = true, aiProviders = AiProvider.entries.toSet(), textScale = 1.3f,
             )
         for (wanted in variants) {
             settings.update { wanted }
@@ -87,8 +91,8 @@ class DataStoreSettingsTest {
         val names = raw.data.first().asMap().keys.map { it.name }.sorted()
         assertEquals(
             listOf(
-                "ai_provider", "default_priority", "max_recording_seconds", "note_type_choice", "online_speech",
-                "recording_end", "reduce_motion", "speech_language", "text_scale", "theme",
+                "ai_daily_limit", "ai_providers", "default_priority", "max_recording_seconds", "note_type_choice", "online_speech",
+                "recording_end", "reduce_motion", "silence_seconds", "speech_language", "text_scale", "theme",
             ),
             names,
         )
@@ -98,12 +102,14 @@ class DataStoreSettingsTest {
     fun `values the app does not know fall back to defaults`() = runBlocking {
         val raw = dataStore()
         raw.edit { p ->
-            for (key in listOf("recording_end", "online_speech", "note_type_choice", "default_priority", "theme", "ai_provider")) {
+            for (key in listOf("recording_end", "online_speech", "note_type_choice", "default_priority", "theme", "ai_provider", "ai_providers")) {
                 p[stringPreferencesKey(key)] = "FOO"
             }
             p[intPreferencesKey("max_recording_seconds")] = 45
+            p[intPreferencesKey("silence_seconds")] = 31
             p[stringPreferencesKey("speech_language")] = "de-DE"
             p[floatPreferencesKey("text_scale")] = 2f
+            p[intPreferencesKey("ai_daily_limit")] = 7
         }
         assertEquals(AppSettings(), DataStoreSettings(raw).settings.first())
     }
@@ -126,5 +132,30 @@ class DataStoreSettingsTest {
 
         settings.update { it.copy(theme = ThemeMode.DARK) }
         assertEquals(ThemeMode.DARK, settings.settings.first().theme)
+    }
+
+    @Test
+    fun `the one provider chosen before 0_5 stays on, and the old key is removed`() = runBlocking {
+        val raw = dataStore()
+        raw.edit { it[stringPreferencesKey("ai_provider")] = "GROQ" }
+        val settings = DataStoreSettings(raw)
+        assertEquals(setOf(AiProvider.GROQ), settings.settings.first().aiProviders)
+
+        settings.update { it }
+        val prefs = raw.data.first()
+        assertEquals("groq", prefs[stringPreferencesKey("ai_providers")])
+        assertNull(prefs[stringPreferencesKey("ai_provider")])
+        // "No AI" before 0.5 means nothing turned on.
+        raw.edit { it.clear(); it[stringPreferencesKey("ai_provider")] = "NONE" }
+        assertEquals(emptySet<AiProvider>(), settings.settings.first().aiProviders)
+    }
+
+    @Test
+    fun `turning every provider off is remembered, not mistaken for the old setting`() = runBlocking {
+        val raw = dataStore()
+        raw.edit { it[stringPreferencesKey("ai_provider")] = "GEMINI" }
+        val settings = DataStoreSettings(raw)
+        settings.update { it.copy(aiProviders = emptySet()) }
+        assertEquals(emptySet<AiProvider>(), settings.settings.first().aiProviders)
     }
 }
