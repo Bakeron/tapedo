@@ -54,8 +54,15 @@ sealed interface RecordingState {
         val levels: List<Float>,
         /** How many samples were ever taken - keeps the zigzag stable while the line scrolls. */
         val sampleCount: Long,
-        /** False while the phone restarts its recognizer after a pause - the pen lifts, "one moment". */
-        val listening: Boolean = true,
+        /**
+         * True only while the microphone really listens: false until the recognizer is ready and while
+         * the phone restarts it after a pause - the pen lifts, "one moment".
+         */
+        val listening: Boolean = false,
+        /** The microphone has opened at least once - later gaps are restarts, not the start. */
+        val micOpened: Boolean = false,
+        /** Seconds left of the "3, 2, 1" before recording; 0 = recording. The recognizer warms up meanwhile. */
+        val countdown: Int = 0,
     ) : RecordingState
 
     /** Speech is done; the rules or the AI are cutting the text into cards. */
@@ -113,6 +120,8 @@ class HomeViewModel(
     private val todayEpochDay: () -> Long = { LocalDate.now().toEpochDay() },
     /** Clock for the recording limit - a virtual one in tests. */
     private val timeSource: TimeSource = TimeSource.Monotonic,
+    /** "3, 2, 1" before each recording, so the user knows when to speak (the author's decision 07.11.2026). */
+    private val countdownMillis: Long = COUNTDOWN_MS,
 ) : ViewModel() {
 
     /** Default list titles in the app language - set by the screen, which can read resources. */
@@ -214,46 +223,53 @@ class HomeViewModel(
         val limit = s.maxRecordingSeconds
         // "On silence" is counted here, not by the recognizer - its own pause is far too short to think.
         val silence = if (s.recordingEnd == RecordingEnd.SILENCE) SilenceCountdown(s.silenceSeconds * 1000L) else null
-        _recording.value = RecordingState.Active(0, limit, "", emptyList(), 0)
+        _recording.value = RecordingState.Active(0, limit, "", emptyList(), 0, countdown = countdownLeft(0))
 
         session = viewModelScope.launch {
             var level = 0f
             // Real elapsed time: delay() runs a little late each tick, so counting ticks drifts behind the clock.
             val started = timeSource.markNow()
+            // The counter, the limit and "on silence" start after the countdown. The recognizer is started
+            // at once, so it is ready by "go"; what is said during the countdown is not used.
+            fun recordedMs() = (started.elapsedNow().inWholeMilliseconds - countdownMillis).coerceAtLeast(0)
             // Fixed-rate sampling: the pen keeps moving in silence, like paper under a seismograph.
             val sampler = launch {
                 var limitHit = false
                 while (true) {
                     delay(TICK_MS)
                     val elapsedMs = started.elapsedNow().inWholeMilliseconds
+                    val recordedMs = recordedMs()
                     val sample = level
                     _recording.update { st ->
                         if (st !is RecordingState.Active) st
                         else st.copy(
-                            elapsedSeconds = (elapsedMs / 1000).toInt(),
+                            elapsedSeconds = (recordedMs / 1000).toInt(),
                             levels = (st.levels + sample).takeLast(SEISMOGRAPH_SAMPLES),
                             sampleCount = st.sampleCount + 1,
+                            countdown = countdownLeft(elapsedMs),
                         )
                     }
                     level *= DECAY // falls back between words
-                    if (!limitHit && (elapsedMs >= limit * 1000L || silence?.isOver(elapsedMs) == true)) {
+                    if (!limitHit && (recordedMs >= limit * 1000L || silence?.isOver(recordedMs) == true)) {
                         limitHit = true
                         speech.stop() // the limit or the silence ends the recording like the stop button would
                     }
                 }
             }
             try {
-                speech.listen(s.speechLanguage, allowOnline = allowOnline).collect { e ->
+                speech.listen(s.speechLanguage, allowOnline = allowOnline, skipFirstMs = countdownMillis).collect { e ->
                     when (e) {
                         is SpeechEvent.Level -> level = max(level, e.value)
                         is SpeechEvent.Partial -> {
-                            silence?.heard(e.text, started.elapsedNow().inWholeMilliseconds)
+                            silence?.heard(e.text, recordedMs())
                             _recording.update { if (it is RecordingState.Active) it.copy(text = e.text) else it }
                         }
                         is SpeechEvent.Listening -> {
                             // Back to listening: a short jolt of the pen shows "you can speak again".
                             if (e.on && !s.reduceMotion) level = max(level, LISTENING_AGAIN_JOLT)
-                            _recording.update { if (it is RecordingState.Active) it.copy(listening = e.on) else it }
+                            _recording.update {
+                                if (it is RecordingState.Active) it.copy(listening = e.on, micOpened = it.micOpened || e.on) else it
+                            }
                         }
                         is SpeechEvent.Done -> when {
                             appendTo != null -> appendSpoken(appendTo, e.text)
@@ -648,7 +664,11 @@ class HomeViewModel(
         false
     }
 
+    /** Whole seconds of the countdown still to go: 3, 2, 1, then 0. */
+    private fun countdownLeft(elapsedMs: Long): Int = ((countdownMillis - elapsedMs + 999) / 1000).coerceAtLeast(0).toInt()
+
     private companion object {
+        const val COUNTDOWN_MS = 3_000L
         const val TICK_MS = 50L
         const val DECAY = 0.75f
         const val LISTENING_AGAIN_JOLT = 0.5f

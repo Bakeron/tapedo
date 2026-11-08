@@ -65,8 +65,10 @@ class HomeViewModelTest {
     /** Records what each recording was allowed to do and replays [events]. */
     private class FakeSpeech(private val events: () -> Flow<SpeechEvent>) : SpeechInput {
         val allowOnline = mutableListOf<Boolean>()
-        override fun listen(languageTag: String, allowOnline: Boolean): Flow<SpeechEvent> {
+        val skipped = mutableListOf<Long>()
+        override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long): Flow<SpeechEvent> {
             this.allowOnline += allowOnline
+            skipped += skipFirstMs
             return events()
         }
         var stops = 0
@@ -129,6 +131,8 @@ class HomeViewModelTest {
         speech: FakeSpeech = FakeSpeech { flowOf() },
         notes: FakeNotes = FakeNotes(),
         notice: FakeNotice = FakeNotice(),
+        // Most tests time the recording itself - the "3, 2, 1" has its own test.
+        countdownMillis: Long = 0,
     ) = HomeViewModel(
         store, speech, notes,
         NoteStructurer(NoSecrets(), MemoryAiUsage(), NoGateway),
@@ -136,6 +140,7 @@ class HomeViewModelTest {
         nowMillis = { 1_000L },
         todayEpochDay = { 20_000L },
         timeSource = testScheduler.timeSource,
+        countdownMillis = countdownMillis,
     ).also { vm ->
         backgroundScope.launch { vm.settings.collect { } }
         backgroundScope.launch { vm.stack.collect { } }
@@ -218,13 +223,57 @@ class HomeViewModelTest {
 
         vm.startRecording()
         runCurrent()
-        assertTrue((vm.recording.value as RecordingState.Active).listening)
-        events.send(SpeechEvent.Listening(false))
-        runCurrent()
-        assertEquals(false, (vm.recording.value as RecordingState.Active).listening)
+        // The bug from 07.11.2026: "listening" was shown before the microphone opened - first words lost.
+        val starting = vm.recording.value as RecordingState.Active
+        assertEquals("not listening until the recognizer is ready", false, starting.listening)
+        assertEquals(false, starting.micOpened)
         events.send(SpeechEvent.Listening(true))
         runCurrent()
         assertTrue((vm.recording.value as RecordingState.Active).listening)
+        events.send(SpeechEvent.Listening(false))
+        runCurrent()
+        val restarting = vm.recording.value as RecordingState.Active
+        assertEquals(false, restarting.listening)
+        assertTrue("a later gap is a restart, not the start", restarting.micOpened)
+        events.send(SpeechEvent.Listening(true))
+        runCurrent()
+        assertTrue((vm.recording.value as RecordingState.Active).listening)
+        events.close()
+    }
+
+    @Test
+    fun `three two one, and the counter and the limit start only after it`() = runTest(dispatcher) {
+        val events = Channel<SpeechEvent>(Channel.UNLIMITED)
+        val speech = FakeSpeech { events.receiveAsFlow() }
+        val vm = viewModel(
+            FakeStore(AppSettings(recordingEnd = RecordingEnd.STOP_BUTTON, maxRecordingSeconds = 10)),
+            speech,
+            countdownMillis = 3_000,
+        )
+
+        vm.startRecording()
+        runCurrent()
+        assertEquals(3, (vm.recording.value as RecordingState.Active).countdown)
+        assertEquals("the recognizer warms up during the countdown", 1, speech.allowOnline.size)
+        assertEquals("what is said during the countdown is not used", listOf(3_000L), speech.skipped)
+        advanceTimeBy(1_010)
+        runCurrent()
+        assertEquals(2, (vm.recording.value as RecordingState.Active).countdown)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(1, (vm.recording.value as RecordingState.Active).countdown)
+        advanceTimeBy(1_000) // 3.01 s
+        runCurrent()
+        val recording = vm.recording.value as RecordingState.Active
+        assertEquals(0, recording.countdown)
+        assertEquals(0, recording.elapsedSeconds)
+
+        advanceTimeBy(9_900) // 9.9 s of recording, 12.9 s since the tap
+        runCurrent()
+        assertEquals("the limit counts recording time, not the countdown", 0, speech.stops)
+        advanceTimeBy(200)
+        runCurrent()
+        assertEquals(1, speech.stops)
         events.close()
     }
 

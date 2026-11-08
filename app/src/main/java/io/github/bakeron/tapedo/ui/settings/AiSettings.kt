@@ -3,6 +3,12 @@ package io.github.bakeron.tapedo.ui.settings
 import android.view.WindowManager
 import androidx.activity.compose.LocalActivity
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -67,8 +74,10 @@ import io.github.bakeron.tapedo.core.ai.UsedUp
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.ui.cards.RuledText
-import io.github.bakeron.tapedo.ui.cards.marginLine
 import io.github.bakeron.tapedo.ui.components.CounterSlider
+import io.github.bakeron.tapedo.ui.components.Fold
+import io.github.bakeron.tapedo.ui.components.FoldLabel
+import io.github.bakeron.tapedo.ui.components.FoldValue
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
 import io.github.bakeron.tapedo.ui.components.ToggleLever
@@ -161,7 +170,7 @@ fun ProblemView(problem: AiProblem, modifier: Modifier = Modifier) {
         Warning(stringResource(R.string.ai_problem_line, providerName(problem.provider), problem.model, problemText(problem.problem)))
         if (problem.providerMessage.isNotBlank()) {
             Unfold(stringResource(R.string.ai_provider_answer), open, Modifier.padding(start = 26.dp)) { open = !open }
-            if (open) {
+            Fold(open) {
                 Text(
                     problem.providerMessage,
                     style = MaterialTheme.typography.bodySmall,
@@ -194,12 +203,11 @@ private fun Warning(text: String, modifier: Modifier = Modifier) {
 /** An underlined fold / unfold line with a triangle - like a tab on a card divider. */
 @Composable
 private fun Unfold(label: String, open: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Text(
-        (if (open) "▾ " else "▸ ") + label,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurface,
-        textDecoration = TextDecoration.Underline,
-        modifier = modifier
+    FoldLabel(
+        label,
+        open,
+        MaterialTheme.typography.labelLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        modifier
             .heightIn(min = 48.dp)
             .clickable(role = Role.Button) { onClick() }
             .padding(vertical = 12.dp),
@@ -262,8 +270,7 @@ private fun ProviderCard(p: AiProvider, on: Boolean, settings: AppSettings, st: 
             .background(scheme.background, shape)
             // A card that is on gets an inked edge - the lever and its words say it too.
             .border(if (on) 1.5.dp else 1.dp, if (on) colors.controlEdge else colors.cardEdge, shape)
-            .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 10.dp)
-            .marginLine(colors.record.copy(alpha = 0.55f)),
+            .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -276,11 +283,7 @@ private fun ProviderCard(p: AiProvider, on: Boolean, settings: AppSettings, st: 
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
-                Text(
-                    (if (open) "▾ " else "▸ ") + stringResource(if (open) R.string.ai_fold else R.string.ai_unfold),
-                    style = MaterialTheme.typography.labelLarge,
-                    textDecoration = TextDecoration.Underline,
-                )
+                FoldLabel(stringResource(if (open) R.string.ai_fold else R.string.ai_unfold), open, MaterialTheme.typography.labelLarge)
             }
             ToggleLever(
                 checked = on,
@@ -303,14 +306,14 @@ private fun ProviderCard(p: AiProvider, on: Boolean, settings: AppSettings, st: 
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
         )
-        if (on) {
-            when {
-                st.keySuffix == null -> Warning(stringResource(R.string.ai_no_key))
-                st.usedUp == UsedUp.APP -> Warning(stringResource(R.string.ai_used_up_app, settings.aiDailyLimit))
-                st.usedUp == UsedUp.PROVIDER -> Warning(stringResource(R.string.ai_used_up_provider, name))
-            }
+        val warning = if (!on) null else when {
+            st.keySuffix == null -> stringResource(R.string.ai_no_key)
+            st.usedUp == UsedUp.APP -> stringResource(R.string.ai_used_up_app, settings.aiDailyLimit)
+            st.usedUp == UsedUp.PROVIDER -> stringResource(R.string.ai_used_up_provider, name)
+            else -> null
         }
-        if (open) {
+        FoldValue(warning) { Warning(it) }
+        Fold(open) {
             ProviderBody(p, texts, settings, st, actions)
         }
     }
@@ -350,9 +353,11 @@ private fun KeySteps(p: AiProvider, steps: List<Int>, noKey: Boolean) {
     var open by rememberSaveable(p, noKey) { mutableStateOf(noKey) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Unfold(stringResource(R.string.ai_how_key), open) { open = !open }
-        if (open) {
-            PaperButton(stringResource(R.string.ai_get_key) + " ↗", onClick = { uri.openUri(p.keyPage) })
-            steps.forEachIndexed { i, step -> Step(i + 1, stringResource(step)) }
+        Fold(open) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PaperButton(stringResource(R.string.ai_get_key) + " ↗", onClick = { uri.openUri(p.keyPage) })
+                steps.forEachIndexed { i, step -> Step(i + 1, stringResource(step)) }
+            }
         }
     }
 }
@@ -394,17 +399,29 @@ private fun KeyField(p: AiProvider, st: ProviderState, actions: AiActions) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
             Text(
-                stringResource(if (st.shown) R.string.ai_hide_key else R.string.ai_show_key),
+                label,
                 style = MaterialTheme.typography.labelLarge,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier
-                    .heightIn(min = 48.dp)
-                    .clickable(role = Role.Switch) { actions.showKey(p, !st.shown) }
-                    .semantics { selected = st.shown }
-                    .padding(start = 12.dp, top = 14.dp, bottom = 14.dp),
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp).wrapContentHeight(),
             )
+            // Only a saved key can be shown (author's decision 7.11.2026); the row keeps its height either way.
+            AnimatedVisibility(
+                visible = st.keySuffix != null,
+                enter = if (TapedoTheme.reduceMotion) EnterTransition.None else fadeIn(tween(220)),
+                exit = if (TapedoTheme.reduceMotion) ExitTransition.None else fadeOut(tween(160)),
+            ) {
+                Text(
+                    stringResource(if (st.shown) R.string.ai_hide_key else R.string.ai_show_key),
+                    style = MaterialTheme.typography.labelLarge,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clickable(role = Role.Switch) { actions.showKey(p, !st.shown) }
+                        .semantics { selected = st.shown }
+                        .padding(start = 12.dp, top = 14.dp, bottom = 14.dp),
+                )
+            }
         }
         LineField(
             value = st.draft,
@@ -435,9 +452,9 @@ private fun KeyField(p: AiProvider, st: ProviderState, actions: AiActions) {
                 )
             }
         }
-        if (st.keyNote != null) {
+        FoldValue(st.keyNote) { note ->
             Text(
-                stringResource(if (st.keyNote == KeyNote.SAVED) R.string.ai_key_saved_note else R.string.ai_key_deleted_note),
+                stringResource(if (note == KeyNote.SAVED) R.string.ai_key_saved_note else R.string.ai_key_deleted_note),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
@@ -477,7 +494,7 @@ private fun ModelField(p: AiProvider, settings: AppSettings, actions: AiActions)
             onDone = { focus.clearFocus() },
             onLeave = ::save,
         )
-        if (justSaved) {
+        Fold(justSaved) {
             Text(
                 stringResource(R.string.ai_model_saved),
                 style = MaterialTheme.typography.bodySmall,
@@ -502,21 +519,24 @@ private fun ModelPicker(p: AiProvider, current: String, st: ProviderState, actio
             onClick = { actions.fetchModels(p) },
             enabled = !loading,
         )
-        val list = (st.models as? ModelsState.Loaded)?.list ?: return@Column
-        val problem = list.problem
-        if (problem != null) {
-            Warning(stringResource(R.string.ai_free_models_failed, problemText(problem.problem)))
-        } else {
-            Text(
-                stringResource(if (list.fromProvider) R.string.ai_free_models_live else R.string.ai_free_models_saved),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (list.models.isNotEmpty()) {
-            Text(stringResource(R.string.ai_free_models), style = MaterialTheme.typography.bodySmall)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (m in list.models) ModelTape(m, m == current) { actions.setModel(p, m) }
+        FoldValue((st.models as? ModelsState.Loaded)?.list) { list ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val problem = list.problem
+                if (problem != null) {
+                    Warning(stringResource(R.string.ai_free_models_failed, problemText(problem.problem)))
+                } else {
+                    Text(
+                        stringResource(if (list.fromProvider) R.string.ai_free_models_live else R.string.ai_free_models_saved),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (list.models.isNotEmpty()) {
+                    Text(stringResource(R.string.ai_free_models), style = MaterialTheme.typography.bodySmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (m in list.models) ModelTape(m, m == current) { actions.setModel(p, m) }
+                    }
+                }
             }
         }
     }

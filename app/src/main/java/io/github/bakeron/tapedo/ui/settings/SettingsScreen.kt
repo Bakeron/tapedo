@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -34,7 +35,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -56,6 +59,8 @@ import io.github.bakeron.tapedo.core.settings.ThemeMode
 import io.github.bakeron.tapedo.locale.AppLanguage
 import io.github.bakeron.tapedo.ui.cards.RuledText
 import io.github.bakeron.tapedo.ui.components.CounterSlider
+import io.github.bakeron.tapedo.ui.components.Fold
+import io.github.bakeron.tapedo.ui.components.holdInPlace
 import io.github.bakeron.tapedo.ui.components.ToggleLever
 import io.github.bakeron.tapedo.ui.components.Tick
 import io.github.bakeron.tapedo.ui.components.LabelTape
@@ -131,9 +136,10 @@ fun SettingsScreen(
             )
         }
 
+        val scroll = rememberScrollState()
         Column(
             Modifier
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .padding(horizontal = 16.dp)
                 .windowInsetsPadding(WindowInsets.navigationBars),
             verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -169,20 +175,22 @@ fun SettingsScreen(
                     TapedoTheme.colors.rule,
                     Modifier.padding(bottom = 10.dp),
                 )
-                if (settings.recordingEnd == RecordingEnd.SILENCE) {
-                    Rule()
-                    Setting(
-                        title = stringResource(R.string.settings_silence_length),
-                        hint = stringResource(R.string.settings_silence_length_hint),
-                    ) {
-                        CounterSlider(
-                            options = AppSettings.SILENCE_OPTIONS,
-                            selected = settings.silenceSeconds,
-                            label = { s -> stringResource(R.string.settings_seconds, s) },
-                            spokenLabel = { s -> pluralStringResource(R.plurals.duration_seconds, s, s) },
-                            tick = { s -> if (s % 10 == 0) Tick.MAJOR else if (s % 5 == 0) Tick.MINOR else Tick.NONE },
-                            onSelect = { v -> onChange { it.copy(silenceSeconds = v) } },
-                        )
+                Fold(settings.recordingEnd == RecordingEnd.SILENCE) {
+                    Column {
+                        Rule()
+                        Setting(
+                            title = stringResource(R.string.settings_silence_length),
+                            hint = stringResource(R.string.settings_silence_length_hint),
+                        ) {
+                            CounterSlider(
+                                options = AppSettings.SILENCE_OPTIONS,
+                                selected = settings.silenceSeconds,
+                                label = { s -> stringResource(R.string.settings_seconds, s) },
+                                spokenLabel = { s -> pluralStringResource(R.plurals.duration_seconds, s, s) },
+                                tick = { s -> if (s % 10 == 0) Tick.MAJOR else if (s % 5 == 0) Tick.MINOR else Tick.NONE },
+                                onSelect = { v -> onChange { it.copy(silenceSeconds = v) } },
+                            )
+                        }
                     }
                 }
                 Rule()
@@ -211,7 +219,6 @@ fun SettingsScreen(
                 Setting(
                     title = stringResource(R.string.settings_speech_language),
                     hint = stringResource(R.string.settings_speech_language_hint),
-                    more = stringResource(R.string.settings_speech_language_more),
                 ) {
                     SlideSelector(
                         options = AppSettings.SPEECH_LANGUAGES,
@@ -260,9 +267,12 @@ fun SettingsScreen(
             }
 
             Section(stringResource(R.string.settings_section_look)) {
+                // A new text size or language re-lays the whole page; these two switches stay under the finger.
                 Setting(
                     title = stringResource(R.string.settings_text_size),
                     hint = stringResource(R.string.settings_text_size_hint),
+                    // Keyed on the scale the layout really uses: the setting reaches this screen a frame before the theme.
+                    controlModifier = Modifier.holdInPlace(scroll, LocalDensity.current.fontScale),
                 ) {
                     SlideSelector(
                         options = AppSettings.TEXT_SCALES,
@@ -287,13 +297,23 @@ fun SettingsScreen(
                     )
                 }
                 Rule()
-                Setting(title = stringResource(R.string.settings_app_language)) {
-                    // Read on every composition: switching recreates the activity anyway.
+                val locale = LocalConfiguration.current.locales[0]
+                Setting(
+                    title = stringResource(R.string.settings_app_language),
+                    controlModifier = Modifier.holdInPlace(scroll, locale),
+                ) {
+                    // The switch moves at once; the texts follow when the system hands over the new language.
+                    var language by remember(locale) { mutableStateOf(AppLanguage.current()) }
                     SlideSelector(
                         options = AppLanguage.ALL,
-                        selected = AppLanguage.current(),
+                        selected = language,
                         label = { languageName(it) },
-                        onSelect = { if (it != AppLanguage.current()) AppLanguage.set(it) },
+                        onSelect = {
+                            if (it != language) {
+                                language = it
+                                AppLanguage.set(it)
+                            }
+                        },
                     )
                 }
                 Rule()
@@ -338,13 +358,19 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
  * The longer explanation ([more]) waits behind a small "more" note in the margin, like a pencilled footnote.
  */
 @Composable
-private fun Setting(title: String, hint: String? = null, more: String? = null, control: @Composable () -> Unit) {
+private fun Setting(
+    title: String,
+    hint: String? = null,
+    more: String? = null,
+    controlModifier: Modifier = Modifier,
+    control: @Composable () -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
     val rule = TapedoTheme.colors.rule
     var expanded by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium)
-        control()
+        Box(controlModifier) { control() }
         if (hint != null) {
             // The "more" note sits in the right margin, at the hint's last line.
             Row(verticalAlignment = Alignment.Bottom) {
@@ -364,8 +390,10 @@ private fun Setting(title: String, hint: String? = null, more: String? = null, c
                 }
             }
         }
-        if (more != null && expanded) {
-            RuledText(more, MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
+        if (more != null) {
+            Fold(expanded) {
+                RuledText(more, MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
+            }
         }
     }
 }

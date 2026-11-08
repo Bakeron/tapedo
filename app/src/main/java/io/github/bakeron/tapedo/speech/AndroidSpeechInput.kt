@@ -2,21 +2,23 @@ package io.github.bakeron.tapedo.speech
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioFormat
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import io.github.bakeron.tapedo.core.speech.ListeningMode
-import io.github.bakeron.tapedo.core.speech.Phrases
 import io.github.bakeron.tapedo.core.speech.RecognizerErrorKind
 import io.github.bakeron.tapedo.core.speech.RecognizerErrorPolicy
 import io.github.bakeron.tapedo.core.speech.RecognizerStep
 import io.github.bakeron.tapedo.core.speech.SpeechError
 import io.github.bakeron.tapedo.core.speech.SpeechEvent
 import io.github.bakeron.tapedo.core.speech.SpeechInput
+import io.github.bakeron.tapedo.core.speech.Transcript
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
@@ -35,8 +37,10 @@ import kotlinx.coroutines.withContext
  * Works like a dictaphone: from "record" to [stop] nothing said is lost. On Android 13+ it asks for a
  * segmented session - one open microphone, a result after every pause. A recognizer that ignores that
  * (or an older phone) ends after each pause; it is then restarted at once and the phrases are joined
- * (a pause becomes a comma, so items said one by one stay separate). During that restart the microphone
- * is closed for a moment - [SpeechEvent.Listening] tells the screen.
+ * ([Transcript]: a pause of 2 s or more becomes a comma, so items said one by one stay separate).
+ * The microphone is closed until the recognizer is ready, and for a moment during that restart -
+ * [SpeechEvent.Listening] tells the screen. On Android 13+ Tapedo records by itself ([ContinuousMic]) and
+ * feeds the recognizer, so those restarts lose nothing.
  * SpeechRecognizer must be used on the main thread - hence [flowOn] Main and the [main] handler.
  */
 class AndroidSpeechInput(private val context: Context) : SpeechInput {
@@ -73,7 +77,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             SpeechRecognizer.createSpeechRecognizer(context)
         }
 
-    override fun listen(languageTag: String, allowOnline: Boolean): Flow<SpeechEvent> = callbackFlow {
+    override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long): Flow<SpeechEvent> = callbackFlow {
         val onDevice = onDeviceAvailable()
         if (!onDevice && !SpeechRecognizer.isRecognitionAvailable(context)) {
             trySend(SpeechEvent.Failed(SpeechError.NOT_AVAILABLE))
@@ -82,42 +86,80 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             return@callbackFlow
         }
 
+        // Android 13+: Tapedo's own microphone feeds the recognizer, so its restarts leave no gap. Without it
+        // (older phones, a microphone that would not open) the recognizer listens by itself, as before.
+        val mic: ContinuousMic? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContinuousMic(
+                skipMs = skipFirstMs,
+                onLevel = { trySend(SpeechEvent.Level(it)) },
+            ).takeIf { it.start() }
+        } else {
+            null
+        }
+
         var recognizer = newRecognizer(onDevice)
-        val phrases = mutableListOf<String>()
+        // Pauses become commas by the clock, not by where the recognizer ends its phrases. Some
+        // recognizers end a phrase with "no match" (or an empty result) after showing it - what the
+        // user saw on screen is still kept.
+        val transcript = Transcript()
         var stopping = false
+        // Speech began and its phrase has no result yet - stopListening now would throw the phrase away.
+        var speaking = false
         var closed = false
         var offline = true
-        var listening = true
+        // The microphone opens only at onReadyForSpeech, often a second after the tap - until then the
+        // screen must not say "listening", or the first words are lost.
+        var listening = false
         // Errors other than silence since the last new words - a recognizer that keeps failing ends the recording.
         var failuresInRow = 0
         // A segment arrived: this recognizer really keeps one session open.
         var segmentsSeen = false
-        // The words on screen for the phrase being spoken. Some recognizers end a phrase with "no match"
-        // (or an empty result) after showing it - what the user saw on screen is still kept.
-        var shown = ""
 
-        fun soFar(current: String = "") = Phrases.join(phrases + current)
+        // Own microphone: where the next recognizer session starts in the recorded audio.
+        var nextFrom = 0L
+        var sessionFrom = 0L
+        var sessionReady = false
+        // Where the recognizer said the phrase ended in this session (-1: not yet).
+        var phraseEndPos = -1L
 
-        fun keepShown() {
-            if (shown.isNotBlank()) phrases += shown
-            shown = ""
-        }
-
-        fun addPhrase(text: String?) {
-            if (text.isNullOrBlank()) keepShown() else phrases += text
-            shown = ""
-        }
+        fun now() = SystemClock.elapsedRealtime()
 
         fun finish() {
             if (closed) return
-            trySend(if (phrases.isEmpty()) SpeechEvent.Failed(SpeechError.NO_SPEECH) else SpeechEvent.Done(soFar()))
+            trySend(
+                if (transcript.isEmpty()) SpeechEvent.Failed(SpeechError.NO_SPEECH) else SpeechEvent.Done(transcript.text()),
+            )
             close()
+        }
+
+        /**
+         * Own microphone: a session is over - the next one starts a little before where this one stopped
+         * hearing, so nothing said in between is lost. A session that heard nothing because it failed is
+         * replayed whole. Returns true when, after "stop", recorded audio is still left for another session.
+         */
+        fun sessionEnded(failed: Boolean): Boolean {
+            val m = mic ?: return false
+            val boundary = when {
+                phraseEndPos >= 0 -> phraseEndPos
+                failed || !sessionReady -> sessionFrom
+                else -> m.fedPos()
+            }
+            m.endSession()
+            nextFrom = maxOf(boundary - ContinuousMic.bytes(REPLAY_MS), sessionFrom, m.startPos)
+            phraseEndPos = -1
+            val left = m.leftAfter(boundary)
+            return stopping && left > LEFT_MIN_MS
         }
 
         fun start() {
             if (closed) return
-            // "Stop" pressed during the restart gap - end now instead of listening again.
-            if (stopping) return finish()
+            // "Stop" pressed during the restart gap - end now instead of listening again. With the own
+            // microphone the audio recorded meanwhile still gets a last session (it ends at the stop point).
+            if (stopping && mic == null) return finish()
+            speaking = false
+            sessionReady = false
+            phraseEndPos = -1
+            sessionFrom = nextFrom
             recognizer.startListening(
                 Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -125,20 +167,26 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, offline)
                     putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        // One session for the whole recording; [stop] ends it. Recognizers that do not
-                        // support this ignore it and end after a pause as before.
+                    // Every restart closes the microphone for a moment, and the first word after it often gets
+                    // lost (seen on the author's Android 16 phone, 07.11.2026). So: wait long before ending a
+                    // phrase - on every Android version, also when the segmented session below is ignored.
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, PHRASE_SILENCE_MS)
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, PHRASE_SILENCE_MS)
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, SESSION_MS)
+                    if (mic != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, mic.openSession(nextFrom))
+                        putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
+                        putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
+                        putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, ContinuousMic.RATE)
+                        // One session for the whole audio: it ends when the audio does (at "stop").
+                        putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_AUDIO_SOURCE)
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        // One session with a result after every pause; it ends after [PHRASE_SILENCE_MS] of
+                        // silence or with [stop]. The "minimum length" kind was ignored by the author's phone,
+                        // so the "silence" kind is asked for now.
                         putExtra(
                             RecognizerIntent.EXTRA_SEGMENTED_SESSION,
-                            RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS,
-                        )
-                        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, SESSION_MS)
-                    } else {
-                        // Older phones: wait a little longer before ending a phrase, fewer restart gaps.
-                        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, PHRASE_SILENCE_MS)
-                        putExtra(
-                            RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
-                            PHRASE_SILENCE_MS,
+                            RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS,
                         )
                     }
                 },
@@ -146,9 +194,9 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         }
 
         // A short gap before restarting - starting again inside a callback often gives "busy".
-        // The microphone is closed until onReadyForSpeech.
+        // The recognizer's own microphone is closed until onReadyForSpeech; the own one never closes.
         fun restart(block: () -> Unit = { start() }) {
-            if (listening) {
+            if (listening && mic == null) {
                 listening = false
                 trySend(SpeechEvent.Listening(false))
             }
@@ -156,12 +204,17 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         }
 
         val listener = object : RecognitionListener {
-            override fun onBeginningOfSpeech() = Unit
+            override fun onBeginningOfSpeech() {
+                speaking = true
+            }
             override fun onBufferReceived(buffer: ByteArray?) = Unit
-            override fun onEndOfSpeech() = Unit
+            override fun onEndOfSpeech() {
+                if (mic != null && phraseEndPos < 0) phraseEndPos = mic.fedPos()
+            }
             override fun onEvent(eventType: Int, params: Bundle?) = Unit
 
             override fun onReadyForSpeech(params: Bundle?) {
+                sessionReady = true
                 if (!listening) {
                     listening = true
                     trySend(SpeechEvent.Listening(true))
@@ -176,9 +229,9 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             override fun onPartialResults(partialResults: Bundle?) {
                 val text = partialResults.firstResult()
                 if (!text.isNullOrBlank()) {
-                    shown = text
+                    transcript.partial(text, now())
                     failuresInRow = 0
-                    trySend(SpeechEvent.Partial(soFar(text)))
+                    trySend(SpeechEvent.Partial(transcript.text()))
                 }
             }
 
@@ -189,36 +242,45 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                     remember(ListeningMode.CONTINUOUS)
                 }
                 val text = segmentResults.firstResult()
+                speaking = false
+                // A segment is not a session end: the next phrase is in the same audio.
+                phraseEndPos = -1
                 if (!text.isNullOrBlank()) failuresInRow = 0
-                addPhrase(text)
-                trySend(SpeechEvent.Partial(soFar()))
+                transcript.phraseEnded(text, now())
+                trySend(SpeechEvent.Partial(transcript.text()))
             }
 
             override fun onEndOfSegmentedSession() {
-                keepShown()
+                transcript.phraseEnded(null, now())
+                val more = sessionEnded(failed = false)
                 // Ended by itself (e.g. the recognizer's own time limit) - the recording goes on.
-                if (stopping) finish() else restart()
+                if (stopping && !more) finish() else restart()
             }
 
             /** The recognizer ended after a pause - a whole session in older phones. */
             override fun onResults(results: Bundle?) {
                 val text = results.firstResult()
+                speaking = false
                 if (!text.isNullOrBlank()) failuresInRow = 0
-                addPhrase(text)
-                if (stopping) return finish()
+                transcript.phraseEnded(text, now())
+                val more = sessionEnded(failed = false)
+                if (stopping && !more) return finish()
                 if (!segmentsSeen) remember(ListeningMode.RESUMING)
-                trySend(SpeechEvent.Partial(soFar()))
+                trySend(SpeechEvent.Partial(transcript.text()))
                 restart()
             }
 
             override fun onError(error: Int) {
-                keepShown()
+                speaking = false
+                transcript.phraseEnded(null, now())
                 val kind = kindOf(error)
                 if (kind != RecognizerErrorKind.SILENCE) failuresInRow++
+                // After "stop" the recorded rest still gets heard (the grace timer ends a recognizer that keeps failing).
+                if (sessionEnded(failed = kind != RecognizerErrorKind.SILENCE)) return restart()
                 val step = RecognizerErrorPolicy.decide(
                     error = kind,
                     offline = offline,
-                    phrasesHeard = phrases.isNotEmpty(),
+                    phrasesHeard = !transcript.isEmpty(),
                     allowOnline = allowOnline,
                     stopping = stopping,
                     failuresInRow = failuresInRow,
@@ -247,12 +309,26 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         stopRequest = {
             if (!stopping) {
                 stopping = true
-                recognizer.stopListening()
+                if (mic != null) {
+                    // The microphone goes off at once; the recognizer gets the audio up to here and then its
+                    // end, which ends the session with the last phrase in it (see onResults / onEndOfSegmentedSession).
+                    mic.stopAfter(STOP_AUDIO_TAIL_MS)
+                } else {
+                    // stopListening in the middle of a phrase gave "no match" and lost the whole last phrase
+                    // (author's phone, 08.11.2026) - a phrase still being spoken gets [STOP_TAIL_MS] to end by
+                    // itself, which finishes the recording at once (see onResults / start). Nothing being
+                    // spoken - nothing to wait for.
+                    if (speaking) {
+                        main.postDelayed({ recognizer.stopListening() }, STOP_TAIL_MS)
+                    } else {
+                        recognizer.stopListening()
+                    }
+                }
                 // A recognizer that never answers the stop must not leave the recording hanging.
                 main.postDelayed({
-                    keepShown()
+                    transcript.phraseEnded(null, now())
                     finish()
-                }, STOP_GRACE_MS)
+                }, if (mic != null) STOP_OWN_MIC_GRACE_MS else STOP_TAIL_MS + STOP_GRACE_MS)
             }
         }
         start()
@@ -262,6 +338,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             stopRequest = null
             main.removeCallbacksAndMessages(null)
             recognizer.destroy()
+            mic?.close()
         }
     }
         // trySend drops events when the default 64-slot buffer is full - the final Done must never be lost.
@@ -286,10 +363,35 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         const val STOP_GRACE_MS = 3_000L
 
         /** Longer than the longest recording (60 min) - the session ends with [stop], not by itself. */
-        const val SESSION_MS = 61 * 60 * 1000
+        const val SESSION_MS = 61 * 60 * 1000L // a Long: recognizers read these extras with getLong (an Int reads as 0)
 
-        /** Fallback path: quiet before a phrase ends (the platform default is often about 1 s). */
-        const val PHRASE_SILENCE_MS = 2_500L
+        /**
+         * Quiet before a phrase (or a segmented session) ends - the platform default is often under 1 s.
+         * Pauses still become commas: [Transcript] reads them from the clock, not from phrase ends.
+         * How long a silence ends the whole recording is decided by Tapedo, not here.
+         */
+        const val PHRASE_SILENCE_MS = 10_000L
+
+        /**
+         * After "stop", the most the microphone keeps listening - the author's limit (08.11.2026): listening
+         * longer after "stop" is a bug. A phrase on the author's phone ended ~0.9 s after "stop".
+         */
+        const val STOP_TAIL_MS = 1_000L
+
+        /** Own microphone: it records this much after "stop" - the last syllable is often said with the tap. */
+        const val STOP_AUDIO_TAIL_MS = 200L
+
+        /**
+         * Own microphone: the most "stop" waits for the recognizer to turn the rest of the audio into text
+         * (it usually takes well under 1 s); then the recording ends with what is on screen.
+         */
+        const val STOP_OWN_MIC_GRACE_MS = 2_000L
+
+        /** A new session starts this much before where the last one heard the phrase end - still its silence. */
+        const val REPLAY_MS = 300L
+
+        /** After "stop": less unheard audio than this is not worth another session. */
+        const val LEFT_MIN_MS = 250L
         const val PREFS = "speech"
         const val KEY_MODE = "listening_mode"
         val SILENCE_ERRORS = setOf(SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT)

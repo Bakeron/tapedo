@@ -10,6 +10,8 @@
     <string name="record_counter">%1$s / %2$s</string>
     <string name="record_listening">Listening…</string>
     <string name="record_wait">One moment… the microphone is coming back</string>
+    <string name="record_starting">One moment… turning the microphone on</string>
+    <string name="record_countdown">Recording in %1$d</string>
     <string name="mic_open_settings">Open phone settings</string>
     <string name="speech_error_permission">Without the microphone Tapedo can’t hear your note. Allow the microphone in the phone settings.</string>
     <string name="speech_error_not_available">This phone has no speech recognition. Install or enable the Google app.</string>
@@ -55,8 +57,7 @@
         <item quantity="other">%d minutes</item>
     </plurals>
     <string name="settings_speech_language">Speech language</string>
-    <string name="settings_speech_language_hint">The phone recognises speech in this language.</string>
-    <string name="settings_speech_language_more">Mixed notes (e.g. Polish words in an English sentence) usually work too.</string>
+    <string name="settings_speech_language_hint">The language you speak to the phone in. Tapedo’s own texts follow “App language” below.</string>
     <string name="settings_online_speech">Online recognition</string>
     <string name="settings_online_speech_ask">Ask</string>
     <string name="settings_online_speech_always">Always</string>

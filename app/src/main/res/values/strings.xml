@@ -12,6 +12,8 @@
     <string name="record_counter">%1$s / %2$s</string>
     <string name="record_listening">Słucham…</string>
     <string name="record_wait">Chwila… mikrofon wraca</string>
+    <string name="record_starting">Chwila… włączam mikrofon</string>
+    <string name="record_countdown">Nagrywanie za %1$d</string>
     <string name="mic_open_settings">Otwórz ustawienia telefonu</string>
     <string name="speech_error_permission">Tapedo nie usłyszy notatki bez dostępu do mikrofonu. Zezwól na mikrofon w ustawieniach telefonu.</string>
     <string name="speech_error_not_available">Ten telefon nie ma rozpoznawania mowy. Zainstaluj albo włącz aplikację Google.</string>
@@ -63,8 +65,7 @@
     </plurals>
     <string name="settings_minutes">%d min</string>
     <string name="settings_speech_language">Język mowy</string>
-    <string name="settings_speech_language_hint">W tym języku telefon rozpoznaje mowę.</string>
-    <string name="settings_speech_language_more">Notatki mieszane (np. angielskie słowa w polskim zdaniu) zwykle też przechodzą.</string>
+    <string name="settings_speech_language_hint">Język, w którym mówisz do telefonu. Napisy w Tapedo zmienia „Język aplikacji” niżej.</string>
     <string name="settings_online_speech">Rozpoznawanie przez internet</string>
     <string name="settings_online_speech_ask">Pytaj</string>
     <string name="settings_online_speech_always">Zawsze</string>

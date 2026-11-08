@@ -8,6 +8,7 @@ import io.github.bakeron.tapedo.core.ai.NoteStructurer
 import io.github.bakeron.tapedo.core.ai.SecretStore
 import io.github.bakeron.tapedo.core.ai.aiHttpClient
 import io.github.bakeron.tapedo.core.data.NoteRepository
+import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.SettingsStore
 import io.github.bakeron.tapedo.core.speech.SpeechInput
 import io.github.bakeron.tapedo.data.FileLockedNotesNotice
@@ -44,6 +45,9 @@ class AppContainer(private val app: Application) {
     val lockedNotice: LockedNotesNotice by lazy { FileLockedNotesNotice(app) }
 
     val settings: SettingsStore by lazy { DataStoreSettings(app) }
+
+    /** The settings last drawn - a recreated window (rotation, theme switch) draws from its first frame, without a blank one. */
+    var lastSettings: AppSettings? = null
 
     val secrets: SecretStore by lazy { KeystoreSecretStore(app) }
 

@@ -4,7 +4,9 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
@@ -35,6 +37,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -51,7 +54,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -239,7 +244,10 @@ fun HomeScreen(
 
     val middle = @Composable { modifier: Modifier ->
         Box(modifier) {
-            if (recording is RecordingState.Active) {
+            if (recording is RecordingState.Active && recording.countdown > 0) {
+                // Nothing else in the middle - the digit stays in one place, the eye has nothing else to read.
+                CountdownDial(recording.countdown, Modifier.align(Alignment.Center))
+            } else if (recording is RecordingState.Active) {
                 ListeningPanel(recording, Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp))
             } else {
                 CardStack(
@@ -332,8 +340,10 @@ private fun ColumnScope.RecordControls(
         modifier = Modifier.padding(horizontal = 20.dp),
     )
 
+    // During "3, 2, 1" nothing is recorded yet, so the key and its counter are dimmed (the key still cancels).
+    val waiting = (recording as? RecordingState.Active)?.countdown?.let { it > 0 } == true
     Column(
-        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 14.dp),
+        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 14.dp).alpha(if (waiting) DIMMED_ALPHA else 1f),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val counter = (recording as? RecordingState.Active)?.let {
@@ -365,13 +375,14 @@ private fun ColumnScope.RecordControls(
 /** While recording: the seismograph and the words as they are recognised. */
 @Composable
 private fun ListeningPanel(state: RecordingState.Active, modifier: Modifier) {
+    SpeakNowCue(state)
     Column(modifier, verticalArrangement = Arrangement.Center) {
-        Seismograph(state.levels, state.sampleCount, SEISMOGRAPH_SAMPLES, penUp = !state.listening)
+        Seismograph(state.levels, state.sampleCount, SEISMOGRAPH_SAMPLES, penUp = !state.ready)
         Spacer(Modifier.height(16.dp))
         if (!state.listening) {
-            // The phone restarts its recognizer after a pause - words said now would be lost.
+            // The microphone is not open yet, or the phone restarts its recognizer - words said now would be lost.
             Text(
-                stringResource(R.string.record_wait),
+                stringResource(if (state.micOpened) R.string.record_wait else R.string.record_starting),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = TapedoTheme.colors.record,
@@ -379,8 +390,8 @@ private fun ListeningPanel(state: RecordingState.Active, modifier: Modifier) {
             )
         }
         if (state.text.isEmpty()) {
-            // Before the first words: a typed "Listening…" (announced once); the REC lamp blinks by the counter.
-            Text(
+            // Only when really listening: a typed "Listening…" (announced once); the REC lamp blinks by the counter.
+            if (state.ready) Text(
                 stringResource(R.string.record_listening),
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -391,6 +402,60 @@ private fun ListeningPanel(state: RecordingState.Active, modifier: Modifier) {
                 state.text,
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            )
+        }
+    }
+}
+
+/**
+ * "3, 2, 1": one big typewriter digit on a round paper dial, so the user knows exactly when to start.
+ * The digit is already huge - the system font size is ignored so it never runs off the dial.
+ */
+@Composable
+internal fun CountdownDial(countdown: Int, modifier: Modifier = Modifier) {
+    val colors = TapedoTheme.colors
+    val spoken = stringResource(R.string.record_countdown, countdown)
+    val digit = with(LocalDensity.current) { 120.dp.toSp() }
+    Box(
+        modifier
+            .size(200.dp)
+            .background(colors.card, CircleShape)
+            .border(3.dp, colors.record, CircleShape)
+            .clearAndSetSemantics {
+                contentDescription = spoken
+                liveRegion = LiveRegionMode.Polite
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            countdown.toString(),
+            style = MaterialTheme.typography.displayLarge.copy(fontSize = digit, lineHeight = digit),
+            fontWeight = FontWeight.Bold,
+            color = colors.record,
+        )
+    }
+}
+
+/** Controls that work but have nothing to do yet (the record key during the countdown). */
+internal const val DIMMED_ALPHA = 0.35f
+
+/** After the countdown, with the microphone open: speak now. */
+internal val RecordingState.Active.ready: Boolean get() = countdown == 0 && listening
+
+/**
+ * One short buzz each time the microphone really listens: after the countdown, and again when it comes
+ * back after the phone restarted its recognizer (words said in that gap are lost) - "speak now",
+ * without looking at the screen.
+ */
+@Composable
+internal fun SpeakNowCue(state: RecordingState.Active) {
+    val view = LocalView.current
+    val go = state.ready
+    LaunchedEffect(go) {
+        if (go) {
+            view.performHapticFeedback(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.CONFIRM
+                else HapticFeedbackConstants.VIRTUAL_KEY,
             )
         }
     }

@@ -20,8 +20,9 @@ sealed interface SpeechEvent {
     data class Level(val value: Float) : SpeechEvent
 
     /**
-     * The microphone closed for a moment (the phone restarts its recognizer after a pause) or opened again.
-     * Only on phones without a continuous session - there the user should wait for the pen to come down.
+     * The microphone opened (the first `true` comes when the recognizer is ready, often a second after
+     * the start), closed for a moment (on phones without a continuous session the recognizer restarts
+     * after a pause) or opened again. Words said while it is closed are lost.
      */
     data class Listening(val on: Boolean) : SpeechEvent
 
@@ -59,8 +60,10 @@ interface SpeechInput {
      * Cancelling the collection aborts without a result.
      * @param allowOnline recognition always starts offline; only with true may it fall back to the online
      *   recognizer when the offline language pack is missing. Otherwise it ends with [SpeechError.OFFLINE_UNAVAILABLE].
+     * @param skipFirstMs what is said in this first stretch (the 3-2-1 countdown) is not used - the author's
+     *   decision 08.11.2026. The recognizer starts at once anyway, so it is ready by "go".
      */
-    fun listen(languageTag: String, allowOnline: Boolean): Flow<SpeechEvent>
+    fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long = 0): Flow<SpeechEvent>
 
     /** Ends listening gracefully: what was said so far still arrives as [SpeechEvent.Done]. */
     fun stop()
