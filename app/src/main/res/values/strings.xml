@@ -7,6 +7,7 @@
     <string name="home_open_settings">Ustawienia</string>
     <string name="home_empty">Stos jest pusty. Naciśnij czerwony przycisk i powiedz, co masz do zrobienia.</string>
     <string name="home_type_question">Co nagrywasz?</string>
+    <string name="home_pause_rule">Przerwa 2 s = nowy punkt</string>
     <string name="record_start">Nagraj</string>
     <string name="record_stop">Zatrzymaj nagrywanie</string>
     <string name="record_counter">%1$s / %2$s</string>
@@ -271,6 +272,7 @@
     <string name="locked_notes_ok">Rozumiem</string>
 
     <!-- Card -->
+    <string name="card_due_field">Termin</string>
     <string name="card_due_today">dziś</string>
     <string name="card_due_tomorrow">jutro</string>
     <string name="card_due_yesterday">wczoraj</string>

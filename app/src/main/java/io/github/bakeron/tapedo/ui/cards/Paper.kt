@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
@@ -42,12 +43,14 @@ fun Modifier.marginLine(color: Color): Modifier = drawBehind {
  * The rules follow the text's own layout (not a dp grid), so they stay under the words at any text size.
  */
 @Composable
-fun RuledText(text: String, style: TextStyle, color: Color, rule: Color, modifier: Modifier = Modifier) {
+fun RuledText(text: String, style: TextStyle, color: Color, rule: Color, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     Text(
         text,
         style = style,
         color = color,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
         onTextLayout = { layout = it },
         modifier = modifier.fillMaxWidth().drawBehind {
             val text = layout ?: return@drawBehind

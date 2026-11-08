@@ -64,6 +64,8 @@ import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.ui.cards.PencilBox
 import io.github.bakeron.tapedo.ui.cards.PriorityTape
 import io.github.bakeron.tapedo.ui.cards.RuledText
+import io.github.bakeron.tapedo.ui.cards.TypeMark
+import io.github.bakeron.tapedo.ui.cards.TypeTapeMark
 import io.github.bakeron.tapedo.ui.cards.appLocale
 import io.github.bakeron.tapedo.ui.cards.handStrike
 import io.github.bakeron.tapedo.ui.cards.isDone
@@ -200,11 +202,13 @@ private fun DividerTabs(tabs: List<StackTab>, selected: StackTab, counts: Map<St
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    val ink = if (isSelected) scheme.onSurface else scheme.onSurfaceVariant
+                    tab.type?.let { TypeMark(it, ink, size = 14.dp) }
                     Text(
                         stringResource(tabNameRes(tab)),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) scheme.onSurface else scheme.onSurfaceVariant,
+                        color = ink,
                         maxLines = 1,
                     )
                     Text(
@@ -283,12 +287,13 @@ private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, 
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(top = 4.dp, start = 4.dp)
+                .padding(top = 4.dp, start = 4.dp, end = 4.dp)
                 .background(colors.card, shape)
                 .border(1.dp, colors.controlEdge, shape)
                 .clickable(onClickLabel = stringResource(R.string.stack_open_card), onClick = onOpen)
                 .heightIn(min = 60.dp)
-                .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                // Room on the left for the type tape stuck over the edge.
+                .padding(start = 36.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (note.type == NoteType.TASK) {
@@ -344,16 +349,19 @@ private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, 
             }
         }
 
+        // The kind at a glance (author 08.11.2026: shopping and lists looked the same). Over the left edge,
+        // so the priority tape moved to the top-right corner - the same corner as on the open card.
+        TypeTapeMark(note.type, Modifier.align(Alignment.CenterStart).padding(top = 4.dp))
+
         // Ideas have no priority, so no tape.
         if (note.type != NoteType.IDEA) {
             val priorityDesc = stringResource(R.string.card_priority_desc, priorityName(note.priority))
             PriorityTape(
                 note.priority,
                 Modifier
-                    .align(Alignment.TopStart)
+                    .align(Alignment.TopEnd)
                     .size(width = 34.dp, height = 12.dp)
                     .semantics { contentDescription = priorityDesc },
-                angle = -38f,
             )
         }
     }

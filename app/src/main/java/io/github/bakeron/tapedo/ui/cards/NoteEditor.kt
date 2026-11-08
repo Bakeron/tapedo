@@ -2,7 +2,6 @@ package io.github.bakeron.tapedo.ui.cards
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -54,6 +52,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -132,14 +131,10 @@ fun NoteEditor(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            // The card being edited.
-            val shape = RoundedCornerShape(3.dp)
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .background(colors.card, shape)
-                    .border(1.dp, colors.cardEdge, shape)
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            // The card being edited, on the paper of its kind - changing the type below changes the paper at once.
+            CardPaper(
+                note,
+                Modifier.fillMaxWidth(paperWidth(note.type)).align(Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 PaperField(
@@ -158,6 +153,8 @@ fun NoteEditor(
                         onValueChange = { onChange(note.copy(body = it)) },
                         textStyle = MaterialTheme.typography.bodyLarge,
                         minLines = if (note.type.hasItems) 1 else 3,
+                        // A note is written on lined paper.
+                        ruled = note.type == NoteType.NOTE,
                     )
                 }
                 if (note.type.hasItems) {
@@ -251,11 +248,14 @@ private fun PaperField(
     textStyle: TextStyle,
     singleLine: Boolean = false,
     minLines: Int = 1,
+    ruled: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val rule = TapedoTheme.colors.rule
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     Column(modifier) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
         BasicTextField(
@@ -267,13 +267,30 @@ private fun PaperField(
             cursorBrush = SolidColor(scheme.primary),
             interactionSource = interaction,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            onTextLayout = { layout = it },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 4.dp)
                 .semantics { contentDescription = label },
             decorationBox = { inner ->
                 Column {
-                    inner()
+                    // Ruled: a faint rule between the lines, spaced by the text's own lines (any text size);
+                    // the line below the field is the last rule.
+                    Box(
+                        if (ruled) {
+                            Modifier.drawBehind {
+                                val text = layout ?: return@drawBehind
+                                val step = text.getLineBottom(0) - text.getLineTop(0)
+                                val lines = maxOf(text.lineCount, minLines)
+                                for (i in 1 until lines) {
+                                    val y = step * i
+                                    drawLine(rule, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
+                                }
+                            }
+                        } else {
+                            Modifier
+                        },
+                    ) { inner() }
                     Spacer(Modifier.height(6.dp))
                     Spacer(
                         Modifier

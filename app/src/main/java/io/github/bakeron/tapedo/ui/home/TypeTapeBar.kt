@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.bakeron.tapedo.core.model.NoteType
+import io.github.bakeron.tapedo.ui.cards.TypeMark
 import io.github.bakeron.tapedo.ui.settings.noteTypeName
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 
@@ -78,6 +79,7 @@ fun TypeTapeBar(
     ) {
         itemsIndexed(options) { i, option ->
             TypeTape(
+                type = option,
                 text = noteTypeName(option),
                 selected = option == selected,
                 // Alternating small tilts - torn-off pieces, not a row of identical chips.
@@ -89,7 +91,7 @@ fun TypeTapeBar(
 }
 
 @Composable
-private fun TypeTape(text: String, selected: Boolean, tilt: Float, onClick: () -> Unit) {
+private fun TypeTape(type: NoteType?, text: String, selected: Boolean, tilt: Float, onClick: () -> Unit) {
     val colors = TapedoTheme.colors
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(1.dp)
@@ -119,6 +121,9 @@ private fun TypeTape(text: String, selected: Boolean, tilt: Float, onClick: () -
                     .padding(2.dp)
                     .background(if (selected) colors.record else colors.rule, CircleShape),
             )
+            val ink = if (selected) scheme.onPrimary else scheme.onSurfaceVariant
+            // The same sign as on the strips in the card box ("auto" has none - it is not a kind).
+            type?.let { TypeMark(it, ink, size = 15.dp) }
             Text(
                 text = text.uppercase(),
                 style = MaterialTheme.typography.labelLarge.copy(
@@ -127,7 +132,7 @@ private fun TypeTape(text: String, selected: Boolean, tilt: Float, onClick: () -
                     shadow = if (selected) Shadow(Color.Black.copy(alpha = 0.35f), Offset(0f, 1.5f), 0f) else null,
                 ),
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected) scheme.onPrimary else scheme.onSurfaceVariant,
+                color = ink,
                 maxLines = 1,
             )
         }

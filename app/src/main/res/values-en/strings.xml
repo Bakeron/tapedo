@@ -5,6 +5,7 @@
     <string name="home_open_settings">Settings</string>
     <string name="home_empty">The stack is empty. Press the red button and say what you need to do.</string>
     <string name="home_type_question">What are you recording?</string>
+    <string name="home_pause_rule">2 s pause = new item</string>
     <string name="record_start">Record</string>
     <string name="record_stop">Stop recording</string>
     <string name="record_counter">%1$s / %2$s</string>
@@ -250,6 +251,7 @@
     <string name="locked_notes_ok">Got it</string>
 
     <!-- Card -->
+    <string name="card_due_field">Due</string>
     <string name="card_due_today">today</string>
     <string name="card_due_tomorrow">tomorrow</string>
     <string name="card_due_yesterday">yesterday</string>

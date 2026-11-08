@@ -343,12 +343,21 @@ private fun ColumnScope.RecordControls(
     onRecordKey: () -> Unit,
 ) {
     val isRecording = recording is RecordingState.Active
-    Text(
-        stringResource(R.string.home_type_question),
-        style = MaterialTheme.typography.titleMedium,
-        // Air above: the question must not stick to the last card of the stack.
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 4.dp).semantics { heading() },
-    )
+    // Air above: the question must not stick to the last card of the stack.
+    Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 4.dp)) {
+        Text(
+            stringResource(R.string.home_type_question),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f).alignByBaseline().semantics { heading() },
+        )
+        // The pause rule (author 08.11.2026): said up front, so a list in one item is no surprise.
+        Text(
+            stringResource(R.string.home_pause_rule),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 12.dp).alignByBaseline(),
+        )
+    }
     TypeTapeBar(selected = typeChoice, onSelect = onTypeChoice, modifier = Modifier.padding(vertical = 2.dp))
     Text(
         typeHint(typeChoice),
