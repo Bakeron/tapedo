@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.Note
+import io.github.bakeron.tapedo.core.report.Problem
 import io.github.bakeron.tapedo.ui.cards.IndexCard
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
@@ -70,6 +71,7 @@ fun PreviewScreen(
     onOnlineAlways: () -> Unit,
     onDismissError: () -> Unit,
     onDismissActionFailed: () -> Unit,
+    onReport: ((Problem) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -123,7 +125,10 @@ fun PreviewScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (recording is RecordingState.Failed) {
-                    ErrorNote(recording.error, askOnline, onOnlineOnce, onOnlineAlways, onDismissError)
+                    ErrorNote(
+                        recording.error, askOnline, onOnlineOnce, onOnlineAlways, onDismissError,
+                        code = recording.code, onReport = onReport,
+                    )
                 }
                 if (actionFailed) {
                     Text(

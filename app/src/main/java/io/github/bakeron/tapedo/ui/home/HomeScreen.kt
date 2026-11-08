@@ -80,9 +80,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
+import io.github.bakeron.tapedo.core.report.Problem
 import io.github.bakeron.tapedo.core.rules.ListTitles
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.speech.SpeechError
+import io.github.bakeron.tapedo.report.ReportMail
 import io.github.bakeron.tapedo.ui.cards.NoteEditor
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
@@ -103,6 +105,11 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
     val lockedNotes by viewModel.lockedNotes.collectAsStateWithLifecycle()
     val preview by viewModel.preview.collectAsStateWithLifecycle()
     val appending by viewModel.appending.collectAsStateWithLifecycle()
+    val ownAudioRefused by viewModel.ownAudioRefused.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    // No address in this build (e.g. built from GitHub without local.properties) - no report button.
+    val report: ((Problem) -> Unit)? =
+        if (ReportMail.available) { problem -> ReportMail.send(context, problem, settings?.speechLanguage.orEmpty()) } else null
 
     val listTitles = ListTitles(
         shopping = stringResource(R.string.default_shopping_title),
@@ -160,6 +167,7 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onOnlineAlways = { viewModel.allowOnlineAlways(appendTo = shown.id) },
             onDismissError = viewModel::dismissError,
             onDismissActionFailed = viewModel::dismissActionFailed,
+            onReport = report,
         )
 
         else -> HomeScreen(
@@ -185,6 +193,9 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onDismissActionFailed = viewModel::dismissActionFailed,
             lockedNotes = lockedNotes,
             onDismissLockedNotes = viewModel::dismissLockedNotes,
+            ownAudioRefused = ownAudioRefused,
+            onDismissOwnAudioRefused = viewModel::dismissOwnAudioRefused,
+            onReport = report,
         )
     }
 }
@@ -219,6 +230,11 @@ fun HomeScreen(
     onDismissActionFailed: () -> Unit = {},
     lockedNotes: Boolean = false,
     onDismissLockedNotes: () -> Unit = {},
+    /** The recognizer's error number when it refused Tapedo's own recording - null: nothing to tell. */
+    ownAudioRefused: Int? = null,
+    onDismissOwnAudioRefused: () -> Unit = {},
+    /** Opens the user's mail app with an error report for the app's author; null = no report button. */
+    onReport: ((Problem) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val isRecording = recording is RecordingState.Active
@@ -260,8 +276,12 @@ fun HomeScreen(
                     top = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             if (recording is RecordingState.Failed) {
-                                ErrorNote(recording.error, askOnline, onOnlineOnce, onOnlineAlways, onDismissError)
+                                ErrorNote(
+                                    recording.error, askOnline, onOnlineOnce, onOnlineAlways, onDismissError,
+                                    code = recording.code, onReport = onReport,
+                                )
                             }
+                            ownAudioRefused?.let { OwnAudioRefusedNote(it, onReport, onDismissOwnAudioRefused) }
                             if (lockedNotes) LockedNotesNote(onDismissLockedNotes)
                             if (actionFailed) ActionFailedNote(onDismissActionFailed)
                         }
@@ -484,6 +504,8 @@ internal fun ErrorNote(
     onOnlineOnce: () -> Unit,
     onOnlineAlways: () -> Unit,
     onDismiss: () -> Unit,
+    code: Int? = null,
+    onReport: ((Problem) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val offlineAsk = error == SpeechError.OFFLINE_UNAVAILABLE && askOnline
@@ -511,6 +533,33 @@ internal fun ErrorNote(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        // Errors the user cannot fix: the author should hear about them at once.
+        if (onReport != null && error in REPORTABLE_ERRORS) {
+            ReportButton { onReport(Problem.RecordingFailed(error.name, code)) }
+        }
+        PaperButton(stringResource(R.string.home_dismiss), onClick = onDismiss)
+    }
+}
+
+private val REPORTABLE_ERRORS = setOf(SpeechError.OTHER, SpeechError.NOT_AVAILABLE, SpeechError.BUSY)
+
+@Composable
+private fun ReportButton(onClick: () -> Unit) {
+    PaperButton(stringResource(R.string.report_send), onClick = onClick, modifier = Modifier.fillMaxWidth())
+    Text(stringResource(R.string.report_privacy), style = MaterialTheme.typography.bodySmall)
+}
+
+/** The recording still works (the old way) - told calmly, once, with the report button. */
+@Composable
+private fun OwnAudioRefusedNote(code: Int, onReport: ((Problem) -> Unit)?, onDismiss: () -> Unit) {
+    PinnedNote {
+        Text(
+            stringResource(R.string.own_audio_refused) +
+                if (onReport != null) " " + stringResource(R.string.own_audio_refused_report) else "",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        if (onReport != null) ReportButton { onReport(Problem.OwnAudioRefused(code)) }
         PaperButton(stringResource(R.string.home_dismiss), onClick = onDismiss)
     }
 }

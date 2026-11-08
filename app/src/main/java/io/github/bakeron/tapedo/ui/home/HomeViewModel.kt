@@ -83,7 +83,8 @@ sealed interface RecordingState {
         val moreFailed: SpeechError? = null,
     ) : RecordingState
 
-    data class Failed(val error: SpeechError) : RecordingState
+    /** @param code the recognizer's own error number, for the error report to the author. */
+    data class Failed(val error: SpeechError, val code: Int? = null) : RecordingState
 }
 
 sealed interface StackState {
@@ -165,6 +166,13 @@ class HomeViewModel(
     /** A change to a saved card (tick, edit, delete) could not be written. */
     private val _actionFailed = MutableStateFlow(false)
     val actionFailed: StateFlow<Boolean> = _actionFailed.asStateFlow()
+
+    /**
+     * The phone's recognizer refused Tapedo's own recording (its error number), so recordings go the old way -
+     * told once, with a button that mails the error to the app's author. Null: nothing to tell.
+     */
+    private val _ownAudioRefused = MutableStateFlow<Int?>(null)
+    val ownAudioRefused: StateFlow<Int?> = _ownAudioRefused.asStateFlow()
 
     /** Old notes were set aside after Android lost the database key - told once. */
     private val _lockedNotes = MutableStateFlow(false)
@@ -276,7 +284,9 @@ class HomeViewModel(
                             continuing != null -> continueReview(e.text)
                             else -> onTranscript(e.text)
                         }
-                        is SpeechEvent.Failed -> endRecording(e.error)
+                        is SpeechEvent.Failed -> endRecording(e.error, e.code)
+                        // The recording goes on; the note waits on the home screen until dismissed.
+                        is SpeechEvent.OwnAudioRefused -> _ownAudioRefused.value = e.code
                     }
                 }
                 if (_recording.value is RecordingState.Active) endRecording(null)
@@ -294,12 +304,12 @@ class HomeViewModel(
     fun stopRecording() = speech.stop()
 
     /** Back to the review window when "record more" was listening; otherwise the error (or nothing) on the stack. */
-    private fun endRecording(error: SpeechError?) {
+    private fun endRecording(error: SpeechError?, code: Int? = null) {
         val review = continuing
         continuing = null
         _recording.value = when {
             review != null -> review.copy(moreFailed = error)
-            error != null -> RecordingState.Failed(error)
+            error != null -> RecordingState.Failed(error, code)
             else -> RecordingState.Idle
         }
     }
@@ -638,6 +648,10 @@ class HomeViewModel(
 
     fun dismissActionFailed() {
         _actionFailed.value = false
+    }
+
+    fun dismissOwnAudioRefused() {
+        _ownAudioRefused.value = null
     }
 
     fun dismissLockedNotes() {

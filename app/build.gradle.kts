@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -19,10 +21,13 @@ android {
         applicationId = "io.github.bakeron.tapedo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.0"
+        versionCode = 11
+        versionName = "1.1"
         // Instrumented tests (app/src/androidTest) - run on the emulator only, see docs/plan-1a.md.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // "Send the error to the app's author" mails this address. It lives in local.properties (outside Git),
+        // so it is not public on GitHub; without it the app has no report button.
+        buildConfigField("String", "REPORT_EMAIL", "\"${reportEmail()}\"")
     }
 
     buildTypes {
@@ -48,11 +53,24 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     androidResources {
         generateLocaleConfig = true
     }
+}
+
+/** `tapedo.reportEmail` from local.properties; empty when missing. A plain address only - it goes into Java source. */
+fun reportEmail(): String {
+    val file = rootProject.file("local.properties")
+    if (!file.exists()) return ""
+    val value = Properties().apply { file.inputStream().use { load(it) } }
+        .getProperty("tapedo.reportEmail").orEmpty().trim()
+    require(value.isEmpty() || Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").matches(value)) {
+        "tapedo.reportEmail in local.properties is not an e-mail address"
+    }
+    return value
 }
 
 // Room writes each database version's schema here (kept in Git) - needed to test migrations later.

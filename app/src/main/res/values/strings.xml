@@ -21,6 +21,11 @@
     <string name="speech_error_network">Rozpoznawanie mowy nie połączyło się z internetem. Sprawdź połączenie albo pobierz język offline w ustawieniach rozpoznawania mowy telefonu - wtedy internet nie jest potrzebny.</string>
     <string name="speech_error_busy">Rozpoznawanie mowy jest zajęte przez inną aplikację. Spróbuj za chwilę.</string>
     <string name="speech_error_other">Coś poszło nie tak z mikrofonem. Spróbuj jeszcze raz.</string>
+    <string name="own_audio_refused">Twój telefon nie przyjął nagrywania bez przerw, więc Tapedo nagrywa starszym sposobem. Nagrywanie działa, ale po pauzie może zgubić słowo.</string>
+    <string name="own_audio_refused_report">Wyślij błąd - autor poprawi to w kolejnej wersji.</string>
+    <string name="report_send">Wyślij błąd autorowi aplikacji</string>
+    <string name="report_privacy">Otworzy się Twoja poczta z gotową wiadomością: model telefonu, wersja Androida i kod błędu - bez notatek i nagrań. Wysyłasz ją sam.</string>
+    <string name="report_no_mail">Nie ma aplikacji poczty. Opis błędu jest w schowku - wklej go w wiadomość na adres %1$s.</string>
     <string name="speech_error_offline_ask">Telefon nie ma pakietu offline dla tego języka, więc nic nie zostało wysłane. Rozpoznawanie przez internet wysyła głos do Google. Możesz też pobrać pakiet offline w ustawieniach rozpoznawania mowy telefonu.</string>
     <string name="speech_error_offline_never">Telefon nie ma pakietu offline dla tego języka, a rozpoznawanie przez internet jest wyłączone w Ustawieniach. Pobierz pakiet offline w ustawieniach rozpoznawania mowy telefonu.</string>
     <string name="speech_online_once">Tym razem przez internet</string>

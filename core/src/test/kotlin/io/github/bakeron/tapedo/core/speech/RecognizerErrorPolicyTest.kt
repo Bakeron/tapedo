@@ -90,4 +90,22 @@ class RecognizerErrorPolicyTest {
         )
         for ((case, expected) in table) assertEquals(case.toString(), expected, case.decide())
     }
+
+    @Test
+    fun `a phone that refuses Tapedo's own audio is told apart from ordinary errors`() {
+        fun refused(error: RecognizerErrorKind, offline: Boolean = true, heard: Boolean = false) =
+            RecognizerErrorPolicy.ownAudioRefused(error, offline, heard)
+
+        // A recognizer that cannot take audio from an app fails at once with a generic error.
+        assertEquals(true, refused(OTHER))
+        assertEquals("offline there is no network to blame", true, refused(NETWORK))
+        // Ordinary situations keep their own handling.
+        assertEquals(false, refused(NETWORK, offline = false))
+        assertEquals(false, refused(SILENCE))
+        assertEquals(false, refused(BUSY))
+        assertEquals(false, refused(LANGUAGE_MISSING))
+        assertEquals(false, refused(NO_PERMISSION))
+        // Once Tapedo's audio was understood, the phone does take it - a later error is a glitch.
+        assertEquals(false, refused(OTHER, heard = true))
+    }
 }

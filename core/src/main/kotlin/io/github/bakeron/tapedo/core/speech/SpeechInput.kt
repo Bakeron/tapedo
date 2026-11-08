@@ -32,8 +32,19 @@ sealed interface SpeechEvent {
     /** Listening ended normally; the whole transcript. Always the last event. */
     data class Done(val text: String) : SpeechEvent
 
-    /** Listening ended with an error and nothing usable was heard. Always the last event. */
-    data class Failed(val error: SpeechError) : SpeechEvent
+    /**
+     * Listening ended with an error and nothing usable was heard. Always the last event.
+     * @param code the platform recognizer's own error number, for an error report - null when there is none.
+     */
+    data class Failed(val error: SpeechError, val code: Int? = null) : SpeechEvent
+
+    /**
+     * The phone's recognizer refused the audio Tapedo records by itself, so this recording goes on with the
+     * recognizer's own microphone - it works, but a word may get lost when it restarts after a pause.
+     * Comes at most once, and only on the recording where it happened (later ones skip straight to it).
+     * @param code the recognizer's error number, for an error report.
+     */
+    data class OwnAudioRefused(val code: Int) : SpeechEvent
 }
 
 /** How the phone's recognizer keeps a long recording going. */

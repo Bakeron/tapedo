@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import androidx.core.content.pm.PackageInfoCompat
 import io.github.bakeron.tapedo.core.speech.ListeningMode
 import io.github.bakeron.tapedo.core.speech.RecognizerErrorKind
 import io.github.bakeron.tapedo.core.speech.RecognizerErrorPolicy
@@ -67,6 +68,17 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         prefs.edit().putString(KEY_MODE, mode.name).apply()
     }
 
+    /** Version of this install - a refusal of the own audio is retried after an update (it may fix it). */
+    private val versionCode by lazy {
+        PackageInfoCompat.getLongVersionCode(context.packageManager.getPackageInfo(context.packageName, 0))
+    }
+
+    private fun ownAudioAllowed() = prefs.getLong(KEY_OWN_AUDIO_REFUSED_IN, -1L) != versionCode
+
+    private fun rememberOwnAudioRefused() {
+        prefs.edit().putLong(KEY_OWN_AUDIO_REFUSED_IN, versionCode).apply()
+    }
+
     private fun onDeviceAvailable() =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
 
@@ -88,7 +100,8 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
 
         // Android 13+: Tapedo's own microphone feeds the recognizer, so its restarts leave no gap. Without it
         // (older phones, a microphone that would not open) the recognizer listens by itself, as before.
-        val mic: ContinuousMic? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        // A phone whose recognizer refused it before (in this version) goes straight to the old way.
+        var mic: ContinuousMic? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ownAudioAllowed()) {
             ContinuousMic(
                 skipMs = skipFirstMs,
                 onLevel = { trySend(SpeechEvent.Level(it)) },
@@ -121,6 +134,10 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         var sessionReady = false
         // Where the recognizer said the phrase ended in this session (-1: not yet).
         var phraseEndPos = -1L
+        // Some words came back - the recognizer does take Tapedo's audio.
+        var heardAnything = false
+        // Errors that look like "this recognizer refuses Tapedo's audio", before anything was heard.
+        var ownAudioErrors = 0
 
         fun now() = SystemClock.elapsedRealtime()
 
@@ -156,6 +173,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             // "Stop" pressed during the restart gap - end now instead of listening again. With the own
             // microphone the audio recorded meanwhile still gets a last session (it ends at the stop point).
             if (stopping && mic == null) return finish()
+            val m = mic
             speaking = false
             sessionReady = false
             phraseEndPos = -1
@@ -173,8 +191,8 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                     putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, PHRASE_SILENCE_MS)
                     putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, PHRASE_SILENCE_MS)
                     putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, SESSION_MS)
-                    if (mic != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, mic.openSession(nextFrom))
+                    if (m != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, m.openSession(nextFrom))
                         putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
                         putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
                         putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, ContinuousMic.RATE)
@@ -209,7 +227,8 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             }
             override fun onBufferReceived(buffer: ByteArray?) = Unit
             override fun onEndOfSpeech() {
-                if (mic != null && phraseEndPos < 0) phraseEndPos = mic.fedPos()
+                val m = mic
+                if (m != null && phraseEndPos < 0) phraseEndPos = m.fedPos()
             }
             override fun onEvent(eventType: Int, params: Bundle?) = Unit
 
@@ -229,6 +248,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             override fun onPartialResults(partialResults: Bundle?) {
                 val text = partialResults.firstResult()
                 if (!text.isNullOrBlank()) {
+                    heardAnything = true
                     transcript.partial(text, now())
                     failuresInRow = 0
                     trySend(SpeechEvent.Partial(transcript.text()))
@@ -245,7 +265,10 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                 speaking = false
                 // A segment is not a session end: the next phrase is in the same audio.
                 phraseEndPos = -1
-                if (!text.isNullOrBlank()) failuresInRow = 0
+                if (!text.isNullOrBlank()) {
+                    failuresInRow = 0
+                    heardAnything = true
+                }
                 transcript.phraseEnded(text, now())
                 trySend(SpeechEvent.Partial(transcript.text()))
             }
@@ -261,7 +284,10 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             override fun onResults(results: Bundle?) {
                 val text = results.firstResult()
                 speaking = false
-                if (!text.isNullOrBlank()) failuresInRow = 0
+                if (!text.isNullOrBlank()) {
+                    failuresInRow = 0
+                    heardAnything = true
+                }
                 transcript.phraseEnded(text, now())
                 val more = sessionEnded(failed = false)
                 if (stopping && !more) return finish()
@@ -275,6 +301,20 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                 transcript.phraseEnded(null, now())
                 val kind = kindOf(error)
                 if (kind != RecognizerErrorKind.SILENCE) failuresInRow++
+                val m = mic
+                if (m != null && RecognizerErrorPolicy.ownAudioRefused(kind, offline, heardAnything)) {
+                    // Once may be a glitch - the same audio is tried again. Twice: this recognizer refuses
+                    // audio from an app, so the recording goes on with its own microphone (old way).
+                    sessionEnded(failed = true)
+                    if (++ownAudioErrors >= OWN_AUDIO_TRIES) {
+                        m.close()
+                        mic = null
+                        rememberOwnAudioRefused()
+                        failuresInRow = 0
+                        trySend(SpeechEvent.OwnAudioRefused(error))
+                    }
+                    return restart()
+                }
                 // After "stop" the recorded rest still gets heard (the grace timer ends a recognizer that keeps failing).
                 if (sessionEnded(failed = kind != RecognizerErrorKind.SILENCE)) return restart()
                 val step = RecognizerErrorPolicy.decide(
@@ -298,7 +338,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                     RecognizerStep.Restart -> restart()
                     RecognizerStep.FinishWithText -> finish()
                     is RecognizerStep.Fail -> {
-                        trySend(SpeechEvent.Failed(step.error))
+                        trySend(SpeechEvent.Failed(step.error, code = error))
                         close()
                     }
                 }
@@ -309,10 +349,11 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         stopRequest = {
             if (!stopping) {
                 stopping = true
-                if (mic != null) {
+                val m = mic
+                if (m != null) {
                     // The microphone goes off at once; the recognizer gets the audio up to here and then its
                     // end, which ends the session with the last phrase in it (see onResults / onEndOfSegmentedSession).
-                    mic.stopAfter(STOP_AUDIO_TAIL_MS)
+                    m.stopAfter(STOP_AUDIO_TAIL_MS)
                 } else {
                     // stopListening in the middle of a phrase gave "no match" and lost the whole last phrase
                     // (author's phone, 08.11.2026) - a phrase still being spoken gets [STOP_TAIL_MS] to end by
@@ -328,7 +369,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                 main.postDelayed({
                     transcript.phraseEnded(null, now())
                     finish()
-                }, if (mic != null) STOP_OWN_MIC_GRACE_MS else STOP_TAIL_MS + STOP_GRACE_MS)
+                }, if (m != null) STOP_OWN_MIC_GRACE_MS else STOP_TAIL_MS + STOP_GRACE_MS)
             }
         }
         start()
@@ -394,6 +435,10 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         const val LEFT_MIN_MS = 250L
         const val PREFS = "speech"
         const val KEY_MODE = "listening_mode"
+
+        /** Version code in which the recognizer refused Tapedo's own audio - see [ownAudioAllowed]. */
+        const val KEY_OWN_AUDIO_REFUSED_IN = "own_audio_refused_in"
+        const val OWN_AUDIO_TRIES = 2
         val SILENCE_ERRORS = setOf(SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
         val LANGUAGE_ERRORS = setOf(
             SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,

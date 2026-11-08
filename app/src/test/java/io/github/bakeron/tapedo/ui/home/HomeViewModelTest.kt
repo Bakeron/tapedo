@@ -330,6 +330,27 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `a refused own recording is told once, the recording goes on, and the error number reaches the report`() =
+        runTest(dispatcher) {
+            val events = Channel<SpeechEvent>(Channel.UNLIMITED)
+            val vm = viewModel(FakeStore(AppSettings()), FakeSpeech { events.receiveAsFlow() })
+
+            vm.startRecording()
+            events.send(SpeechEvent.OwnAudioRefused(code = 5))
+            runCurrent()
+            assertEquals(5, vm.ownAudioRefused.value)
+            assertTrue("still recording", vm.recording.value is RecordingState.Active)
+
+            events.send(SpeechEvent.Failed(SpeechError.OTHER, code = 11))
+            events.close() // the real recognizer ends its flow after Failed; open, the sampler would tick forever
+            runCurrent()
+            assertEquals(RecordingState.Failed(SpeechError.OTHER, code = 11), vm.recording.value)
+
+            vm.dismissOwnAudioRefused()
+            assertEquals(null, vm.ownAudioRefused.value)
+        }
+
+    @Test
     fun `a recording is saved the moment it ends, and Done only closes the window`() = runTest(dispatcher) {
         // A list left in the review window was lost when the phone closed the app in the background.
         val notes = FakeNotes()

@@ -70,6 +70,16 @@ object RecognizerErrorPolicy {
         else -> RecognizerStep.Fail(speechErrorOf(error))
     }
 
+    /**
+     * Tapedo records by itself and hands the audio to the phone's recognizer; some recognizers refuse
+     * audio from an app. True when this error means exactly that, so the recording goes on with the
+     * recognizer's own microphone instead of failing: an error that is not about silence, language,
+     * permission or "busy", before anything at all was heard from Tapedo's audio. Offline a "network"
+     * error cannot be about the network, so it counts too.
+     */
+    fun ownAudioRefused(error: RecognizerErrorKind, offline: Boolean, heardAnything: Boolean): Boolean =
+        !heardAnything && (error == RecognizerErrorKind.OTHER || (offline && error == RecognizerErrorKind.NETWORK))
+
     private fun speechErrorOf(error: RecognizerErrorKind): SpeechError = when (error) {
         RecognizerErrorKind.NO_PERMISSION -> SpeechError.NO_PERMISSION
         RecognizerErrorKind.NETWORK -> SpeechError.NETWORK

@@ -19,6 +19,11 @@
     <string name="speech_error_network">Speech recognition couldn’t reach the internet. Check the connection, or download the language for offline use in the phone’s speech recognition settings - then no internet is needed.</string>
     <string name="speech_error_busy">Speech recognition is busy with another app. Try again in a moment.</string>
     <string name="speech_error_other">Something went wrong with the microphone. Try again.</string>
+    <string name="own_audio_refused">Your phone did not accept gap-free recording, so Tapedo records the older way. Recording works, but a word may get lost after a pause.</string>
+    <string name="own_audio_refused_report">Send the error - the author will fix it in a next version.</string>
+    <string name="report_send">Send the error to the app\'s author</string>
+    <string name="report_privacy">Your mail app opens with a ready message: phone model, Android version and the error code - no notes, no recordings. You send it yourself.</string>
+    <string name="report_no_mail">There is no mail app. The error report is on the clipboard - paste it into a message to %1$s.</string>
     <string name="speech_error_offline_ask">The phone has no offline pack for this language, so nothing was sent. Online recognition sends your voice to Google. You can also download the offline pack in the phone’s speech recognition settings.</string>
     <string name="speech_error_offline_never">The phone has no offline pack for this language, and online recognition is turned off in Settings. Download the offline pack in the phone’s speech recognition settings.</string>
     <string name="speech_online_once">Online this time</string>
