@@ -6,6 +6,8 @@ import io.github.bakeron.tapedo.core.ai.AiUsage
 import io.github.bakeron.tapedo.core.ai.HttpAiGateway
 import io.github.bakeron.tapedo.core.ai.NoteStructurer
 import io.github.bakeron.tapedo.core.ai.SecretStore
+import io.github.bakeron.tapedo.core.ai.HttpWhisper
+import io.github.bakeron.tapedo.core.ai.WhisperRetyper
 import io.github.bakeron.tapedo.core.ai.aiHttpClient
 import io.github.bakeron.tapedo.core.data.NoteRepository
 import io.github.bakeron.tapedo.core.settings.AppSettings
@@ -17,6 +19,7 @@ import io.github.bakeron.tapedo.data.RoomNoteRepository
 import io.github.bakeron.tapedo.data.db.TapedoDatabase
 import io.github.bakeron.tapedo.data.settings.DataStoreAiUsage
 import io.github.bakeron.tapedo.data.settings.DataStoreSettings
+import io.github.bakeron.tapedo.locale.AppLanguage
 import io.github.bakeron.tapedo.security.KeystoreSecretStore
 import io.github.bakeron.tapedo.speech.AndroidSpeechInput
 import io.github.bakeron.tapedo.ui.theme.NightMode
@@ -44,7 +47,7 @@ class AppContainer(private val app: Application) {
 
     val lockedNotice: LockedNotesNotice by lazy { FileLockedNotesNotice(app) }
 
-    val settings: SettingsStore by lazy { DataStoreSettings(app) }
+    val settings: SettingsStore by lazy { DataStoreSettings(app, AppLanguage.phoneLanguage()) }
 
     /** The settings last drawn - a recreated window (rotation, theme switch) draws from its first frame, without a blank one. */
     var lastSettings: AppSettings? = null
@@ -60,4 +63,6 @@ class AppContainer(private val app: Application) {
     val structurer: NoteStructurer by lazy { NoteStructurer(secrets, aiUsage, gateway) }
 
     val aiConnection: AiConnection by lazy { AiConnection(secrets, aiUsage, gateway) }
+
+    val whisper: WhisperRetyper by lazy { WhisperRetyper(secrets, HttpWhisper(http)) }
 }

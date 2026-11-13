@@ -49,6 +49,23 @@ class AiGatewayTest {
         val quota = """{"error": {"code": 429, "message": "Quota exceeded for metric: x, limit: 20, model: gemini-3.5-flash-lite", "status": "RESOURCE_EXHAUSTED"}}"""
         assertEquals(Problem.LIMIT, problemOf(429, quota).problem)
 
+        // A busy free model or a limit per minute - a short wait, not a day off (Tablica ofert, 7.11.2026).
+        val upstream = """{"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"google/gemma-4-31b-it:free is temporarily rate-limited upstream. Please retry shortly","provider_name":"Google AI Studio"}}}"""
+        assertEquals(Problem.BUSY, problemOf(429, upstream).problem)
+        val tpm = """{"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` on tokens per minute (TPM): Limit 8000, Used 6500, Requested 3200. Please try again in 12.75s.","type":"tokens","code":"rate_limit_exceeded"}}"""
+        val busy = problemOf(429, tpm)
+        assertEquals(Problem.BUSY, busy.problem)
+        assertEquals(12_750L, ProblemReader.retryAfterMillis(busy.providerMessage))
+        val tpd = """{"error":{"message":"Rate limit reached for model `x` on tokens per day (TPD): Limit 200000, Used 199000. Please try again in 1m2.5s.","code":"rate_limit_exceeded"}}"""
+        val daily = problemOf(429, tpd)
+        assertEquals(Problem.LIMIT, daily.problem)
+        assertEquals(62_500L, ProblemReader.retryAfterMillis(daily.providerMessage))
+        assertEquals(260L, ProblemReader.retryAfterMillis("Rate limit reached on requests per minute (RPM). Please try again in 260ms."))
+        assertEquals(33_000L, ProblemReader.retryAfterMillis("Please retry in 33s."))
+        assertEquals(null, ProblemReader.retryAfterMillis("Rate limit reached"))
+        val perDay = """{"error":{"message":"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day","code":429}}"""
+        assertEquals(Problem.LIMIT, problemOf(429, perDay).problem)
+
         val gone = """{"error": {"code": 404, "message": "models/gemini-9 is not found for API version v1beta.", "status": "NOT_FOUND"}}"""
         assertEquals(Problem.MODEL, problemOf(404, gone).problem)
         val groq = """{"error":{"message":"The model `x` does not exist or you do not have access to it.","type":"invalid_request_error","code":"model_not_found"}}"""

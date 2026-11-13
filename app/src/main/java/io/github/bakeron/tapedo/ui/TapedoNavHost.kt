@@ -46,7 +46,10 @@ fun TapedoNavHost(container: AppContainer, debugTranscript: String? = null) {
     ) {
         composable<HomeDestination> {
             val vm = viewModel {
-                HomeViewModel(container.settings, container.speech, container.notes, container.structurer, container.lockedNotice)
+                HomeViewModel(
+                    container.settings, container.speech, container.notes, container.structurer, container.lockedNotice,
+                    retyper = container.whisper,
+                )
             }
             HomeRoute(vm, onOpenSettings = { nav.navigate(SettingsDestination) }, debugTranscript = debugTranscript)
         }

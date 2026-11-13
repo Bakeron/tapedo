@@ -1,9 +1,11 @@
 package io.github.bakeron.tapedo.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -112,11 +114,17 @@ fun <T> SlideSelector(
                         .padding(horizontal = 4.dp, vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // Indicator LED: lit on the chosen option, a dark socket elsewhere.
+                    // Indicator LED: lit on the chosen option, a dark socket elsewhere. It dims and lights up
+                    // while the knob slides over, not in one jump (author 10.11.2026).
+                    val led by animateColorAsState(
+                        targetValue = if (isSelected) colors.record else colors.ledOff,
+                        animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(LED_FADE_MS),
+                        label = "led",
+                    )
                     Box(
                         Modifier
                             .size(8.dp)
-                            .background(if (isSelected) colors.record else colors.rule, CircleShape),
+                            .background(led, CircleShape),
                     )
                     Spacer(Modifier.height(5.dp))
                     Text(
@@ -132,3 +140,5 @@ fun <T> SlideSelector(
         }
     }
 }
+
+private const val LED_FADE_MS = 350

@@ -19,6 +19,9 @@ import io.github.bakeron.tapedo.core.settings.ThemeMode
 /** True when the user (in Tapedo or system-wide) asked for less motion - animations snap instead. */
 val LocalReduceMotion = staticCompositionLocalOf { false }
 
+/** "Crooked paper" is on: cards, tapes and stamps lie at a slight angle. Off by default (author 10.11.2026). */
+val LocalTilted = staticCompositionLocalOf { false }
+
 private val LightScheme = lightColorScheme(
     primary = Paper.graphite,
     onPrimary = Paper.card,
@@ -80,6 +83,7 @@ fun ThemeMode.isDark(): Boolean = when (this) {
 fun TapedoTheme(
     mode: ThemeMode = ThemeMode.SYSTEM,
     reduceMotion: Boolean = false,
+    tilted: Boolean = false,
     /** Tapedo's own text size, multiplied with the phone's font scale (sp only - layout in dp stays). */
     textScale: Float = 1f,
     content: @Composable () -> Unit,
@@ -90,6 +94,7 @@ fun TapedoTheme(
     CompositionLocalProvider(
         LocalTapedoColors provides if (dark) DarkTapedoColors else LightTapedoColors,
         LocalReduceMotion provides reduceMotion,
+        LocalTilted provides tilted,
         LocalDensity provides Density(density.density, density.fontScale * textScale),
     ) {
         MaterialTheme(
@@ -111,4 +116,8 @@ object TapedoTheme {
 
     val reduceMotion: Boolean
         @Composable @ReadOnlyComposable get() = LocalReduceMotion.current
+
+    /** [degrees] with "Crooked paper" on, straight (0) otherwise - every paper angle goes through here. */
+    @Composable @ReadOnlyComposable
+    fun tilt(degrees: Float): Float = if (LocalTilted.current) degrees else 0f
 }

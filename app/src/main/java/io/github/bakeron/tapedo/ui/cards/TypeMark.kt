@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.bakeron.tapedo.core.model.NoteType
+import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 
 /**
  * The small drawn sign of a card type - the same sign on the strips, the dividers and the "What are you
@@ -97,6 +98,19 @@ fun TypeMark(type: NoteType, color: Color, modifier: Modifier = Modifier, size: 
     }
 }
 
+/** The "Done" divider's sign: a filing box with its lid on - finished cards are put away, not thrown out. */
+@Composable
+fun DoneMark(color: Color, modifier: Modifier = Modifier, size: Dp = 16.dp) {
+    Canvas(modifier.size(size).clearAndSetSemantics { }) {
+        val w = this.size.width
+        val line = Stroke(width = (w / 10f).coerceAtLeast(1.4.dp.toPx()), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        // Lid a little wider than the box, the box below it, a handle slot on the front.
+        drawRoundRect(color, Offset(w * 0.04f, w * 0.14f), Size(w * 0.92f, w * 0.22f), CornerRadius(w * 0.04f), style = line)
+        drawRect(color, Offset(w * 0.12f, w * 0.36f), Size(w * 0.76f, w * 0.54f), style = line)
+        drawLine(color, Offset(w * 0.38f, w * 0.56f), Offset(w * 0.62f, w * 0.56f), line.width, StrokeCap.Round)
+    }
+}
+
 /**
  * The type sign on a short piece of label-maker tape, stuck over the left edge of a strip in the card box -
  * the same dark tape with light print as the section labels, so it reads as a label, not as a button.
@@ -106,7 +120,7 @@ fun TypeTapeMark(type: NoteType, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     Box(
         modifier
-            .rotate(-3f)
+            .rotate(TapedoTheme.tilt(-3f))
             .background(scheme.primary, RoundedCornerShape(1.dp))
             .padding(horizontal = 5.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center,

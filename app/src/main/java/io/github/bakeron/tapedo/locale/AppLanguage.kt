@@ -1,5 +1,6 @@
 package io.github.bakeron.tapedo.locale
 
+import android.content.res.Resources
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 
@@ -17,9 +18,15 @@ object AppLanguage {
         return if (tags.startsWith(ENGLISH)) ENGLISH else POLISH
     }
 
-    /** Polish by default (docs/zalozenia.md), even on a phone set to another language. */
+    /** The phone's own language ("pl", "de", ...), whatever Tapedo is set to. */
+    fun phoneLanguage(): String = Resources.getSystem().configuration.locales[0]?.language.orEmpty()
+
+    /**
+     * After installing: Polish on a phone in Polish, English on any other (author 11.11.2026, as in
+     * Mikropłatności). Whoever already has Tapedo keeps the language they have - it is stored.
+     */
     fun applyDefaultIfUnset() {
-        if (AppCompatDelegate.getApplicationLocales().isEmpty) set(POLISH)
+        if (AppCompatDelegate.getApplicationLocales().isEmpty) set(if (phoneLanguage() == POLISH) POLISH else ENGLISH)
     }
 
     /** Recreates the activity in the new language. */

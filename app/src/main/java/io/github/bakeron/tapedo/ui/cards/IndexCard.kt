@@ -49,6 +49,8 @@ import java.time.LocalDate
  *
  * @param compact the stack shows a few lines; the review window shows everything.
  * @param onToggleItem / [onToggleDone] null = read-only (e.g. a card not saved yet).
+ * @param preview the whole card (preview screen, window after recording): no title that only repeats the kind
+ *   or the text (author 10.11.2026, 11.11.2026); a task is headed "Zadanie [number]" instead.
  */
 @Composable
 fun IndexCard(
@@ -60,6 +62,8 @@ fun IndexCard(
     onClickLabel: String? = null,
     onToggleItem: ((Int) -> Unit)? = null,
     onToggleDone: (() -> Unit)? = null,
+    preview: Boolean = false,
+    number: Int? = null,
 ) {
     val colors = TapedoTheme.colors
     val scheme = MaterialTheme.colorScheme
@@ -68,10 +72,30 @@ fun IndexCard(
     val today = remember { LocalDate.now().toEpochDay() }
     val type = note.type
 
+    val kindNames = listOf(
+        stringResource(typeNameRes(type)),
+        stringResource(R.string.default_checklist_title),
+        stringResource(R.string.default_shopping_title),
+    )
+    val title: String? = when {
+        !preview -> note.title
+        type == NoteType.TASK && number != null -> numberedName(type, number)
+        type == NoteType.EVENT -> null
+        type.hasItems && titleIsKindName(note, kindNames) -> null
+        titleComesFromBody(note) -> null
+        else -> note.title
+    }
+    // Without its title a task or event still says what it is - the body, or the title when there is no body.
+    val bodyText: String? = if (title == note.title) {
+        note.body.takeIf { it.isNotBlank() && !bodyRepeatsTitle(note) }
+    } else {
+        note.body.ifBlank { if (type.hasItems) "" else note.title }.takeIf { it.isNotBlank() }
+    }
+
     // Centred: the receipt and the idea slip are narrower than the row they lie in.
     Box(modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         // An idea slip hangs on its pin a little more crooked than the other cards.
-        Box(Modifier.fillMaxWidth(paperWidth(type)).rotate(tilt + if (type == NoteType.IDEA) -1.8f else 0f)) {
+        Box(Modifier.fillMaxWidth(paperWidth(type)).rotate(TapedoTheme.tilt(tilt + if (type == NoteType.IDEA) -1.8f else 0f))) {
             CardPaper(
                 note,
                 Modifier.padding(top = 6.dp, end = 6.dp),
@@ -85,8 +109,12 @@ fun IndexCard(
                         NoteType.TASK -> ""
                         else -> metaLine(context, note, today, locale)
                     }
+                    // The preview opens a list with "LISTA:" and the items right under it (author 10.11.2026).
+                    val listHead = preview && type == NoteType.CHECKLIST
+                    val head = stringResource(if (listHead) R.string.default_checklist_title else typeNameRes(type)) +
+                        if (meta.isNotEmpty()) "  ·  $meta" else ""
                     Text(
-                        (stringResource(typeNameRes(type)) + if (meta.isNotEmpty()) "  ·  $meta" else "").uppercase(locale),
+                        (if (listHead) "$head:" else head).uppercase(locale),
                         style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f).padding(end = 52.dp),
@@ -96,15 +124,17 @@ fun IndexCard(
                 Spacer(Modifier.padding(top = 6.dp))
 
                 // A lined note: the title sits on the red header line, like on an index card.
-                TitleLine(note, onToggleDone, if (type == NoteType.NOTE) Modifier.headerRule(colors.record.copy(alpha = 0.6f)) else Modifier)
+                if (title != null) {
+                    TitleLine(note, title, onToggleDone, if (type == NoteType.NOTE) Modifier.headerRule(colors.record.copy(alpha = 0.6f)) else Modifier)
+                }
 
-                val body = note.body.isNotBlank() && !bodyRepeatsTitle(note)
+                val body = bodyText != null
                 when {
                     type == NoteType.NOTE -> {
                         Spacer(Modifier.padding(top = 6.dp))
-                        if (body) {
+                        if (bodyText != null) {
                             RuledText(
-                                note.body,
+                                bodyText,
                                 MaterialTheme.typography.bodyMedium,
                                 scheme.onSurface,
                                 colors.rule,
@@ -114,8 +144,8 @@ fun IndexCard(
                         // The paper goes on after the text - also when the note is only its title.
                         BlankLines(if (body) 1 else 2, MaterialTheme.typography.bodyMedium, colors.rule)
                     }
-                    body -> Text(
-                        note.body,
+                    bodyText != null -> Text(
+                        bodyText,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = if (compact) 4 else Int.MAX_VALUE,
                         overflow = TextOverflow.Ellipsis,
@@ -191,13 +221,13 @@ fun IndexCard(
 }
 
 @Composable
-private fun TitleLine(note: Note, onToggleDone: (() -> Unit)?, rule: Modifier) {
+private fun TitleLine(note: Note, text: String, onToggleDone: (() -> Unit)?, rule: Modifier) {
     val ink = MaterialTheme.colorScheme.onSurface
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val struck = note.type == NoteType.TASK && note.done
     val title = @Composable { mod: Modifier ->
         Text(
-            note.title,
+            text,
             style = MaterialTheme.typography.titleMedium,
             onTextLayout = { layout = it },
             modifier = mod.handStrike(struck, { layout }, ink),

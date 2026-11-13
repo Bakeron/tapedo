@@ -31,6 +31,12 @@ enum class Problem {
     /** The provider's own limit is used. */
     LIMIT,
 
+    /**
+     * The model is busy for a moment (a free model shared by many people, a limit per minute) - not the
+     * daily limit: the next provider is asked now, and this one again with the next note.
+     */
+    BUSY,
+
     /** The daily limit from the settings is used. */
     CAP,
 
@@ -45,12 +51,18 @@ enum class Problem {
 
     /** An answer came, but empty, refused or broken. */
     ANSWER,
+
+    /** Whisper: the phone gave Tapedo no recording to send (older Android, or its recognizer refused Tapedo's audio). */
+    NO_AUDIO,
+
+    /** Whisper: the recording is bigger than the provider takes in one file. */
+    TOO_LONG,
     OTHER,
     ;
 
     /** A problem of this provider's key, project or model - the next provider is asked instead. */
     val tryNext: Boolean
-        get() = this in setOf(KEY, API_OFF, NO_FREE_TIER, VERIFY, DENIED, MODEL, NO_KEY, KEY_UNREADABLE)
+        get() = this in setOf(KEY, API_OFF, NO_FREE_TIER, VERIFY, DENIED, MODEL, BUSY, NO_KEY, KEY_UNREADABLE)
 }
 
 /**
@@ -93,6 +105,15 @@ object ProblemReader {
         }
         // Google answers "limit: 0" when the free plan of this account does not include the model.
         if (Regex("limit:\\s*0(?!\\d)").containsMatchIn(t)) return Problem.MODEL
+        // A limit per minute (Groq: tokens or requests per minute) or a free model busy for everybody
+        // (OpenRouter) - a short wait is enough, so it must not rest the provider until tomorrow.
+        if (has(
+                "rate-limited upstream", "temporarily rate-limited", "free-models-per-min", "overloaded",
+                "per minute", "perminute", "(tpm)", "(rpm)",
+            )
+        ) {
+            return Problem.BUSY
+        }
         val modelGone = has(
             "not found", "does not exist", "not supported", "no longer available", "not available", "decommissioned",
             "no endpoints found", "invalid model", "unknown model", "is not a valid model", "model_not_found",
@@ -108,6 +129,24 @@ object ProblemReader {
             else -> Problem.OTHER
         }
     }
+
+    /**
+     * How long the provider asks to wait - Groq / OpenAI "try again in 12.75s", "in 1m2.5s", "in 260ms",
+     * Gemini "retry in 33s" - or null when it does not say.
+     */
+    fun retryAfterMillis(message: String): Long? {
+        val lower = message.lowercase()
+        val start = listOf("try again in ", "retry in ")
+            .firstNotNullOfOrNull { w -> lower.indexOf(w).takeIf { it >= 0 }?.plus(w.length) } ?: return null
+        val m = RETRY_AFTER.find(lower.substring(start)) ?: return null
+        val minutes = m.groups[1]?.value?.toDoubleOrNull() ?: 0.0
+        val amount = m.groups[2]?.value?.toDoubleOrNull() ?: 0.0
+        val millis = minutes * 60_000 + if (m.groups[3]?.value == "ms") amount else amount * 1000
+        return millis.takeIf { it > 0 && it.isFinite() }?.toLong()?.coerceAtMost(3_600_000)
+    }
+
+    /** "1m2.5s", "12.75s", "260ms" (milliseconds, not minutes), "2m". */
+    private val RETRY_AFTER = Regex("^(?:(\\d+(?:\\.\\d+)?)m(?!s))?(?:(\\d+(?:\\.\\d+)?)(ms|s))?")
 
     private val json = Json { isLenient = true }
 

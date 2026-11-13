@@ -20,6 +20,12 @@ interface AiUsage {
 
     /** A new model or a working "Check connection": the provider is asked again today. */
     suspend fun clearLimit(provider: AiProvider, today: Long)
+
+    /** Adds the cost of one answer from Claude to [day], in millionths of a dollar ([recordClaude]). */
+    suspend fun addClaudeCost(day: Long, microUsd: Long)
+
+    /** Claude's cost from [fromDay] to [toDay], both included, in millionths of a dollar. */
+    suspend fun claudeCostMicros(fromDay: Long, toDay: Long): Long
 }
 
 /** Why a provider is not asked today. */
@@ -41,6 +47,7 @@ suspend fun AiUsage.usedUp(provider: AiProvider, today: Long, dailyLimit: Int): 
 class MemoryAiUsage : AiUsage {
     private val calls = mutableMapOf<Pair<AiProvider, Long>, Int>()
     private val limits = mutableMapOf<AiProvider, Long>()
+    private val claude = mutableMapOf<Long, Long>()
 
     override suspend fun callsToday(provider: AiProvider, today: Long) = calls[provider to today] ?: 0
 
@@ -60,4 +67,11 @@ class MemoryAiUsage : AiUsage {
     override suspend fun clearLimit(provider: AiProvider, today: Long) {
         limits.remove(provider)
     }
+
+    override suspend fun addClaudeCost(day: Long, microUsd: Long) {
+        claude[day] = (claude[day] ?: 0) + microUsd
+    }
+
+    override suspend fun claudeCostMicros(fromDay: Long, toDay: Long) =
+        claude.filterKeys { it in fromDay..toDay }.values.sum()
 }

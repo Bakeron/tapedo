@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -43,7 +44,12 @@ fun Modifier.marginLine(color: Color): Modifier = drawBehind {
  * The rules follow the text's own layout (not a dp grid), so they stay under the words at any text size.
  */
 @Composable
-fun RuledText(text: String, style: TextStyle, color: Color, rule: Color, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) {
+fun RuledText(text: String, style: TextStyle, color: Color, rule: Color, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) =
+    RuledText(AnnotatedString(text), style, color, rule, modifier, maxLines)
+
+/** [RuledText] with styled words (e.g. option names in bold). */
+@Composable
+fun RuledText(text: AnnotatedString, style: TextStyle, color: Color, rule: Color, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     Text(
         text,

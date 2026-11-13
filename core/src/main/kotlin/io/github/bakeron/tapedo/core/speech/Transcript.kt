@@ -9,8 +9,10 @@ package io.github.bakeron.tapedo.core.speech
  * the clock instead: a comma (a new list item) only where no new word appeared for [pauseMillis],
  * a space everywhere else. Words appear a moment after they are said, but that delay is about the same
  * for every word, so the gap between two words is close to the real pause.
+ *
+ * @param pauseMillis null = a pause never makes a comma (the user turned it off in Settings).
  */
-class Transcript(private val pauseMillis: Long = PAUSE_MILLIS) {
+class Transcript(private val pauseMillis: Long? = PAUSE_MILLIS) {
 
     /** Finished phrases, separators already in place. */
     private val done = StringBuilder()
@@ -32,7 +34,7 @@ class Transcript(private val pauseMillis: Long = PAUSE_MILLIS) {
         if (words.isEmpty()) return
         // A different phrase after a long pause, with no "phrase ended" in between: some recognizers drop
         // the old phrase silently. It was on screen, so it is kept.
-        if (current.isNotEmpty() && words.first() != current.first() && pausedBefore(nowMillis)) flush()
+        if (current.isNotEmpty() && words.first() != current.first() && pausedBefore(nowMillis, pauseMillis ?: PAUSE_MILLIS)) flush()
         // A corrected word also means the recognizer is still hearing speech - not a pause.
         take(words, nowMillis, anyChangeIsSpeech = true)
     }
@@ -52,13 +54,13 @@ class Transcript(private val pauseMillis: Long = PAUSE_MILLIS) {
     private fun take(words: List<String>, nowMillis: Long, anyChangeIsSpeech: Boolean) {
         if (words == current) return
         val grew = words.size > current.size
-        if (grew && pausedBefore(nowMillis)) breaks += current.size
+        if (grew && pauseMillis != null && pausedBefore(nowMillis, pauseMillis)) breaks += current.size
         if (grew || anyChangeIsSpeech) lastWordAt = nowMillis
         current = words
         breaks.retainAll { it < words.size }
     }
 
-    private fun pausedBefore(nowMillis: Long): Boolean = lastWordAt?.let { nowMillis - it >= pauseMillis } == true
+    private fun pausedBefore(nowMillis: Long, pause: Long): Boolean = lastWordAt?.let { nowMillis - it >= pause } == true
 
     private fun flush() {
         append(done, current, breaks)
@@ -80,7 +82,7 @@ class Transcript(private val pauseMillis: Long = PAUSE_MILLIS) {
     private fun words(text: String): List<String> = text.trim().split(WHITESPACE).filter { it.isNotEmpty() }
 
     companion object {
-        /** The author's choice (07.11.2026): a shorter pause is a breath, not the next item. */
+        /** The default (author 07.11.2026): a shorter pause is a breath, not the next item. Settings can change it. */
         const val PAUSE_MILLIS = 2_000L
 
         private const val PUNCTUATION = ".,;:!?…"

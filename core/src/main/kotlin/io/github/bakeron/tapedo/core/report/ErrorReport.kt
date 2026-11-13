@@ -18,6 +18,9 @@ sealed interface Problem {
 
     /** A recording ended with an error. [error] is the SpeechError name, [code] the recognizer's number. */
     data class RecordingFailed(val error: String, val code: Int?) : Problem
+
+    /** Sent by hand from Settings - "About", with no error behind it: the user describes it in the mail. */
+    data object UserReport : Problem
 }
 
 /**
@@ -60,6 +63,7 @@ object ErrorReport {
     private fun title(problem: Problem): String = when (problem) {
         is Problem.OwnAudioRefused -> "telefon odrzucił nagrywanie bez przerw"
         is Problem.RecordingFailed -> "nagrywanie się nie udało"
+        Problem.UserReport -> "zgłoszenie z „O aplikacji”"
     }
 
     private fun whatHappened(problem: Problem): String = when (problem) {
@@ -67,11 +71,13 @@ object ErrorReport {
             "rozpoznawanie mowy w telefonie odrzuciło dźwięk nagrany przez Tapedo (EXTRA_AUDIO_SOURCE). " +
                 "Tapedo przełączyło się na stary sposób - nagrywa, ale po pauzie może zgubić słowo."
         is Problem.RecordingFailed -> "nagranie skończyło się błędem i nic nie zostało zapisane."
+        Problem.UserReport -> "użytkownik sam zgłasza błąd z Ustawień - „O aplikacji” (opis na górze maila)."
     }
 
     private fun code(problem: Problem): Int? = when (problem) {
         is Problem.OwnAudioRefused -> problem.code
         is Problem.RecordingFailed -> problem.code
+        Problem.UserReport -> null
     }
 
     private fun task(problem: Problem): String = when (problem) {
@@ -82,5 +88,6 @@ object ErrorReport {
         is Problem.RecordingFailed ->
             "Sprawdź w app/src/main/java/io/github/bakeron/tapedo/speech/AndroidSpeechInput.kt " +
                 "i core/.../speech/RecognizerErrorPolicy.kt, skąd ten błąd i czy nagrywanie mogło go przetrwać."
+        Problem.UserReport -> "Przeczytaj opis użytkownika na górze maila, odtwórz błąd i znajdź jego przyczynę w kodzie."
     }
 }

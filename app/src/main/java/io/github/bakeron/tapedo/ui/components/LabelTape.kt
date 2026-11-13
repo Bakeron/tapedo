@@ -15,6 +15,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 
 /**
  * Section heading styled like embossed label-maker tape stuck on the recorder:
@@ -34,7 +35,7 @@ fun LabelTape(text: String, modifier: Modifier = Modifier, tilt: Float = -1.2f) 
         color = letters,
         modifier = modifier
             .semantics { heading() }
-            .rotate(tilt)
+            .rotate(TapedoTheme.tilt(tilt))
             .background(strip, RoundedCornerShape(1.dp))
             .padding(horizontal = 10.dp, vertical = 3.dp),
     )

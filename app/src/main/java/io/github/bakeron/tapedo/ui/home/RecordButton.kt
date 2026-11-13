@@ -2,6 +2,8 @@ package io.github.bakeron.tapedo.ui.home
 
 import android.os.Build
 import android.view.HapticFeedbackConstants
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -73,6 +75,13 @@ fun RecordButton(
         label = "keySink",
     )
 
+    // The square "stop" mark grows in on the latched key and shrinks away when it pops up.
+    val stopMark by animateFloatAsState(
+        targetValue = if (recording) 1f else 0f,
+        animationSpec = if (reduceMotion) snap() else tween(180),
+        label = "stopMark",
+    )
+
     // Bezel: a recessed ring the key sits in.
     Box(
         modifier
@@ -115,9 +124,16 @@ fun RecordButton(
                 .border(2.dp, colors.card.copy(alpha = 0.35f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            if (recording) {
-                Box(Modifier.size(26.dp).background(colors.card, RoundedCornerShape(4.dp)))
-            }
+            Box(
+                Modifier
+                    .size(26.dp)
+                    .graphicsLayer {
+                        alpha = stopMark
+                        scaleX = 0.6f + 0.4f * stopMark
+                        scaleY = 0.6f + 0.4f * stopMark
+                    }
+                    .background(colors.card, RoundedCornerShape(4.dp)),
+            )
         }
     }
 }

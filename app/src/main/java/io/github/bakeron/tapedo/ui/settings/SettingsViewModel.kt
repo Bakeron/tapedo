@@ -6,6 +6,8 @@ import io.github.bakeron.tapedo.core.ai.AiConnection
 import io.github.bakeron.tapedo.core.ai.AiProblem
 import io.github.bakeron.tapedo.core.ai.AiUsage
 import io.github.bakeron.tapedo.core.ai.SecretStore
+import io.github.bakeron.tapedo.core.ai.Spent
+import io.github.bakeron.tapedo.core.ai.claudeSpent
 import io.github.bakeron.tapedo.core.ai.UsedUp
 import io.github.bakeron.tapedo.core.ai.usedUp
 import io.github.bakeron.tapedo.core.settings.AiProvider
@@ -60,6 +62,8 @@ data class ProviderState(
     val callsToday: Int = 0,
     val callsMonth: Int = 0,
     val usedUp: UsedUp? = null,
+    /** Claude only: what the spending counter added up. */
+    val spent: Spent? = null,
 )
 
 class SettingsViewModel(
@@ -127,6 +131,12 @@ class SettingsViewModel(
             if (ok) edit(provider) { it.copy(check = CheckState.Idle) }
             refreshUsage()
         }
+    }
+
+    /** A new top-up of the Claude account: counted from today; null clears it. */
+    fun setTopUp(cents: Int?) {
+        val today = todayEpochDay()
+        update { s -> s.copy(claudeTopUpCents = cents, claudeTopUpDay = cents?.let { today }) }
     }
 
     fun editKey(provider: AiProvider, text: String) = edit(provider) { it.copy(draft = text.trim(), keyNote = null) }
@@ -231,7 +241,17 @@ class SettingsViewModel(
 
     private suspend fun refreshUsage() {
         val today = todayEpochDay()
-        val limit = (settings.value ?: store.settings.first()).aiDailyLimit
+        // Straight from the store: right after a change the shared state may still hold the old settings.
+        val s = store.settings.first()
+        val limit = s.aiDailyLimit
+        try {
+            val spent = usage.claudeSpent(today, s.claudeTopUpDay)
+            edit(AiProvider.ANTHROPIC) { it.copy(spent = spent) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Only shown - the last sums stay on screen.
+        }
         for (p in AiProvider.entries) {
             try {
                 val calls = usage.callsToday(p, today)

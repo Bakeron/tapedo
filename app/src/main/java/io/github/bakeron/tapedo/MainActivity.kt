@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
             val still = s.reduceMotion || systemAnimationsOff
-            TapedoTheme(mode = s.theme, reduceMotion = still, textScale = s.textScale) {
+            TapedoTheme(mode = s.theme, reduceMotion = still, tilted = s.tiltedPaper, textScale = s.textScale) {
                 val dip = languageDip(still)
                 Box(Modifier.graphicsLayer { alpha = dip() }) {
                     TapedoNavHost(container, debugTranscript)

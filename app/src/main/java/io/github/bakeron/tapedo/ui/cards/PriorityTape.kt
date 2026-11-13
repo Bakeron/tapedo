@@ -28,7 +28,7 @@ fun PriorityTape(priority: Priority, modifier: Modifier = Modifier, angle: Float
     // The pattern is what tells priorities apart without colour vision (medium and low tapes are
     // almost the same lightness), so the dots need about 3:1 against the tape, not a faint print.
     val ink = colors.tapeInk.copy(alpha = 0.6f)
-    Canvas(modifier.size(width = 64.dp, height = 20.dp).rotate(angle)) {
+    Canvas(modifier.size(width = 64.dp, height = 20.dp).rotate(TapedoTheme.tilt(angle))) {
         val w = size.width
         val h = size.height
         val tooth = 2.5.dp.toPx()

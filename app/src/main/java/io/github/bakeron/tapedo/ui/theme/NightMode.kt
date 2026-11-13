@@ -22,7 +22,10 @@ object NightMode {
         AppCompatDelegate.setDefaultNightMode(mode)
     }
 
-    /** Applies a theme chosen in Settings. Recreates the activity only when the window mode really changes. */
+    /**
+     * Applies a theme chosen in Settings. The manifest handles uiMode itself, so the screen is not rebuilt:
+     * the switches slide to the new choice instead of jumping (author 11.11.2026).
+     */
     fun apply(context: Context, theme: ThemeMode) {
         val mode = when (theme) {
             ThemeMode.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM

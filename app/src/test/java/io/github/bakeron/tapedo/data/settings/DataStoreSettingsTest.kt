@@ -10,12 +10,12 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.bakeron.tapedo.core.model.NoteType
-import io.github.bakeron.tapedo.core.model.Priority
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.settings.RecordingEnd
 import io.github.bakeron.tapedo.core.settings.ThemeMode
+import io.github.bakeron.tapedo.core.settings.WhisperProvider
 import java.io.File
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
@@ -62,20 +62,23 @@ class DataStoreSettingsTest {
         val variants = RecordingEnd.entries.map { d.copy(recordingEnd = it) } +
             AppSettings.MAX_RECORDING_OPTIONS.map { d.copy(maxRecordingSeconds = it) } +
             AppSettings.SILENCE_OPTIONS.map { d.copy(silenceSeconds = it) } +
+            AppSettings.PAUSE_OPTIONS.map { d.copy(pauseSeconds = it) } +
             AppSettings.SPEECH_LANGUAGES.map { d.copy(speechLanguage = it) } +
             OnlineSpeech.entries.map { d.copy(onlineSpeech = it) } +
             (NoteType.entries + null).map { d.copy(noteTypeChoice = it) } +
-            Priority.entries.map { d.copy(defaultPriority = it) } +
             ThemeMode.entries.map { d.copy(theme = it) } +
             listOf(true, false).map { d.copy(reduceMotion = it) } +
             AiProvider.entries.map { d.copy(aiProviders = setOf(it)) } +
             AiProvider.entries.map { d.copy(aiModels = mapOf(it to "model-${it.id}")) } +
             AppSettings.AI_DAILY_LIMITS.map { d.copy(aiDailyLimit = it) } +
             AppSettings.TEXT_SCALES.map { d.copy(textScale = it) } +
+            (WhisperProvider.entries + null).map { d.copy(whisper = it) } +
+            listOf(true, false).map { d.copy(tiltedPaper = it) } +
+            listOf(d.copy(claudeTopUpCents = 2050, claudeTopUpDay = 20_404L), d.copy(claudeTopUpCents = null, claudeTopUpDay = null)) +
             AppSettings(
                 recordingEnd = RecordingEnd.STOP_BUTTON, maxRecordingSeconds = 600, silenceSeconds = 12,
                 speechLanguage = "en-US",
-                onlineSpeech = OnlineSpeech.NEVER, noteTypeChoice = NoteType.EVENT, defaultPriority = Priority.LOW,
+                onlineSpeech = OnlineSpeech.NEVER, noteTypeChoice = NoteType.EVENT,
                 theme = ThemeMode.DARK, reduceMotion = true, aiProviders = AiProvider.entries.toSet(), textScale = 1.3f,
             )
         for (wanted in variants) {
@@ -91,8 +94,9 @@ class DataStoreSettingsTest {
         val names = raw.data.first().asMap().keys.map { it.name }.sorted()
         assertEquals(
             listOf(
-                "ai_daily_limit", "ai_providers", "default_priority", "max_recording_seconds", "note_type_choice", "online_speech",
-                "recording_end", "reduce_motion", "silence_seconds", "speech_language", "text_scale", "theme",
+                "ai_daily_limit", "ai_providers", "max_recording_seconds", "note_type_choice", "online_speech",
+                "pause_seconds", "recording_end", "reduce_motion", "silence_seconds", "speech_language", "text_scale", "theme",
+                "tilted_paper", "whisper",
             ),
             names,
         )
@@ -107,6 +111,7 @@ class DataStoreSettingsTest {
             }
             p[intPreferencesKey("max_recording_seconds")] = 45
             p[intPreferencesKey("silence_seconds")] = 31
+            p[intPreferencesKey("pause_seconds")] = 11
             p[stringPreferencesKey("speech_language")] = "de-DE"
             p[floatPreferencesKey("text_scale")] = 2f
             p[intPreferencesKey("ai_daily_limit")] = 7
@@ -157,5 +162,27 @@ class DataStoreSettingsTest {
         val settings = DataStoreSettings(raw)
         settings.update { it.copy(aiProviders = emptySet()) }
         assertEquals(emptySet<AiProvider>(), settings.settings.first().aiProviders)
+    }
+
+    @Test
+    fun `speech follows the phone's language until one is picked`() = runBlocking {
+        val raw = dataStore()
+        assertEquals("en-US", DataStoreSettings(raw, "de").settings.first().speechLanguage)
+        assertEquals("pl-PL", DataStoreSettings(raw, "pl").settings.first().speechLanguage)
+        // A picked (stored) language stays, whatever the phone says.
+        DataStoreSettings(raw, "pl").update { it.copy(speechLanguage = "pl-PL") }
+        assertEquals("pl-PL", DataStoreSettings(raw, "de").settings.first().speechLanguage)
+    }
+
+    @Test
+    fun `a top-up out of range is not read`() = runBlocking {
+        val raw = dataStore()
+        raw.edit {
+            it[intPreferencesKey("claude_top_up_cents")] = 0
+            it[androidx.datastore.preferences.core.longPreferencesKey("claude_top_up_day")] = -3L
+        }
+        val s = DataStoreSettings(raw).settings.first()
+        assertNull(s.claudeTopUpCents)
+        assertNull(s.claudeTopUpDay)
     }
 }

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tapedo - polityka prywatności / Privacy policy</title>
+<meta name="description" content="Polityka prywatności aplikacji Tapedo na Androida. Privacy policy of the Tapedo Android app.">
+<style>
+  /* Paper index card in the light theme, recorder panel in the dark one - the app's own two themes. */
+  :root {
+    --bg: #ece6d8;
+    --card: #fbf8f0;
+    --ink: #24211c;
+    --muted: #5e594f;
+    --rule: #c9c0ad;
+    --margin: #c4574a;
+    --link: #1f5a8a;
+    --tape: #e8b04a;
+    --tape-ink: #24211c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --card: #222427;
+      --ink: #e9e5dc;
+      --muted: #b3ada1;
+      --rule: #3a3d42;
+      --margin: #d9776a;
+      --link: #8cc1ec;
+      --tape: #e8b04a;
+      --tape-ink: #24211c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 1.0625rem/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+  }
+  article {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--margin);
+    padding: 1.25rem 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .tape {
+    display: inline-block;
+    background: var(--tape);
+    color: var(--tape-ink);
+    font: 700 0.85rem/1 ui-monospace, "Courier New", monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.4rem 0.6rem;
+    margin: 0 0 0.75rem;
+  }
+  h1, h2 {
+    font-family: ui-monospace, "Courier New", monospace;
+    line-height: 1.25;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 {
+    font-size: 1.1rem;
+    margin: 1.75rem 0 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  p, ul { margin: 0.5rem 0; }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.3rem 0; }
+  .meta { color: var(--muted); font-size: 0.95rem; }
+  a { color: var(--link); text-underline-offset: 0.15em; }
+  a:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  nav { margin-bottom: 1rem; font-size: 0.95rem; }
+  code { font-family: ui-monospace, "Courier New", monospace; font-size: 0.95em; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<main>
+
+<nav><a href="#en" hreflang="en" lang="en">English version below</a></nav>
+
+<article id="pl" lang="pl">
+<p class="tape">Tapedo</p>
+<h1>Polityka prywatności</h1>
+<p class="meta">Ostatnia zmiana: 12.11.2026</p>
+
+<p>Tapedo to aplikacja na Androida, która zamienia to, co mówisz, w karteczki - notatki, zadania, listy, zakupy, wydarzenia i pomysły. Ta polityka opisuje, jakie dane aplikacja przetwarza, gdzie je trzyma, co może wyjść z telefonu i jak wszystko usunąć.</p>
+
+<h2>Najważniejsze w skrócie</h2>
+<ul>
+  <li>Autor aplikacji <strong>nie ma żadnego serwera</strong> i <strong>nie dostaje Twoich danych</strong> - ani notatek, ani nagrań, ani informacji o tym, jak korzystasz z aplikacji.</li>
+  <li>Bez konta, <strong>bez reklam, analityki i śledzenia</strong>. Aplikacja nie wysyła raportów o awariach.</li>
+  <li>Karteczki są <strong>zaszyfrowane i zapisane tylko na Twoim telefonie</strong>.</li>
+  <li>Z telefonu wychodzi tylko to, na co się zgodzisz: tekst notatki do wybranego dostawcy AI, głos do Google przy rozpoznawaniu mowy przez internet i nagranie do usługi Whisper, gdy ją włączysz.</li>
+</ul>
+
+<h2>Jakie dane</h2>
+<ul>
+  <li><strong>Karteczki</strong> - tekst, który powiesz albo wpiszesz, rodzaj karteczki, priorytet, termin, punkty listy.</li>
+  <li><strong>Ustawienia</strong> - np. motyw, wielkość tekstu, język, sposób kończenia nagrania, wybrani dostawcy AI i modele.</li>
+  <li><strong>Liczniki AI</strong> - ile zapytań poszło do każdego dostawcy danego dnia, a przy płatnym Claude także szacowany koszt i kwota doładowania, którą sam wpiszesz. Bez treści notatek.</li>
+  <li><strong>Klucze API</strong> do dostawców AI - tylko gdy sam je wpiszesz.</li>
+</ul>
+<p>Aplikacja <strong>nie prosi</strong> o imię, adres e-mail, numer telefonu, lokalizację, kontakty ani zdjęcia. Jedyne uprawnienia to mikrofon (do nagrywania) i internet (tylko dla usług opisanych niżej).</p>
+
+<h2>Gdzie są dane</h2>
+<ul>
+  <li><strong>Karteczki</strong> - w bazie zaszyfrowanej SQLCipher (AES-256) w prywatnym folderze aplikacji, do którego inne aplikacje nie mają dostępu. Klucz do bazy chroni systemowy sejf telefonu (Android Keystore) - nie da się go odczytać z plików telefonu.</li>
+  <li><strong>Klucze API</strong> - zaszyfrowane kluczem z Android Keystore. Gdy włączysz „Pokaż klucz”, aplikacja blokuje zrzuty ekranu.</li>
+  <li><strong>Dźwięk</strong> - Tapedo nie zapisuje nagrań. Podczas nagrywania dźwięk jest tylko w pamięci telefonu i znika po przepisaniu - zostaje sam tekst.</li>
+  <li><strong>Kopie zapasowe</strong> - wyłączone. Dane Tapedo nie trafiają do kopii Google ani do przenoszenia danych na nowy telefon.</li>
+</ul>
+<p>Gdy telefon straci klucz do bazy (np. po zmianie zabezpieczeń), Tapedo nie kasuje starych karteczek - odkłada zaszyfrowane pliki obok i zaczyna nową bazę.</p>
+
+<h2>Co może wyjść z telefonu</h2>
+
+<p><strong>1. Tekst notatki do dostawcy AI</strong> - tylko gdy w Ustawieniach (zakładka „AI”) włączysz dostawcę i wpiszesz swój klucz. Do AI trafia przepisany tekst nagrania i dzisiejsza data (żeby „jutro” zamienić na dzień) - bez nagrania, kluczy innych dostawców, innych karteczek i danych o Tobie. Tekst idzie szyfrowanym połączeniem (HTTPS) prosto z telefonu do dostawcy, bez serwera autora. Bez AI proste reguły w telefonie układają karteczki i nic nie wychodzi.</p>
+<p>Każdy dostawca ma własne zasady - czy przechowuje zapytania, jak długo i czy może na nich trenować modele. W aplikacji przy każdym dostawcy jest krótki opis („Gdzie trafiają dane”). Pełne zasady (stan 12.11.2026):</p>
+<ul>
+  <li>Groq (USA) - <a href="https://groq.com/privacy-policy">groq.com/privacy-policy</a></li>
+  <li>OpenRouter (USA) - <a href="https://openrouter.ai/privacy">openrouter.ai/privacy</a>; przekazuje zapytania firmie, która uruchamia wybrany model. Przy darmowych modelach część z nich może używać tekstu do trenowania - nie dyktuj tam danych wrażliwych.</li>
+  <li>Anthropic - Claude (USA) - <a href="https://www.anthropic.com/legal/privacy">anthropic.com/legal/privacy</a></li>
+  <li>OpenAI (USA) - <a href="https://openai.com/policies/privacy-policy">openai.com/policies/privacy-policy</a></li>
+  <li>Google - Gemini - <a href="https://policies.google.com/privacy">policies.google.com/privacy</a> i <a href="https://aistudio.google.com/docs/terms">warunki Gemini API</a></li>
+</ul>
+
+<p><strong>2. Głos do Google przy rozpoznawaniu mowy przez internet.</strong> Tapedo przepisuje mowę rozpoznawaniem wbudowanym w telefon. Na telefonach, które rozpoznają mowę w samym telefonie (zwykle Android 12 i nowszy), głos nie wychodzi z telefonu. Gdy brakuje pakietu offline dla języka mowy, Tapedo najpierw pyta, zanim użyje rozpoznawania przez internet (ustawienie „Rozpoznawanie przez internet”: Pytaj / Zawsze / Nigdy). Wtedy głos przetwarza usługa rozpoznawania mowy w telefonie (zwykle Google) według <a href="https://policies.google.com/privacy">polityki prywatności Google</a>. Uczciwie: na telefonach bez rozpoznawania w samym telefonie system może wysłać głos sam, bez pytania - Tapedo nie może tego zablokować i ostrzega o tym w Ustawieniach.</p>
+
+<p><strong>3. Nagranie do Whisper</strong> - tylko gdy w zakładce „AI” wybierzesz dostawcę Whisper (Groq albo OpenAI; domyślnie wyłączony - wybór dostawcy jest zgodą). Po każdym nagraniu dźwięk (bez odliczania i bez ciszy na końcu) idzie z pamięci telefonu do tego dostawcy, który zwraca tekst. Tapedo nigdy nie zapisuje nagrania na dysku.</p>
+
+<p><strong>4. Zgłoszenie błędu</strong> - przycisk „Wyślij błąd autorowi aplikacji” otwiera Twoją pocztę z gotową wiadomością: wersja Tapedo, model telefonu, wersja Androida, język i kod błędu - bez notatek i nagrań. Wiadomość widzisz przed wysłaniem i wysyłasz ją sam (albo nie).</p>
+
+<p>Poza tym aplikacja łączy się z internetem tylko przy „Sprawdź połączenie” i „Pokaż darmowe modele” u wybranego dostawcy AI. Karteczka wysłana przyciskiem „Udostępnij” trafia do aplikacji, którą sam wybierzesz (np. komunikatora albo poczty) - dalej obowiązują jej zasady.</p>
+
+<h2>Jak usunąć dane</h2>
+<ul>
+  <li><strong>Karteczkę</strong> - przycisk usuwania przy karteczce na ekranie głównym albo „Usuń karteczkę” w edytorze.</li>
+  <li><strong>Klucz API</strong> - przycisk „Usuń” przy dostawcy w zakładce „AI”.</li>
+  <li><strong>Wszystko</strong> - odinstalowanie aplikacji albo „Wyczyść dane” w ustawieniach Androida usuwa karteczki, ustawienia, klucze i liczniki z telefonu.</li>
+  <li><strong>U dostawców AI</strong> - dane wysłane do dostawcy podlegają jego zasadom (linki wyżej); usunięcie ich prowadzisz z dostawcą, np. przez jego panel.</li>
+</ul>
+
+<h2>Twoje prawa (RODO)</h2>
+<p>Autor aplikacji nie zbiera ani nie przechowuje Twoich danych osobowych - wszystko jest na Twoim telefonie i pod Twoją kontrolą. Wyjątek: wiadomość e-mail, którą sam wyślesz autorowi (np. zgłoszenie błędu). Autor używa jej tylko do odpowiedzi i rozwiązania problemu, a na Twoją prośbę ją usunie. Masz prawo do dostępu do danych, ich sprostowania, usunięcia, ograniczenia przetwarzania i sprzeciwu, a także do skargi do Prezesa Urzędu Ochrony Danych Osobowych (<a href="https://uodo.gov.pl">uodo.gov.pl</a>). Prawa wobec danych wysłanych do dostawców AI albo Google realizujesz u tych firm.</p>
+
+<h2>Wiek</h2>
+<p>Tapedo nie jest przeznaczone dla dzieci poniżej 13 lat i nie zbiera świadomie ich danych. Dostawcy AI mają własne wymagania co do wieku (np. Gemini API - 18 lat) - korzystając z nich, musisz je spełniać.</p>
+
+<h2>Kontakt</h2>
+<p>Pytania o prywatność: zgłoszenie na GitHubie - <a href="https://github.com/Bakeron/tapedo/issues">github.com/Bakeron/tapedo/issues</a> (zgłoszenia są publiczne - nie wpisuj tam danych prywatnych) albo e-mail - adres jest w aplikacji: Ustawienia, zakładka „O aplikacji”.</p>
+
+<h2>Zmiany</h2>
+<p>O zmianach tej polityki informuje data na górze i opis wersji aplikacji.</p>
+</article>
+
+<article id="en" lang="en">
+<p class="tape">Tapedo</p>
+<h1>Privacy policy</h1>
+<p class="meta">Last changed: 12 November 2026</p>
+
+<p>Tapedo is an Android app that turns what you say into index cards - notes, tasks, lists, shopping, events and ideas. This policy explains what data the app handles, where it is kept, what may leave the phone and how to delete everything.</p>
+
+<h2>In short</h2>
+<ul>
+  <li>The app’s author <strong>has no server</strong> and <strong>receives none of your data</strong> - no notes, no recordings, no information about how you use the app.</li>
+  <li>No account, <strong>no ads, no analytics, no tracking</strong>. The app sends no crash reports.</li>
+  <li>Cards are <strong>encrypted and stored only on your phone</strong>.</li>
+  <li>Only what you agree to leaves the phone: the note text to the AI provider you picked, your voice to Google for online speech recognition, and the recording to Whisper when you turn it on.</li>
+</ul>
+
+<h2>What data</h2>
+<ul>
+  <li><strong>Cards</strong> - the text you say or type, card type, priority, due date, list items.</li>
+  <li><strong>Settings</strong> - e.g. theme, text size, language, how a recording ends, the AI providers and models you picked.</li>
+  <li><strong>AI counters</strong> - how many requests went to each provider on a given day, and for paid Claude also the estimated cost and the top-up amount you enter yourself. No note text.</li>
+  <li><strong>API keys</strong> for AI providers - only if you enter them.</li>
+</ul>
+<p>The app <strong>does not ask</strong> for your name, e-mail address, phone number, location, contacts or photos. Its only permissions are the microphone (for recording) and the internet (only for the services described below).</p>
+
+<h2>Where the data is</h2>
+<ul>
+  <li><strong>Cards</strong> - in a SQLCipher-encrypted database (AES-256) in the app’s private folder, which other apps cannot access. The database key is protected by the phone’s system vault (Android Keystore) - it cannot be read from the phone’s files.</li>
+  <li><strong>API keys</strong> - encrypted with a key from Android Keystore. While “Show key” is on, the app blocks screenshots.</li>
+  <li><strong>Sound</strong> - Tapedo does not save recordings. While recording, the sound is only in the phone’s memory and is gone once it is typed out - only the text stays.</li>
+  <li><strong>Backups</strong> - turned off. Tapedo’s data does not go to Google backups or to data transfer to a new phone.</li>
+</ul>
+<p>If the phone loses the database key (e.g. after a change of screen lock), Tapedo does not delete the old cards - it sets the encrypted files aside and starts a new database.</p>
+
+<h2>What may leave the phone</h2>
+
+<p><strong>1. Note text to an AI provider</strong> - only when you turn a provider on in Settings (“AI” tab) and enter your own key. The AI receives the typed-out text of the recording and today’s date (to turn “tomorrow” into a day) - no recording, no other providers’ keys, no other cards, no data about you. The text goes over an encrypted connection (HTTPS) straight from the phone to the provider, with no server of the author in between. Without AI, simple rules on the phone sort the cards and nothing leaves the phone.</p>
+<p>Each provider has its own rules - whether it keeps requests, for how long, and whether it may train models on them. The app shows a short note for each provider (“Where your data goes”). Full policies (as of 12 November 2026):</p>
+<ul>
+  <li>Groq (USA) - <a href="https://groq.com/privacy-policy">groq.com/privacy-policy</a></li>
+  <li>OpenRouter (USA) - <a href="https://openrouter.ai/privacy">openrouter.ai/privacy</a>; it passes requests on to the company running the chosen model. Some free models may use the text for training - do not dictate sensitive data there.</li>
+  <li>Anthropic - Claude (USA) - <a href="https://www.anthropic.com/legal/privacy">anthropic.com/legal/privacy</a></li>
+  <li>OpenAI (USA) - <a href="https://openai.com/policies/privacy-policy">openai.com/policies/privacy-policy</a></li>
+  <li>Google - Gemini - <a href="https://policies.google.com/privacy">policies.google.com/privacy</a> and the <a href="https://aistudio.google.com/docs/terms">Gemini API terms</a></li>
+</ul>
+
+<p><strong>2. Voice to Google for online speech recognition.</strong> Tapedo types out speech with the phone’s built-in recogniser. On phones that recognise speech on the device (usually Android 12 and newer), your voice does not leave the phone. If the offline pack for the speech language is missing, Tapedo asks first before using online recognition (the “Online recognition” setting: Ask / Always / Never). Then the phone’s speech service (usually Google) handles your voice under <a href="https://policies.google.com/privacy">Google’s privacy policy</a>. To be honest: on phones without on-device recognition the system may send your voice by itself, without asking - Tapedo cannot block that and warns about it in Settings.</p>
+
+<p><strong>3. Recording to Whisper</strong> - only when you pick a Whisper provider in the “AI” tab (Groq or OpenAI; off by default - picking a provider is your consent). After each recording the sound (without the countdown and the silence at the end) goes from the phone’s memory to that provider, which returns the text. Tapedo never saves the recording to storage.</p>
+
+<p><strong>4. Error report</strong> - the “Send the error to the app’s author” button opens your mail app with a ready message: Tapedo version, phone model, Android version, language and error code - no notes and no recordings. You see the message before sending and send it yourself (or not).</p>
+
+<p>Apart from that the app connects to the internet only for “Check connection” and “Show free models” at the AI provider you picked. A card sent with “Share” goes to the app you pick (e.g. a messenger or mail) - from then on that app’s rules apply.</p>
+
+<h2>How to delete data</h2>
+<ul>
+  <li><strong>A card</strong> - the delete button on the card on the home screen, or “Delete card” in the editor.</li>
+  <li><strong>An API key</strong> - the “Delete” button at the provider in the “AI” tab.</li>
+  <li><strong>Everything</strong> - uninstalling the app or “Clear data” in Android settings removes cards, settings, keys and counters from the phone.</li>
+  <li><strong>At AI providers</strong> - data sent to a provider falls under its rules (links above); you arrange deletion with the provider, e.g. in its dashboard.</li>
+</ul>
+
+<h2>Your rights (GDPR)</h2>
+<p>The app’s author does not collect or store your personal data - everything is on your phone and under your control. The exception: an e-mail you send to the author yourself (e.g. an error report). The author uses it only to reply and fix the problem, and deletes it at your request. You have the right to access, rectify and erase data, to restrict processing and to object, and to lodge a complaint with a data protection authority (in Poland: <a href="https://uodo.gov.pl/en">uodo.gov.pl</a>). Rights over data sent to AI providers or Google are exercised with those companies.</p>
+
+<h2>Age</h2>
+<p>Tapedo is not meant for children under 13 and does not knowingly collect their data. AI providers have their own age requirements (e.g. Gemini API - 18) - you must meet them to use those providers.</p>
+
+<h2>Contact</h2>
+<p>Privacy questions: an issue on GitHub - <a href="https://github.com/Bakeron/tapedo/issues">github.com/Bakeron/tapedo/issues</a> (issues are public - do not put private data there) or e-mail - the address is in the app: Settings, “About” tab.</p>
+
+<h2>Changes</h2>
+<p>Changes to this policy are shown by the date at the top and in the app’s release notes.</p>
+</article>
+
+</main>
+</body>
+</html>

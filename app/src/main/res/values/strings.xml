@@ -5,9 +5,9 @@
 
     <!-- Home -->
     <string name="home_open_settings">Ustawienia</string>
-    <string name="home_empty">Stos jest pusty. Naciśnij czerwony przycisk i powiedz, co masz do zrobienia.</string>
-    <string name="home_type_question">Co nagrywasz?</string>
-    <string name="home_pause_rule">Przerwa 2 s = nowy punkt</string>
+    <string name="home_empty">Ta przekładka jest pusta. Naciśnij czerwony przycisk i powiedz - nagranie trafi właśnie tutaj.</string>
+    <string name="home_pause_rule">Przerwa %d s = nowy punkt</string>
+    <string name="home_pause_off">Jedno nagranie = jeden punkt</string>
     <string name="record_start">Nagraj</string>
     <string name="record_stop">Zatrzymaj nagrywanie</string>
     <string name="record_counter">%1$s / %2$s</string>
@@ -15,6 +15,8 @@
     <string name="record_wait">Chwila… mikrofon wraca</string>
     <string name="record_starting">Chwila… włączam mikrofon</string>
     <string name="record_countdown">Nagrywanie za %1$d</string>
+    <string name="record_cancel">Anuluj</string>
+    <string name="record_countdown_cancel_hint">Dotknij, żeby anulować</string>
     <string name="mic_open_settings">Otwórz ustawienia telefonu</string>
     <string name="speech_error_permission">Tapedo nie usłyszy notatki bez dostępu do mikrofonu. Zezwól na mikrofon w ustawieniach telefonu.</string>
     <string name="speech_error_not_available">Ten telefon nie ma rozpoznawania mowy. Zainstaluj albo włącz aplikację Google.</string>
@@ -25,34 +27,32 @@
     <string name="own_audio_refused">Twój telefon nie przyjął nagrywania bez przerw, więc Tapedo nagrywa starszym sposobem. Nagrywanie działa, ale po pauzie może zgubić słowo.</string>
     <string name="own_audio_refused_report">Wyślij błąd - autor poprawi to w kolejnej wersji.</string>
     <string name="report_send">Wyślij błąd autorowi aplikacji</string>
-    <string name="report_privacy">Otworzy się Twoja poczta z gotową wiadomością: model telefonu, wersja Androida i kod błędu - bez notatek i nagrań. Wysyłasz ją sam.</string>
+    <string name="report_privacy">Otworzy się Twoja poczta z gotową wiadomością: wersja Tapedo, model telefonu, wersja Androida, język i kod błędu - bez notatek i nagrań. Wysyłasz ją sam.</string>
     <string name="report_no_mail">Nie ma aplikacji poczty. Opis błędu jest w schowku - wklej go w wiadomość na adres %1$s.</string>
     <string name="speech_error_offline_ask">Telefon nie ma pakietu offline dla tego języka, więc nic nie zostało wysłane. Rozpoznawanie przez internet wysyła głos do Google. Możesz też pobrać pakiet offline w ustawieniach rozpoznawania mowy telefonu.</string>
     <string name="speech_error_offline_never">Telefon nie ma pakietu offline dla tego języka, a rozpoznawanie przez internet jest wyłączone w Ustawieniach. Pobierz pakiet offline w ustawieniach rozpoznawania mowy telefonu.</string>
     <string name="speech_online_once">Tym razem przez internet</string>
     <string name="speech_online_always">Zawsze przez internet</string>
-    <string name="type_hint_auto">Tapedo samo wybierze typ: „kup” to zakupy, „o 10” to wydarzenie.</string>
-    <string name="type_hint_note">Zwykła notatka - tekst tak, jak go powiesz.</string>
-    <string name="type_hint_checklist">Każda rzecz osobno, do odhaczania: „ręczniki, krem, ładowarka”.</string>
-    <string name="type_hint_task">Jedna rzecz do zrobienia, z terminem, jeśli go powiesz („w piątek”).</string>
-    <string name="type_hint_idea">Luźna myśl na później - bez terminu i priorytetu.</string>
-    <string name="type_hint_event">Data, godzina i miejsce, np. „we wtorek o 10 u dentysty”.</string>
-    <string name="type_hint_shopping">Lista zakupów, sama pogrupowana na działy: nabiał, pieczywo, warzywa…</string>
+    <string name="speech_get_offline_pack">Pobierz pakiet językowy</string>
 
     <!-- Settings -->
     <string name="settings_title">Ustawienia</string>
-    <string name="settings_section_recording">Nagrywanie</string>
-    <string name="settings_section_notes">Notatki</string>
-    <string name="settings_section_look">Wygląd i język</string>
+    <string name="settings_tab_recording">Nagrywanie</string>
+    <string name="settings_tab_ai">AI</string>
+    <string name="settings_tab_look">Wygląd</string>
+    <string name="settings_tab_about">O aplikacji</string>
     <string name="settings_recording_end">Koniec nagrania</string>
     <string name="settings_recording_end_silence">Po ciszy</string>
     <string name="settings_recording_end_stop">Przyciskiem stop</string>
-    <string name="settings_recording_end_hint">„Po ciszy” kończy nagranie, gdy przez dłuższą chwilę nic nie mówisz. „Przyciskiem stop” słucha, dopóki go nie naciśniesz. Krótkie pauzy na myślenie niczego nie ucinają.</string>
-    <string name="settings_listening_continuous">Nagrywanie ciągłe - pauzy niczego nie ucinają.</string>
+    <string name="settings_recording_end_hint">%1$s kończy nagranie, gdy przez dłuższą chwilę nic nie mówisz. %2$s słucha, dopóki go nie naciśniesz. Krótkie pauzy na myślenie niczego nie ucinają.</string>
+    <string name="settings_listening_continuous">Ten telefon słucha bez przerw - pauzy niczego nie ucinają.</string>
     <string name="settings_listening_resuming">Ten telefon wznawia nasłuch po pauzie - mów dalej, gdy pióro wróci na papier.</string>
     <string name="settings_listening_unknown">Po pierwszym nagraniu zobaczysz tu, czy pauzy przerywają nasłuch.</string>
     <string name="settings_silence_length">Cisza przed końcem</string>
     <string name="settings_silence_length_hint">Tyle sekund bez nowych słów kończy nagranie.</string>
+    <string name="settings_pause">Pauza robi nowy punkt</string>
+    <string name="settings_pause_hint">Tyle sekund przerwy między słowami zaczyna nowy punkt listy. „Nigdy” - jedno nagranie (i każde dogranie do karteczki) to jeden punkt.</string>
+    <string name="settings_pause_never">Nigdy</string>
     <string name="settings_max_length">Najdłuższe nagranie</string>
     <string name="settings_max_length_hint">Zabezpieczenie, gdy zapomnisz zatrzymać nagrywanie.</string>
     <string name="settings_seconds">%d s</string>
@@ -71,33 +71,50 @@
     </plurals>
     <string name="settings_minutes">%d min</string>
     <string name="settings_speech_language">Język mowy</string>
-    <string name="settings_speech_language_hint">Język, w którym mówisz do telefonu. Napisy w Tapedo zmienia „Język aplikacji” niżej.</string>
+    <string name="settings_speech_language_hint">Język, w którym mówisz do telefonu. Napisy w Tapedo zmienia „Język aplikacji” w zakładce „Wygląd”.</string>
     <string name="settings_online_speech">Rozpoznawanie przez internet</string>
     <string name="settings_online_speech_ask">Pytaj</string>
     <string name="settings_online_speech_always">Zawsze</string>
     <string name="settings_online_speech_never">Nigdy</string>
-    <string name="settings_online_speech_hint">Gdy telefon nie ma pakietu offline dla języka mowy, rozpoznawanie przez internet wysyła głos do Google.</string>
+    <string name="settings_online_speech_hint">Domyślnie głos zostaje w telefonie. Gdy brakuje pakietu offline dla języka mowy, Tapedo najpierw zapyta, zanim wyśle głos do Google.</string>
     <string name="settings_online_speech_more">Na telefonach z rozpoznawaniem na urządzeniu (zwykle Android 12 i nowszy) głos bez Twojej zgody nie wychodzi z telefonu. Na pozostałych system może sam użyć internetu.</string>
+    <string name="settings_online_speech_no_ondevice">Uwaga: ten telefon nie rozpoznaje mowy w samym telefonie - system może wysłać głos do Google sam, bez pytania. Tapedo nie może tego zablokować.</string>
     <string name="settings_save_failed">Nie udało się zapisać zmiany. Spróbuj jeszcze raz.</string>
-    <string name="settings_default_priority">Domyślny priorytet</string>
-    <string name="settings_default_priority_hint">Taki priorytet (kolorowa taśma w rogu karteczki) dostaje każda nowa karteczka.</string>
-    <string name="settings_default_priority_more">Wyjątki: gdy w nagraniu powiesz „pilne” albo „ważne”, dostaje wysoki, a gdy „kiedyś” albo „na spokojnie” - niski. Pomysły nie mają priorytetu.</string>
     <string name="settings_text_size">Wielkość tekstu</string>
     <string name="settings_text_size_hint">Powiększa albo zmniejsza tekst w Tapedo - dodatkowo do wielkości tekstu ustawionej w telefonie.</string>
     <string name="settings_percent" translatable="false">%d%%</string>
     <string name="settings_theme">Motyw</string>
+    <string name="settings_theme_hint">Papier - jasny jak kartka. Panel - ciemny jak obudowa dyktafonu.</string>
     <string name="settings_theme_system">Jak w systemie</string>
     <string name="settings_theme_light">Papier</string>
     <string name="settings_theme_dark">Panel</string>
-    <string name="settings_app_language">Język aplikacji</string>
+    <string name="settings_app_language">Język aplikacji / Language</string>
+    <string name="settings_whisper">Whisper - dokładniejsze przepisywanie</string>
+    <string name="settings_whisper_off">Wyłączony</string>
+    <string name="settings_whisper_hint">Po „stop” Whisper przepisuje nagranie jeszcze raz, dokładniej niż telefon. Podczas mówienia napisy dalej pokazuje telefon.</string>
+    <string name="settings_whisper_more">Whisper to model rozpoznawania mowy firmy OpenAI. Groq daje go za darmo w dziennym limicie, OpenAI za ok. 0,006 USD za minutę nagrania (stan 11.2026). Działa na Androidzie 13 i nowszym. Nagranie jest tylko w pamięci telefonu, nigdy na dysku. Gdy Whisper nie zadziała, zostaje tekst z telefonu, a okno po nagraniu mówi dlaczego.</string>
+    <string name="settings_whisper_data">Gdzie trafiają dane: po każdym nagraniu dźwięk (bez odliczania i bez ciszy na końcu) idzie do %1$s. Wybierając %1$s, zgadzasz się na to.</string>
+    <string name="settings_whisper_key_ok">Klucz %1$s jest zapisany - to wystarczy, przełącznik w ramce %1$s wyżej nie jest potrzebny.</string>
+    <string name="settings_whisper_key_missing">Brak klucza %1$s - wpisz go wyżej, w ramce %1$s. Do tego czasu zostaje tekst z telefonu.</string>
+    <string name="settings_whisper_moved">Whisper - dokładniejsze przepisywanie nagrania przez AI - jest w zakładce „AI”.</string>
+    <string name="settings_whisper_open_ai">Przejdź do zakładki AI</string>
     <string name="settings_reduce_motion">Ogranicz animacje</string>
     <string name="settings_reduce_motion_hint">Karteczki i przełączniki zmieniają się od razu, bez ruchu. Działa też samo, gdy animacje są wyłączone w systemie.</string>
-    <string name="settings_more">więcej</string>
-    <string name="settings_less">zwiń</string>
+    <string name="settings_explain">Wyjaśnij</string>
+    <string name="settings_explain_hide">Zwiń</string>
+    <string name="settings_explain_desc">Wyjaśnij: %1$s</string>
+    <string name="settings_explain_open">rozwinięte</string>
+    <string name="settings_explain_closed">zwinięte</string>
+    <string name="settings_tilted">Krzywe karteczki</string>
+    <string name="settings_tilted_hint">Karteczki, taśmy i pieczątki leżą lekko krzywo, jak rzucone na biurko.</string>
     <string name="settings_off">Wyłączone</string>
     <string name="settings_on">Włączone</string>
-    <string name="settings_footer">Notatki są zaszyfrowane i zapisane tylko na tym telefonie. Tapedo nie zapisuje dźwięku - zostaje sam tekst. Z telefonu wychodzi tylko to, na co się zgodzisz: tekst notatki do wybranego dostawcy AI i głos do Google przy rozpoznawaniu przez internet.</string>
+    <string name="settings_footer">Karteczki są zaszyfrowane i zapisane tylko na tym telefonie. Tapedo nie zapisuje dźwięku - zostaje sam tekst. Z telefonu wychodzi tylko to, na co się zgodzisz: tekst notatki do wybranego dostawcy AI, głos do Google przy rozpoznawaniu przez internet i nagranie do Whisper, gdy go włączysz.</string>
     <string name="settings_licenses">Licencje open source</string>
+    <string name="settings_about_what">Tapedo zamienia to, co mówisz, w karteczki - notatki, zadania, listy, zakupy, wydarzenia i pomysły. Bez konta, bez reklam i bez serwera autora.</string>
+    <string name="settings_contact">Kontakt z autorem</string>
+    <string name="report_no_mail_address">Nie ma aplikacji poczty. Adres %1$s jest w schowku.</string>
+    <string name="settings_privacy_policy">Polityka prywatności</string>
     <string name="licenses_title">Licencje</string>
     <string name="licenses_intro">Tapedo jest zbudowane z otwartych bibliotek i krojów pisma. Poniżej ich licencje w oryginalnym, angielskim brzmieniu.</string>
     <string name="settings_version">Wersja %s</string>
@@ -120,38 +137,39 @@
     <string name="priority_low">Niski</string>
     <string name="default_shopping_title">Zakupy</string>
     <string name="default_checklist_title">Lista</string>
+    <!-- "Zadanie 2" - the kind and the card's number in the order recorded. -->
+    <string name="card_numbered" translatable="false">%1$s %2$d</string>
 
     <!-- AI -->
-    <string name="settings_section_ai">Pomoc AI</string>
     <string name="ai_p_groq" translatable="false">Groq</string>
     <string name="ai_p_openrouter" translatable="false">OpenRouter</string>
     <string name="ai_p_anthropic" translatable="false">Claude (Anthropic)</string>
     <string name="ai_p_openai" translatable="false">OpenAI</string>
     <string name="ai_p_gemini" translatable="false">Google Gemini</string>
-    <string name="ai_intro">AI rozpisuje notatkę na osobne karteczki i listy, rozpoznaje terminy i poprawia przekręcone słowa. Bez AI notatki rozpisują proste reguły: zakupy po słowie „kup”, wydarzenie po „o 10”, priorytet po „pilne”, termin po „jutro” - działa bez internetu, a tekst notatki nie wychodzi z telefonu.</string>
+    <string name="ai_intro">AI rozpisuje notatkę na osobne karteczki i listy, rozpoznaje terminy i poprawia przekręcone słowa. Bez AI notatkę rozpisują proste reguły: zakupy po słowie „kup”, wydarzenie po „o 10”, priorytet po „pilne”, termin po „jutro” - działa bez internetu, a tekst notatki nie wychodzi z telefonu.</string>
     <string name="ai_queue">Możesz włączyć kilku dostawców - Tapedo pyta ich po kolei, w kolejności z tej listy. Gdy jeden wykorzysta dzienny limit, następne notatki idą do kolejnego. Gdy nikt nie odpowie, notatkę rozpisują reguły bez AI.</string>
-    <string name="ai_free">za darmo</string>
+    <string name="ai_free">Za darmo</string>
     <string name="ai_paid">Płatne za zużycie</string>
     <string name="ai_on">Włączone</string>
     <string name="ai_off">Wyłączone</string>
     <string name="ai_unfold">Pokaż</string>
     <string name="ai_fold">Ukryj</string>
-    <string name="ai_p_groq_hint">Bardzo szybki, darmowy poziom (orientacyjnie ok. 1000 zapytań dziennie na model, 11.2026).</string>
-    <string name="ai_p_openrouter_hint">Wiele modeli; darmowe mają w nazwie „:free” i limit ok. 50 zapytań dziennie (11.2026).</string>
-    <string name="ai_p_anthropic_hint">Domyślny model Claude Opus 5.5; tańszy do takich zadań jest claude-haiku-5-5.</string>
-    <string name="ai_p_openai_hint">Klucz z platformy OpenAI.</string>
-    <string name="ai_p_gemini_hint">Darmowy plan Google dostaje tylko część kont i projektów. Klucz z Google AI Studio.</string>
+    <string name="ai_p_groq_hint">Najlepszy z darmowych: przyzwoity i bardzo szybki, ale gubi subtelności. Limit ok. 1000 zapytań dziennie na model (11.2026).</string>
+    <string name="ai_p_openrouter_hint">Bardzo słaby i zmyśla (dopisuje rzeczy, których nie było) - tylko na zapas. „openrouter/free” za każdym razem wybiera inny model, więc wyniki są nierówne. Limit ok. 50 zapytań dziennie (11.2026).</string>
+    <string name="ai_p_anthropic_hint">Najdokładniejszy. Polecany Claude Sonnet 5.5 - ok. 2-3 gr za minutę nagrania (11.2026). Opus 5.5 jest 2 razy droższy, a do porządkowania notatek to przepłacanie; tańszy Haiku częściej się myli.</string>
+    <string name="ai_p_openai_hint">Domyślny gpt-6-luna - tani, ale częściej się myli. Klucz z platformy OpenAI.</string>
+    <string name="ai_p_gemini_hint">Domyślny Gemini Flash-Lite - tani, ale częściej się myli. Darmowy plan Google dostaje tylko część kont i projektów. Klucz z Google AI Studio.</string>
     <string name="ai_what_title">Co to jest</string>
     <string name="ai_privacy_title">Gdzie trafiają dane</string>
     <string name="ai_groq_what">Usługa uruchamiająca otwarte modele AI bardzo szybko. Rozpisuje notatkę na osobne zadania i listy. Darmowy plan nie wymaga karty płatniczej; ma limit zapytań na minutę i na dzień.</string>
     <string name="ai_openrouter_what">Jedno konto do wielu modeli AI różnych firm. Rozpisuje notatkę na osobne zadania i listy. Darmowe modele mają w nazwie „:free” - bez doładowania konta ok. 50 zapytań dziennie.</string>
-    <string name="ai_anthropic_what">Modele AI Claude od firmy Anthropic. Rozpisują notatkę na osobne zadania i listy i dobrze rozumieją polski. Płatne za zużycie - konto trzeba doładować; jedna notatka to orientacyjnie kilka groszy (11.2026).</string>
+    <string name="ai_anthropic_what">Modele AI Claude od firmy Anthropic. Rozpisują notatkę na osobne zadania i listy i dobrze rozumieją polski. Płatne za zużycie - konto trzeba doładować; z Sonnet 5.5 orientacyjnie 2-3 gr za minutę nagrania (11.2026).</string>
     <string name="ai_openai_what">Modele AI GPT od OpenAI. Rozpisują notatkę na osobne zadania i listy. Płatne za zużycie - konto trzeba doładować.</string>
     <string name="ai_gemini_what">Model AI od Google. Rozpisuje notatkę na osobne zadania i listy i poprawia przekręcone słowa. Darmowy plan Google dostaje tylko część kont i projektów - nowe projekty zwykle działają dopiero po podpięciu płatności, dlatego Gemini jest tu płatny i ostatni na liście. Tylko dla osób pełnoletnich (18+).</string>
-    <string name="ai_groq_privacy">Do Groq (USA) trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. Według umowy Groq nie może używać go do trenowania modeli. Domyślnie nie przechowuje zapytań; przy awariach może trzymać logi do 30 dni - można to wyłączyć w panelu Groq (Data Controls, Zero Data Retention).</string>
+    <string name="ai_groq_privacy">Do Groq (USA) trafia tylko tekst notatki - bez danych o Tobie; nagranie tylko wtedy, gdy wybierzesz Groq dla Whisper. Według umowy Groq nie może używać go do trenowania modeli. Domyślnie nie przechowuje zapytań; przy awariach może trzymać logi do 30 dni - można to wyłączyć w panelu Groq (Data Controls, Zero Data Retention).</string>
     <string name="ai_openrouter_privacy">Do OpenRouter (USA) trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. OpenRouter sam nie zapisuje zapytań, jeśli nie włączysz tego na koncie, ale przekazuje je firmie, która uruchamia model - przy darmowych modelach część z nich może używać tekstu do trenowania. W ustawieniach prywatności OpenRouter można wyłączyć takie modele; nie dyktuj tam danych wrażliwych (stan 11.2026).</string>
     <string name="ai_anthropic_privacy">Do Anthropic (USA) trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. Według warunków dla firm Anthropic nie trenuje modeli na danych z API, a zapytania kasuje automatycznie w ciągu 30 dni - dłużej tylko te oznaczone jako naruszenie zasad (stan 11.2026).</string>
-    <string name="ai_openai_privacy">Do OpenAI (USA) trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. Dane z API nie służą do trenowania modeli, jeśli sam się na to nie zgodzisz; OpenAI trzyma je do 30 dni do wykrywania nadużyć (stan 11.2026).</string>
+    <string name="ai_openai_privacy">Do OpenAI (USA) trafia tylko tekst notatki - bez danych o Tobie; nagranie tylko wtedy, gdy wybierzesz OpenAI dla Whisper. Dane z API nie służą do trenowania modeli, jeśli sam się na to nie zgodzisz; OpenAI trzyma je do 30 dni do wykrywania nadużyć (stan 11.2026).</string>
     <string name="ai_gemini_privacy">Do Google trafia tylko tekst notatki - bez nagrania i bez danych o Tobie. Na płatnym planie Google nie używa go do ulepszania swoich produktów, a przechowuje przez ograniczony czas tylko do wykrywania nadużyć. Na darmowym planie (jeśli Twój projekt go ma) poza EOG, Szwajcarią i Wielką Brytanią Google może używać tekstu i dawać go do przeczytania ludziom - wtedy nie dyktuj danych wrażliwych (stan 11.2026).</string>
     <string name="ai_how_key">Jak zdobyć klucz</string>
     <string name="ai_get_key">Załóż klucz</string>
@@ -159,7 +177,7 @@
     <string name="ai_how_groq_2">W „API Keys” dotknij „Create API Key”, nadaj nazwę i skopiuj klucz - Groq pokazuje go tylko raz.</string>
     <string name="ai_how_groq_3">Wklej klucz poniżej i dotknij „Sprawdź połączenie”. Darmowy plan nie wymaga karty.</string>
     <string name="ai_how_openrouter_1">Dotknij „Załóż klucz” - otworzy się OpenRouter. Załóż konto.</string>
-    <string name="ai_how_openrouter_2">W „Keys” dotknij „Create Key” i skopiuj klucz - pokazuje się tylko raz.</string>
+    <string name="ai_how_openrouter_2">W „Keys” dotknij „Create Key”. W „Credit limit” wybierz „Custom amount” i wpisz 1 - to tylko górna granica wydatków klucza; bez doładowania konta nic nie zapłacisz, a modele „:free” kosztują 0. Skopiuj klucz - pokazuje się tylko raz.</string>
     <string name="ai_how_openrouter_3">Wybierz model z „:free” w nazwie - tylko takie są darmowe (bez doładowania ok. 50 zapytań dziennie). Wklej klucz poniżej i dotknij „Sprawdź połączenie”.</string>
     <string name="ai_how_anthropic_1">Dotknij „Załóż klucz” - otworzy się konsola Claude. Załóż konto.</string>
     <string name="ai_how_anthropic_2">W „Billing” doładuj konto - bez środków klucz nie działa.</string>
@@ -168,7 +186,7 @@
     <string name="ai_how_openai_2">W „Billing” doładuj konto - bez środków klucz nie działa.</string>
     <string name="ai_how_openai_3">W „API keys” dotknij „Create new secret key”, skopiuj klucz (pokazuje się tylko raz), wklej poniżej i dotknij „Sprawdź połączenie”.</string>
     <string name="ai_how_gemini_1">Dotknij „Załóż klucz” - otworzy się Google AI Studio. Zaloguj się kontem Google.</string>
-    <string name="ai_how_gemini_2">Na stronie aistudio.google.com/billing podepnij płatności do projektu - bez nich Gemini działa tylko w projektach z darmowym planem (w kolumnie „Billing Tier” przy projekcie; „Free tier unavailable” = tylko płatnie).</string>
+    <string name="ai_how_gemini_2">Na stronie aistudio.google.com/billing podepnij płatności do projektu - bez nich Gemini działa tylko w projektach z darmowym planem (w kolumnie „Billing Tier” przy projekcie; „Free tier unavailable” = tylko za opłatą).</string>
     <string name="ai_how_gemini_3">Dotknij „Create API key”, skopiuj klucz, wklej poniżej i dotknij „Sprawdź połączenie”.</string>
     <string name="ai_key">Klucz API</string>
     <string name="ai_show_key">Pokaż klucz</string>
@@ -199,47 +217,68 @@
     <string name="ai_test_ok">Działa - odpowiedział model %1$s.</string>
     <string name="ai_test_hint">Jedno małe zapytanie - liczy się do dziennego limitu.</string>
     <string name="ai_usage">Zapytania dziś: %1$d z %2$d, w ostatnich 30 dniach: %3$d.</string>
+    <string name="ai_topup">Doładowanie konta Claude (w $)</string>
+    <string name="ai_topup_hint">Kwota ostatniego doładowania konta Claude - w dolarach, bo tak liczy Anthropic. Wpisz ją zaraz po doładowaniu: Tapedo liczy wydatki od dnia zapisu.</string>
+    <string name="ai_topup_pln">Ok. %1$s zł (kurs ok. 4 zł za $, 11.2026). Wydatki liczone od %2$s - po kolejnym doładowaniu wpisz nową kwotę.</string>
+    <string name="ai_topup_wrong">Wpisz kwotę w dolarach, np. 5 albo 20,50 (od 0,01 do 10 000).</string>
+    <string name="ai_spent">Wydane od %1$s: ok. %2$s z %3$s, zostało ok. %4$s (ok. %5$s zł).</string>
+    <string name="ai_spent_periods">Na Claude dziś: %1$s, w tym miesiącu: %2$s.</string>
+    <string name="ai_spent_hint">Tapedo samo liczy to z tokenów i cennika Claude (stan 11.2026), więc to szacunek - dokładne saldo jest w konsoli Claude, w „Billing”.</string>
+    <string name="ai_low_funds">Z doładowania Claude zostało ok. %1$s z %2$s - mniej niż 10%%. Doładuj konto, zanim Claude przestanie odpowiadać.</string>
+    <string name="ai_low_funds_here">Po doładowaniu wpisz wyżej nową kwotę.</string>
+    <string name="ai_low_funds_where">Po doładowaniu wpisz nową kwotę w Ustawieniach, w zakładce „AI”, przy Claude.</string>
     <string name="ai_limit">Limit zapytań dziennie</string>
     <string name="ai_limit_hint">Po tylu zapytaniach do jednego dostawcy Tapedo czeka do jutra - darmowy limit nie zostanie przekroczony.</string>
     <string name="ai_limit_now">Dzienny limit wykorzystany: %1$s.</string>
     <string name="ai_limit_app">limit z ustawień</string>
     <string name="ai_limit_provider">limit dostawcy</string>
-    <string name="ai_limit_all">Wszyscy włączeni dostawcy czekają do jutra - notatki rozpisują reguły bez AI.</string>
+    <string name="ai_limit_all">Wszyscy włączeni dostawcy czekają do jutra - do tego czasu reguły bez AI rozpisują notatki.</string>
     <string name="ai_limit_next">Notatki idą do następnego dostawcy z listy.</string>
-    <string name="ai_privacy">Do AI trafia tylko tekst notatki. Nagranie, klucze, inne karteczki i dane o Tobie - nigdy.</string>
+    <string name="ai_privacy">Do AI, które rozpisuje karteczki, trafia tylko tekst notatki - nagranie, klucze, inne karteczki i dane o Tobie nigdy. Nagranie idzie tylko do Whisper (niżej), gdy go włączysz.</string>
     <string name="ai_problem_key">klucz nieprawidłowy - sprawdź, czy został skopiowany w całości, albo utwórz nowy.</string>
     <string name="ai_problem_api_off">interfejs wyłączony w projekcie dostawcy - włącz go w projekcie albo utwórz klucz w nowym projekcie (zobacz „Jak zdobyć klucz”).</string>
     <string name="ai_problem_no_free_tier">ten projekt Google nie ma darmowego planu - Gemini działa w nim tylko po podpięciu płatności (aistudio.google.com/billing), a nowy klucz w tym samym projekcie nie pomoże. Za darmo zostają Groq i OpenRouter.</string>
     <string name="ai_problem_verify">Google chce potwierdzenia projektu telefonem - otwórz Google AI Studio („Załóż klucz”) i zrób weryfikację albo włącz innego darmowego dostawcę.</string>
     <string name="ai_problem_denied">dostawca odmówił dostępu temu kontu albo projektowi - zajrzyj na jego stronę (konto, płatności, powiadomienia na e-mail) albo włącz innego dostawcę.</string>
     <string name="ai_problem_model">model nie istnieje albo jest niedostępny dla tego konta - wybierz inny darmowy model.</string>
+    <string name="ai_problem_busy">model jest chwilowo zajęty u dostawcy (z darmowego modelu korzysta naraz wiele osób albo minął limit na minutę) - to nie dzienny limit. Tapedo zapyta go znowu przy następnej notatce; możesz też wybrać inny darmowy model - przy OpenRouterze „openrouter/free” sam wybiera wolny.</string>
     <string name="ai_problem_limit">limit u dostawcy wyczerpany - Tapedo zapyta znowu jutro albo od razu po zmianie modelu.</string>
     <string name="ai_problem_cap">dzienny limit z ustawień wykorzystany - Tapedo zapyta znowu jutro.</string>
     <string name="ai_problem_no_key">brakuje klucza.</string>
     <string name="ai_problem_key_unreadable">nie udało się odczytać zapisanego klucza - spróbuj jeszcze raz. Klucz nie zginął; jeśli to się powtarza, wklej go ponownie.</string>
-    <string name="ai_problem_offline">brak połączenia albo dostawca nie odpowiada.</string>
+    <string name="ai_problem_offline">brak połączenia albo dostawca nie odpowiada - sprawdź internet.</string>
     <string name="ai_problem_answer">odpowiedź przyszła pusta albo niepełna - spróbuj jeszcze raz albo wybierz inny model.</string>
-    <string name="ai_problem_other">dostawca zgłosił błąd.</string>
+    <string name="ai_problem_other">dostawca zgłosił błąd - spróbuj później albo włącz innego dostawcę.</string>
+    <string name="ai_problem_no_audio">telefon nie dał Tapedo nagrania - Whisper działa na Androidzie 13 i nowszym, gdy rozpoznawanie mowy w telefonie przyjmuje nagranie Tapedo.</string>
+    <string name="ai_problem_too_long">nagranie jest za długie dla Whisper (najwyżej ok. 12 minut w jednym nagraniu).</string>
     <string name="ai_problem_line">%1$s (%2$s): %3$s</string>
     <string name="ai_provider_answer">Odpowiedź dostawcy</string>
-    <string name="review_ai_rules">Karteczki rozpisały proste reguły zamiast AI:</string>
+    <string name="review_ai_rules">Proste reguły rozpisały karteczki zamiast AI:</string>
 
     <!-- Review window (after a recording) -->
     <string name="home_dismiss">Zamknij</string>
     <string name="record_state">nagrywanie, %1$s z %2$s</string>
     <string name="review_heard">Usłyszane</string>
     <string name="review_structuring">Rozpisuję na karteczki…</string>
+    <string name="review_retyping">Whisper przepisuje nagranie…</string>
+    <string name="review_whisper_failed">Whisper nie przepisał nagrania - został tekst z telefonu:</string>
     <plurals name="review_count">
         <item quantity="one">Wyszła %d karteczka</item>
         <item quantity="few">Wyszły %d karteczki</item>
         <item quantity="many">Wyszło %d karteczek</item>
         <item quantity="other">Wyszło %d karteczki</item>
     </plurals>
-    <string name="review_edit">Popraw</string>
     <string name="review_remove_card">Usuń tę karteczkę</string>
     <string name="review_save_failed">Nie udało się zapisać karteczek. Nic nie zginęło - spróbuj jeszcze raz.</string>
     <string name="review_save_retry">Spróbuj jeszcze raz</string>
-    <string name="review_saved">Już zapisane - możesz poprawić, nagrać dalej albo usunąć.</string>
+    <string name="review_saved">Już zapisane - dotknij karteczki, żeby ją zmienić. Możesz też nagrać dalej albo usunąć.</string>
+    <string name="review_refine">Dokładniej - Claude (ok. 2-3 gr)</string>
+    <string name="review_refine_hint">Te same słowa jeszcze raz do Claude Sonnet 5.5 - trafniej dzieli na karteczki i rozpoznaje rodzaje. Obecne karteczki zostają, dopóki nie wybierzesz nowych.</string>
+    <string name="review_refine_working">Claude układa karteczki…</string>
+    <string name="review_refine_failed">Claude nie ułożył karteczek - obecne zostają.</string>
+    <string name="review_refine_offer">Propozycja Claude</string>
+    <string name="review_refine_accept">Zamień na te</string>
+    <string name="review_refine_keep">Zostaw obecne</string>
     <string name="review_discard">Usuń</string>
     <string name="review_record_more">Nagraj dalej</string>
     <string name="review_more_failed">%s Karteczki są bez zmian.</string>
@@ -248,13 +287,16 @@
     <!-- Card stack -->
     <string name="stack_open_card">otwórz karteczkę</string>
     <string name="stack_empty_title">Pusta karteczka</string>
-    <string name="stack_failed">Nie da się teraz otworzyć notatek. Nic nie zostało usunięte - spróbuj ponownie.</string>
-    <string name="stack_retry">Spróbuj ponownie</string>
+    <string name="stack_failed">Nie da się teraz otworzyć karteczek. Nic nie zostało usunięte - spróbuj jeszcze raz.</string>
+    <string name="stack_retry">Spróbuj jeszcze raz</string>
     <string name="stack_action_failed">Nie udało się zapisać zmiany. Spróbuj jeszcze raz.</string>
     <string name="stack_deleted">Usunięto „%s”</string>
+    <string name="stack_moved">Karteczka jest teraz na przekładce „%s”.</string>
+    <string name="stack_moved_show">Pokaż</string>
+    <string name="home_record_into">Nagranie trafi do: %s</string>
     <string name="stack_undo">Cofnij</string>
+    <string name="strip_close">Zamknij komunikat</string>
     <string name="strip_delete_desc">Usuń „%s”</string>
-    <string name="tab_all">Wszystkie</string>
     <string name="tab_shopping">Zakupy</string>
     <string name="tab_checklist">Listy</string>
     <string name="tab_task">Zadania</string>
@@ -263,11 +305,17 @@
     <string name="tab_idea">Pomysły</string>
     <string name="tab_done">Zrobione</string>
     <string name="tab_empty">Na tej przekładce nie ma karteczek.</string>
+    <plurals name="tab_desc">
+        <item quantity="one">%1$s, %2$d karteczka</item>
+        <item quantity="few">%1$s, %2$d karteczki</item>
+        <item quantity="many">%1$s, %2$d karteczek</item>
+        <item quantity="other">%1$s, %2$d karteczki</item>
+    </plurals>
     <string name="search_hint">Szukaj w karteczkach</string>
     <string name="search_clear">Wyczyść szukanie</string>
     <string name="search_none">Nic nie pasuje do „%s” na tej przekładce.</string>
     <string name="strip_progress_desc">odhaczone %1$d z %2$d</string>
-    <string name="locked_notes_title">Starych notatek nie da się odczytać</string>
+    <string name="locked_notes_title">Starych karteczek nie da się odczytać</string>
     <string name="locked_notes_body">Android zgubił klucz, którym były zaszyfrowane (zdarza się po aktualizacji systemu albo zmianie blokady ekranu), więc Tapedo zaczęło od pustego stosu. Zaszyfrowanych plików nie usunęło - zostały w danych aplikacji, ale bez klucza nie odczyta ich nikt.</string>
     <string name="locked_notes_ok">Rozumiem</string>
 
@@ -320,7 +368,6 @@
     <string name="editor_delete">Usuń karteczkę</string>
 
     <!-- Preview (one saved card on the whole screen) -->
-    <string name="preview_title">Podgląd</string>
     <string name="preview_add_voice">Dopisz głosem</string>
     <string name="preview_add_stop">Zakończ dopisywanie</string>
     <string name="preview_add_hint_list">Powiedz, co dopisać do listy, np. „masło i jajka”.</string>

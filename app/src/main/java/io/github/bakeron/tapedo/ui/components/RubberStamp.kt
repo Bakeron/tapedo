@@ -27,7 +27,7 @@ fun RubberStamp(text: String, modifier: Modifier = Modifier, tilt: Float = -4f) 
         style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.6.sp),
         fontWeight = FontWeight.Bold,
         modifier = modifier
-            .rotate(tilt)
+            .rotate(TapedoTheme.tilt(tilt))
             .alpha(0.9f)
             .border(1.5.dp, ink, RoundedCornerShape(3.dp))
             .padding(horizontal = 7.dp, vertical = 2.dp),

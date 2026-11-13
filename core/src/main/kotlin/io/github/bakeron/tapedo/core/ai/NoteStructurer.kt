@@ -26,7 +26,17 @@ data class StructureResult(
     val notes: List<Note>,
     /** Every provider that could not write the cards, and why - also when the next one took over. */
     val problems: List<AiProblem> = emptyList(),
+    /** Claude answered and less than 10% of the top-up is left - said after the recording. */
+    val lowFunds: LowFunds? = null,
+    /** The provider that wrote the cards; null when the rules did. */
+    val by: AiProvider? = null,
 )
+
+/** The answer to "More exact": Claude's cards to offer, or why there are none (the old cards stay). */
+sealed interface Refined {
+    data class Cards(val notes: List<Note>, val lowFunds: LowFunds?) : Refined
+    data class Failed(val problem: AiProblem, val lowFunds: LowFunds? = null) : Refined
+}
 
 /**
  * AI or rules. AI is optional: with no provider on, no key, no internet or every limit used the app still
@@ -55,11 +65,11 @@ class NoteStructurer(
         nowMillis: Long,
     ): StructureResult {
         val problems = mutableListOf<AiProblem>()
-        val rules = { StructureResult(RuleBasedStructurer(settings.defaultPriority, listTitles).structure(transcript, todayEpochDay, nowMillis, chosenType), problems.toList()) }
+        val rules = { StructureResult(RuleBasedStructurer(AppSettings.NEW_CARD_PRIORITY, listTitles).structure(transcript, todayEpochDay, nowMillis, chosenType), problems.toList()) }
         val providers = AiProvider.entries.filter { it in settings.aiProviders }
         if (providers.isEmpty() || transcript.isBlank()) return rules()
 
-        val request = StructureRequest(transcript, todayEpochDay, nowMillis, settings.defaultPriority, chosenType)
+        val request = StructureRequest(transcript, todayEpochDay, nowMillis, AppSettings.NEW_CARD_PRIORITY, chosenType)
         for (provider in providers) {
             val model = settings.modelFor(provider)
             fun failed(problem: Problem, message: String = "") = problems.add(AiProblem(provider, model, problem, message))
@@ -76,8 +86,7 @@ class NoteStructurer(
             if (key == null) { failed(Problem.NO_KEY); continue }
 
             val answer = try {
-                pause(provider)
-                gateway.chat(provider, model, key).ask(AiContract.systemPrompt(request), AiContract.userMessage(request), json = true)
+                ask(provider, model, key, request, todayEpochDay)
             } catch (e: AiException) {
                 // A call that never reached the provider does not count.
                 if (e.problem != Problem.OFFLINE) usage.addCall(provider, todayEpochDay)
@@ -97,15 +106,100 @@ class NoteStructurer(
                 lastCall[provider] = timeSource.markNow()
             }
             usage.addCall(provider, todayEpochDay)
+            val low = if (provider == AiProvider.ANTHROPIC) claudeSpending(answer, model, settings, todayEpochDay) else null
             return try {
-                StructureResult(AiContract.parse(answer.text, request), problems.toList())
+                StructureResult(AiContract.parse(answer.text, request), problems.toList(), low, provider)
             } catch (e: AiException) {
                 // A broken answer: this note is written by the rules (asking again would cost another call).
                 failed(e.problem, e.providerMessage)
-                rules()
+                rules().copy(lowFunds = low)
             }
         }
         return rules()
+    }
+
+    /** A usable key is saved for [provider] - "More exact" is offered only with a Claude key. */
+    suspend fun hasKey(provider: AiProvider): Boolean = (readKey(provider) as? Key.Found)?.value != null
+
+    /**
+     * "More exact" after a recording that a free model or the rules wrote: the same words once more to
+     * Claude Sonnet (paid, about 2-3 grosze), whatever Claude model the settings name - a cheaper model
+     * would not be more exact. Asked even when Claude is off in the chain (the key is the consent); the
+     * daily limits still count. No rules here - on any failure the old cards simply stay.
+     */
+    suspend fun refine(
+        transcript: String,
+        settings: AppSettings,
+        chosenType: NoteType?,
+        todayEpochDay: Long,
+        nowMillis: Long,
+    ): Refined {
+        val provider = AiProvider.ANTHROPIC
+        val model = REFINE_MODEL
+        fun failed(problem: Problem, message: String = "", low: LowFunds? = null) =
+            Refined.Failed(AiProblem(provider, model, problem, message), low)
+
+        when (usage.usedUp(provider, todayEpochDay, settings.aiDailyLimit)) {
+            UsedUp.APP -> return failed(Problem.CAP)
+            UsedUp.PROVIDER -> return failed(Problem.LIMIT)
+            null -> Unit
+        }
+        val key = when (val k = readKey(provider)) {
+            Key.Unreadable -> return failed(Problem.KEY_UNREADABLE)
+            is Key.Found -> k.value ?: return failed(Problem.NO_KEY)
+        }
+        val request = StructureRequest(transcript, todayEpochDay, nowMillis, AppSettings.NEW_CARD_PRIORITY, chosenType)
+        val answer = try {
+            ask(provider, model, key, request, todayEpochDay)
+        } catch (e: AiException) {
+            if (e.problem != Problem.OFFLINE) usage.addCall(provider, todayEpochDay)
+            if (e.problem == Problem.LIMIT) usage.markLimit(provider, todayEpochDay)
+            return failed(e.problem, e.providerMessage)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return failed(Problem.OTHER)
+        } finally {
+            lastCall[provider] = timeSource.markNow()
+        }
+        usage.addCall(provider, todayEpochDay)
+        val low = claudeSpending(answer, model, settings, todayEpochDay)
+        return try {
+            Refined.Cards(AiContract.parse(answer.text, request), low)
+        } catch (e: AiException) {
+            failed(e.problem, e.providerMessage, low)
+        }
+    }
+
+    /** Claude's answer is paid: its cost is counted, and the top-up checked. A counter failure never costs the note. */
+    private suspend fun claudeSpending(answer: AiAnswer, model: String, settings: AppSettings, today: Long): LowFunds? = try {
+        answer.tokens?.let { usage.recordClaude(today, answer.model ?: model, it) }
+        lowFunds(settings.claudeTopUpUsd, usage.claudeSpent(today, settings.claudeTopUpDay).sinceTopUp)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * One question to the provider. A limit per minute that the provider says ends in a few seconds
+     * ("try again in 2.5s") is waited out once - the person is looking at the screen, so a longer wait
+     * goes to the next provider instead.
+     */
+    private suspend fun ask(provider: AiProvider, model: String, key: String, request: StructureRequest, today: Long): AiAnswer {
+        val chat = gateway.chat(provider, model, key)
+        val system = AiContract.systemPrompt(request)
+        val user = AiContract.userMessage(request)
+        pause(provider)
+        try {
+            return chat.ask(system, user, json = true)
+        } catch (e: AiException) {
+            val wait = ProblemReader.retryAfterMillis(e.providerMessage)
+            if (e.problem != Problem.BUSY || wait == null || wait > SHORT_WAIT_MILLIS) throw e
+            usage.addCall(provider, today)
+            delay(wait)
+        }
+        return chat.ask(system, user, json = true)
     }
 
     /** The provider's pause between two calls, so free per-minute limits are not hit. */
@@ -126,6 +220,14 @@ class NoteStructurer(
     } catch (e: Exception) {
         // Not "no key": the saved key is fine, so the user should simply try again.
         Key.Unreadable
+    }
+
+    companion object {
+        /** Longest wait for a limit per minute before the next provider is asked instead. */
+        private const val SHORT_WAIT_MILLIS = 5_000L
+
+        /** "More exact" always asks Sonnet 5.5 - the cost shown on the button is worked out for it. */
+        val REFINE_MODEL = AiProvider.ANTHROPIC.defaultModel
     }
 }
 
@@ -158,6 +260,7 @@ class AiConnection(
         return try {
             val answer = gateway.chat(provider, model, key).ask("Answer with the single word OK.", "Are you there?", json = false)
             usage.addCall(provider, today)
+            if (provider == AiProvider.ANTHROPIC) answer.tokens?.let { usage.recordClaude(today, answer.model ?: model, it) }
             usage.clearLimit(provider, today)
             Check.Ok(answer.model?.let { ProblemReader.oneLine(it, 120) }?.ifEmpty { null } ?: model)
         } catch (e: AiException) {

@@ -76,7 +76,7 @@ class SettingsViewModelTest {
     }
 
     private object NoSpeech : SpeechInput {
-        override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long) = emptyFlow<SpeechEvent>()
+        override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long, keepAudio: Boolean, pauseMillis: Long?) = emptyFlow<SpeechEvent>()
         override fun stop() = Unit
         override suspend fun listeningMode() = ListeningMode.CONTINUOUS
     }

@@ -1,6 +1,5 @@
 package io.github.bakeron.tapedo.ui.cards
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -9,22 +8,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,18 +34,16 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import io.github.bakeron.tapedo.R
@@ -64,79 +54,44 @@ import io.github.bakeron.tapedo.core.model.Priority
 import io.github.bakeron.tapedo.core.model.ShoppingGroup
 import io.github.bakeron.tapedo.ui.components.LabelTape
 import io.github.bakeron.tapedo.ui.components.PaperButton
-import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
+import io.github.bakeron.tapedo.ui.components.RubberStamp
 import io.github.bakeron.tapedo.ui.components.SlideSelector
 import io.github.bakeron.tapedo.ui.home.TypeTapeBar
+import io.github.bakeron.tapedo.ui.home.tidy
 import io.github.bakeron.tapedo.ui.settings.priorityName
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 import java.time.LocalDate
 
 /**
- * Full-screen editor for one card - the card itself, enlarged, with its lines to write on.
- * Back and "Done" both keep the changes (notes are kept by default); "Delete" offers undo on the stack.
+ * The card in the card view, written on directly (author 13.11.2026: reading in one place and writing in
+ * another was chaos): its kind on top ("Zadanie 3"), the title, text or items to tick, add and remove,
+ * place, date, time and "done", on the paper of its kind with the priority tape and the AI stamp.
+ * Every change goes to [onChange] at once.
  */
 @Composable
-fun NoteEditor(
-    note: Note,
-    saveFailed: Boolean,
-    onChange: (Note) -> Unit,
-    onDone: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val colors = TapedoTheme.colors
+fun EditableCard(note: Note, number: Int?, onChange: (Note) -> Unit, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val locale = appLocale()
     val today = remember { LocalDate.now().toEpochDay() }
-    BackHandler(onBack = onDone)
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(scheme.background)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .imePadding(),
-    ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDone) {
-                Icon(painterResource(R.drawable.ic_back), contentDescription = stringResource(R.string.back))
-            }
-            Text(
-                stringResource(R.string.editor_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f).semantics { heading() },
-            )
-            PaperButton(
-                stringResource(R.string.editor_done),
-                onClick = onDone,
-                style = PaperButtonStyle.FILLED,
-                modifier = Modifier.padding(end = 12.dp),
-            )
-        }
-        if (saveFailed) {
-            Text(
-                stringResource(R.string.stack_action_failed),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.record,
-                modifier = Modifier
-                    .padding(horizontal = 20.dp, vertical = 4.dp)
-                    .semantics { liveRegion = LiveRegionMode.Assertive },
-            )
-        }
-
-        Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            // The card being edited, on the paper of its kind - changing the type below changes the paper at once.
+    val type = note.type
+    // Centred: the receipt and the idea slip are narrower than the screen.
+    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.fillMaxWidth(paperWidth(type))) {
+            // Changing the type below changes the paper at once.
             CardPaper(
                 note,
-                Modifier.fillMaxWidth(paperWidth(note.type)).align(Alignment.CenterHorizontally),
+                Modifier.padding(top = 6.dp, end = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                // The kind in small capitals, numbered like on the stack; date and time have their own lines below.
+                val kind = if (number != null && type != NoteType.EVENT) numberedName(type, number) else stringResource(typeNameRes(type))
+                Text(
+                    kind.uppercase(locale),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 52.dp).semantics { heading() },
+                )
                 PaperField(
                     label = stringResource(R.string.editor_field_title),
                     value = note.title,
@@ -158,7 +113,7 @@ fun NoteEditor(
                     )
                 }
                 if (note.type.hasItems) {
-                    ItemsEditor(note.items, note.type == NoteType.SHOPPING) { onChange(note.copy(items = it)) }
+                    ItemsEditor(note) { onChange(note.copy(items = it)) }
                 }
                 if (note.type == NoteType.EVENT) {
                     PaperField(
@@ -186,44 +141,62 @@ fun NoteEditor(
                 if (note.type == NoteType.TASK) {
                     DoneToggle(note.done) { onChange(note.copy(done = it)) }
                 }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                LabelTape(stringResource(R.string.editor_field_type))
-                TypeTapeBar(
-                    selected = note.type,
-                    onSelect = { type -> if (type != null) onChange(note.changeType(type)) },
-                    includeAuto = false,
-                )
-            }
-
-            if (note.type != NoteType.IDEA) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    LabelTape(stringResource(R.string.editor_field_priority))
-                    SlideSelector(
-                        options = Priority.entries,
-                        selected = note.priority,
-                        label = { priorityName(it) },
-                        onSelect = { onChange(note.copy(priority = it)) },
+                // Pressed on the bottom corner, like on the card in the box.
+                if (note.byAi) {
+                    RubberStamp(
+                        stringResource(R.string.card_ai_stamp),
+                        Modifier
+                            .align(Alignment.End)
+                            .semantics { contentDescription = context.getString(R.string.card_ai_desc) },
                     )
                 }
             }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PaperButton(
-                    stringResource(R.string.card_share),
-                    onClick = { shareNote(context, note, today, locale) },
-                    modifier = Modifier.weight(1f),
-                )
-                PaperButton(
-                    stringResource(R.string.editor_delete),
-                    onClick = onDelete,
-                    style = PaperButtonStyle.DANGER,
-                    modifier = Modifier.weight(1f),
+            // Ideas have no priority, so no tape.
+            if (type != NoteType.IDEA) {
+                val priorityDesc = stringResource(R.string.card_priority_desc, priorityName(note.priority))
+                PriorityTape(
+                    note.priority,
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 4.dp, y = 4.dp)
+                        .semantics { contentDescription = priorityDesc },
                 )
             }
-            Spacer(Modifier.height(16.dp))
         }
+    }
+}
+
+/** Under the card: its type, its priority (not for an idea) and "Share". */
+@Composable
+fun CardOptions(note: Note, onChange: (Note) -> Unit, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val locale = appLocale()
+    val today = remember { LocalDate.now().toEpochDay() }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LabelTape(stringResource(R.string.editor_field_type))
+            TypeTapeBar(
+                selected = note.type,
+                onSelect = { type -> if (type != null) onChange(note.changeType(type)) },
+                includeAuto = false,
+            )
+        }
+        if (note.type != NoteType.IDEA) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LabelTape(stringResource(R.string.editor_field_priority))
+                SlideSelector(
+                    options = Priority.entries,
+                    selected = note.priority,
+                    label = { priorityName(it) },
+                    onSelect = { onChange(note.copy(priority = it)) },
+                )
+            }
+        }
+        PaperButton(
+            stringResource(R.string.card_share),
+            onClick = { shareNote(context, note.tidy(), today, locale) },
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -307,10 +280,14 @@ private fun PaperField(
 /**
  * The list items as ruled lines: tick box, text and x sit on one line, with the rule under the whole row -
  * not under the text field alone, which centred the rule on the tick box and left the text floating above it.
+ * A shopping list keeps its shop sections ("NABIAŁ"), printed like on a till receipt.
  */
 @Composable
-private fun ItemsEditor(items: List<ChecklistItem>, shopping: Boolean, onChange: (List<ChecklistItem>) -> Unit) {
+private fun ItemsEditor(note: Note, onChange: (List<ChecklistItem>) -> Unit) {
+    val items = note.items
+    val shopping = note.type == NoteType.SHOPPING
     val scheme = MaterialTheme.colorScheme
+    val locale = appLocale()
     // "Add item" puts the cursor on the new line, so typing can start at once.
     var focusIndex by remember { mutableStateOf<Int?>(null) }
     val newItem = remember { FocusRequester() }
@@ -322,57 +299,69 @@ private fun ItemsEditor(items: List<ChecklistItem>, shopping: Boolean, onChange:
     }
     Column {
         Text(stringResource(R.string.editor_field_items), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
-        items.forEachIndexed { i, item ->
-            val itemLabel = stringResource(R.string.editor_item_label, i + 1)
-            val rule = scheme.outlineVariant
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 44.dp)
-                    .drawBehind {
-                        val y = size.height - 0.5.dp.toPx()
-                        drawLine(rule, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
-                    },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val state = stringResource(if (item.checked) R.string.card_item_checked else R.string.card_item_unchecked)
-                Box(
-                    Modifier
-                        .size(44.dp)
-                        .toggleable(
-                            value = item.checked,
-                            role = Role.Checkbox,
-                            onValueChange = { checked -> onChange(items.mapIndexed { j, it -> if (j == i) it.copy(checked = checked) else it }) },
-                        )
-                        .semantics {
-                            contentDescription = itemLabel
-                            stateDescription = state
-                        },
-                    contentAlignment = Alignment.Center,
-                ) { PencilBox(item.checked, scheme.onSurface) }
-                BasicTextField(
-                    value = item.text,
-                    onValueChange = { text -> onChange(items.mapIndexed { j, it -> if (j == i) it.copy(text = text) else it }) },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
-                    singleLine = true,
-                    cursorBrush = SolidColor(scheme.primary),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(if (i == items.lastIndex) Modifier.focusRequester(newItem) else Modifier)
-                        .semantics { contentDescription = itemLabel },
+        for ((group, inGroup) in groupedItems(note)) {
+            if (group != null) {
+                Spacer(Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).receiptRule(scheme.outline))
+                Text(
+                    groupName(group).uppercase(locale),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp).semantics { heading() },
                 )
-                val removeLabel = stringResource(R.string.editor_remove_item, i + 1)
-                IconButton(
-                    onClick = { onChange(items.filterIndexed { j, _ -> j != i }) },
-                    modifier = Modifier.size(44.dp).semantics { contentDescription = removeLabel },
+            }
+            for ((i, item) in inGroup) {
+                val itemLabel = stringResource(R.string.editor_item_label, i + 1)
+                val rule = scheme.outlineVariant
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 44.dp)
+                        .drawBehind {
+                            val y = size.height - 0.5.dp.toPx()
+                            drawLine(rule, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        "×",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = scheme.onSurfaceVariant,
-                        modifier = Modifier.clearAndSetSemantics { },
+                    val state = stringResource(if (item.checked) R.string.card_item_checked else R.string.card_item_unchecked)
+                    Box(
+                        Modifier
+                            .size(44.dp)
+                            .toggleable(
+                                value = item.checked,
+                                role = Role.Checkbox,
+                                onValueChange = { checked -> onChange(items.mapIndexed { j, it -> if (j == i) it.copy(checked = checked) else it }) },
+                            )
+                            .semantics {
+                                contentDescription = itemLabel
+                                stateDescription = state
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) { PencilBox(item.checked, scheme.onSurface) }
+                    BasicTextField(
+                        value = item.text,
+                        onValueChange = { text -> onChange(items.mapIndexed { j, it -> if (j == i) it.copy(text = text) else it }) },
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
+                        singleLine = true,
+                        cursorBrush = SolidColor(scheme.primary),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                        modifier = Modifier
+                            .weight(1f)
+                            .then(if (i == items.lastIndex) Modifier.focusRequester(newItem) else Modifier)
+                            .semantics { contentDescription = itemLabel },
                     )
+                    val removeLabel = stringResource(R.string.editor_remove_item, i + 1)
+                    IconButton(
+                        onClick = { onChange(items.filterIndexed { j, _ -> j != i }) },
+                        modifier = Modifier.size(44.dp).semantics { contentDescription = removeLabel },
+                    ) {
+                        Text(
+                            "×",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = scheme.onSurfaceVariant,
+                            modifier = Modifier.clearAndSetSemantics { },
+                        )
+                    }
                 }
             }
         }

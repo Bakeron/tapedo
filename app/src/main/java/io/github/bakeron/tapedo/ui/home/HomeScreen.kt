@@ -7,6 +7,18 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
@@ -29,6 +41,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
@@ -50,11 +63,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -82,10 +95,14 @@ import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.report.Problem
 import io.github.bakeron.tapedo.core.rules.ListTitles
+import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.speech.SpeechError
 import io.github.bakeron.tapedo.report.ReportMail
-import io.github.bakeron.tapedo.ui.cards.NoteEditor
+import io.github.bakeron.tapedo.ui.cards.kindNumbers
+import io.github.bakeron.tapedo.ui.cards.TypeMark
+import io.github.bakeron.tapedo.ui.components.Fold
+import io.github.bakeron.tapedo.ui.components.FoldValue
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
@@ -101,9 +118,9 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
     val stack by viewModel.stack.collectAsStateWithLifecycle()
     val editing by viewModel.editing.collectAsStateWithLifecycle()
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
+    val moved by viewModel.moved.collectAsStateWithLifecycle()
     val actionFailed by viewModel.actionFailed.collectAsStateWithLifecycle()
     val lockedNotes by viewModel.lockedNotes.collectAsStateWithLifecycle()
-    val preview by viewModel.preview.collectAsStateWithLifecycle()
     val appending by viewModel.appending.collectAsStateWithLifecycle()
     val ownAudioRefused by viewModel.ownAudioRefused.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -116,8 +133,28 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
         checklist = stringResource(R.string.default_checklist_title),
     )
     SideEffect { viewModel.listTitles = listTitles }
+    // A screen reader user may have asked Android for more time to act on messages (Accessibility settings).
+    val stripMs = remember(context) {
+        val a11y = context.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && a11y != null) {
+            a11y.getRecommendedTimeoutMillis(
+                UNDO_MS.toInt(),
+                android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT or
+                    android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS,
+            ).toLong()
+        } else {
+            UNDO_MS
+        }
+    }
+    SideEffect { viewModel.stripMs = stripMs }
     // Screen off or another app: write what is open now - the phone may close Tapedo in the background.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onBackground() }
+
+    // The open divider is the kind of the next recording (kept in the settings); "Done" only shows the done
+    // cards - a recording started there goes to the last kind, which opens again.
+    var onDone by rememberSaveable { mutableStateOf(false) }
+    val kind = settings?.noteTypeChoice ?: NoteType.NOTE
+    val tab = if (onDone) StackTab.DONE else StackTab.of(kind)
 
     var debugUsed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(debugTranscript, settings != null) {
@@ -128,54 +165,72 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
         }
     }
 
-    val edit = editing
-    val shown = preview
+    // The card view, the window after recording and the box fade into one another (author 11.11.2026:
+    // nothing in the app may just blink). The screen fading out keeps what it showed until it is gone.
+    val screen = when {
+        editing != null -> HomeShown.CARD
+        recording is RecordingState.Structuring || recording is RecordingState.Review -> HomeShown.REVIEW
+        else -> HomeShown.BOX
+    }
+    val last = remember { arrayOfNulls<Any>(2) } // [0] the open card, [1] review state
+    editing?.let { last[0] = it }
+    if (screen == HomeShown.REVIEW) last[1] = recording
+    val stillNow = TapedoTheme.reduceMotion
+    AnimatedContent(
+        targetState = screen,
+        transitionSpec = { fadeSwap(stillNow) },
+        label = "home screens",
+    ) { target ->
+    val edit = editing ?: last[0] as Editing?
+    val reviewState = if (screen == HomeShown.REVIEW) recording else last[1] as RecordingState? ?: recording
     when {
-        edit != null -> NoteEditor(
+        target == HomeShown.CARD && edit != null -> CardScreen(
             note = edit.note,
-            saveFailed = actionFailed,
+            number = (stack as? StackState.Loaded)?.notes?.let { kindNumbers(it)[edit.note.id] },
+            // Words being added belong to this card; the review window put aside meanwhile is not shown here.
+            recording = if (recording is RecordingState.Review) RecordingState.Idle else recording,
+            appending = appending,
+            actionFailed = actionFailed,
+            askOnline = settings?.onlineSpeech == OnlineSpeech.ASK,
             onChange = viewModel::changeEditing,
-            onDone = viewModel::finishEditing,
+            onBack = viewModel::finishEditing,
             onDelete = viewModel::deleteEditing,
+            onStartAppend = { viewModel.startRecording(appendTo = edit.note.id) },
+            onStopAppend = viewModel::stopRecording,
+            onMicDenied = viewModel::micDenied,
+            onOnlineOnce = { viewModel.startRecording(allowOnlineOnce = true, appendTo = edit.note.id) },
+            onOnlineAlways = { viewModel.allowOnlineAlways(appendTo = edit.note.id) },
+            onDismissError = viewModel::dismissError,
+            onDismissActionFailed = viewModel::dismissActionFailed,
+            onReport = report,
         )
 
-        recording is RecordingState.Structuring || recording is RecordingState.Review -> ReviewPanel(
-            state = recording,
+        target == HomeShown.REVIEW -> ReviewPanel(
+            state = reviewState,
             onSave = viewModel::saveReview,
             onDiscard = viewModel::discardReview,
             onEdit = viewModel::editDraft,
             onRemove = viewModel::removeCard,
             onRecordMore = { viewModel.recordMore() },
             onRecordMoreDenied = viewModel::recordMoreDenied,
-        )
-
-        shown != null -> PreviewScreen(
-            note = shown,
-            recording = recording,
-            appending = appending,
-            actionFailed = actionFailed,
-            askOnline = settings?.onlineSpeech == OnlineSpeech.ASK,
-            onBack = viewModel::closePreview,
-            onEdit = { viewModel.editSaved(shown) },
-            onToggleItem = { i -> viewModel.toggleItem(shown, i) },
-            onToggleDone = { viewModel.toggleDone(shown) },
-            onDelete = { viewModel.deleteFromPreview(shown) },
-            onStartAppend = { viewModel.startRecording(appendTo = shown.id) },
-            onStopAppend = viewModel::stopRecording,
-            onMicDenied = viewModel::micDenied,
-            onOnlineOnce = { viewModel.startRecording(allowOnlineOnce = true, appendTo = shown.id) },
-            onOnlineAlways = { viewModel.allowOnlineAlways(appendTo = shown.id) },
-            onDismissError = viewModel::dismissError,
-            onDismissActionFailed = viewModel::dismissActionFailed,
-            onReport = report,
+            onRefine = viewModel::refine,
+            onAcceptRefined = viewModel::acceptRefined,
+            onKeepCards = viewModel::keepCards,
         )
 
         else -> HomeScreen(
-            typeChoice = settings?.noteTypeChoice,
+            tab = tab,
             recording = recording,
             stack = stack,
-            onTypeChoice = viewModel::chooseType,
-            onStartRecording = viewModel::startRecording,
+            onSelectTab = { t ->
+                onDone = t == StackTab.DONE
+                t.type?.let(viewModel::chooseType)
+            },
+            kind = kind,
+            onStartRecording = {
+                onDone = false
+                viewModel.startRecording()
+            },
             onStopRecording = viewModel::stopRecording,
             onMicDenied = viewModel::micDenied,
             onOpenSettings = onOpenSettings,
@@ -183,12 +238,21 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onOnlineOnce = { viewModel.startRecording(allowOnlineOnce = true) },
             onOnlineAlways = viewModel::allowOnlineAlways,
             onDismissError = viewModel::dismissError,
-            onOpenCard = viewModel::openPreview,
+            onOpenCard = viewModel::openCard,
             onToggleDone = viewModel::toggleDone,
             onDeleteCard = viewModel::delete,
             onRetryStack = viewModel::retryStack,
             deleted = deleted,
             onUndoDelete = viewModel::undoDelete,
+            onDismissDeleted = viewModel::dismissDeleted,
+            moved = moved,
+            onShowMoved = { t ->
+                onDone = t == StackTab.DONE
+                t.type?.let(viewModel::chooseType)
+                viewModel.dismissMoved()
+            },
+            onDismissMoved = viewModel::dismissMoved,
+            stripMs = stripMs,
             actionFailed = actionFailed,
             onDismissActionFailed = viewModel::dismissActionFailed,
             lockedNotes = lockedNotes,
@@ -196,21 +260,28 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             ownAudioRefused = ownAudioRefused,
             onDismissOwnAudioRefused = viewModel::dismissOwnAudioRefused,
             onReport = report,
+            pauseSeconds = settings?.pauseSeconds ?: AppSettings().pauseSeconds,
         )
+    }
     }
 }
 
+private enum class HomeShown { BOX, REVIEW, CARD }
+
 /**
- * Home: the card stack (or the live recording) in the middle; type bar and record key where the thumb is -
- * at the bottom in portrait, in a column on the right in landscape, so the middle never shrinks to nothing.
+ * Home: the card box (or the live recording) in the middle - its open divider is where the next recording
+ * goes; the record key where the thumb is - at the bottom in portrait, in a column on the right in landscape,
+ * so the middle never shrinks to nothing.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
-    typeChoice: NoteType?,
+    tab: StackTab,
     recording: RecordingState,
     stack: StackState,
-    onTypeChoice: (NoteType?) -> Unit,
+    onSelectTab: (StackTab) -> Unit,
+    /** The kind the next recording becomes - also while "Done" is open. */
+    kind: NoteType,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
     onMicDenied: () -> Unit,
@@ -226,6 +297,12 @@ fun HomeScreen(
     onRetryStack: () -> Unit = {},
     deleted: Note? = null,
     onUndoDelete: () -> Unit = {},
+    onDismissDeleted: () -> Unit = {},
+    moved: Moved? = null,
+    onShowMoved: (StackTab) -> Unit = {},
+    onDismissMoved: () -> Unit = {},
+    /** How long the bottom strip stays, for its time line. */
+    stripMs: Long = UNDO_MS,
     actionFailed: Boolean = false,
     onDismissActionFailed: () -> Unit = {},
     lockedNotes: Boolean = false,
@@ -235,6 +312,8 @@ fun HomeScreen(
     onDismissOwnAudioRefused: () -> Unit = {},
     /** Opens the user's mail app with an error report for the app's author; null = no report button. */
     onReport: ((Problem) -> Unit)? = null,
+    /** Seconds of silence that start a new list item (Settings); 0 = never. */
+    pauseSeconds: Int = 2,
 ) {
     val context = LocalContext.current
     val isRecording = recording is RecordingState.Active
@@ -245,6 +324,10 @@ fun HomeScreen(
         view.keepScreenOn = isRecording
         onDispose { view.keepScreenOn = false }
     }
+
+    // "Back" never closes the app mid-recording (author 11.11.2026): during "3, 2, 1" it cancels (nothing is
+    // recorded yet), afterwards it works like "Stop" - the card is made from what was said.
+    BackHandler(enabled = isRecording, onBack = onStopRecording)
 
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) onStartRecording() else onMicDenied()
@@ -259,15 +342,35 @@ fun HomeScreen(
     }
 
     val middle = @Composable { modifier: Modifier ->
-        Box(modifier) {
-            if (recording is RecordingState.Active && recording.countdown > 0) {
+        // The box, the countdown and the live recording fade into one another - nothing just blinks in.
+        val mode = when {
+            recording is RecordingState.Active && recording.countdown > 0 -> Middle.COUNTDOWN
+            recording is RecordingState.Active -> Middle.LISTENING
+            else -> Middle.STACK
+        }
+        // The last digit stays on the dial while it fades out.
+        val lastDigit = remember { intArrayOf(3) }
+        (recording as? RecordingState.Active)?.countdown?.takeIf { it > 0 }?.let { lastDigit[0] = it }
+        val stillNow = TapedoTheme.reduceMotion
+        AnimatedContent(
+            targetState = mode,
+            modifier = modifier,
+            transitionSpec = { fadeSwap(stillNow) },
+            label = "home middle",
+        ) { shownMode ->
+          Box(Modifier.fillMaxSize()) {
+            if (shownMode == Middle.COUNTDOWN) {
                 // Nothing else in the middle - the digit stays in one place, the eye has nothing else to read.
-                CountdownDial(recording.countdown, Modifier.align(Alignment.Center))
-            } else if (recording is RecordingState.Active) {
-                ListeningPanel(recording, Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp))
+                CountdownDial(lastDigit[0], onCancel = onStopRecording, modifier = Modifier.align(Alignment.Center))
+            } else if (shownMode == Middle.LISTENING) {
+                (recording as? RecordingState.Active)?.let {
+                    ListeningPanel(it, Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp))
+                }
             } else {
                 CardStack(
                     stack = stack,
+                    tab = tab,
+                    onSelectTab = onSelectTab,
                     onOpen = onOpenCard,
                     onToggleDone = onToggleDone,
                     onRetry = onRetryStack,
@@ -275,24 +378,35 @@ fun HomeScreen(
                     onDelete = onDeleteCard,
                     top = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (recording is RecordingState.Failed) {
+                            FoldValue(recording as? RecordingState.Failed) { failed ->
                                 ErrorNote(
-                                    recording.error, askOnline, onOnlineOnce, onOnlineAlways, onDismissError,
-                                    code = recording.code, onReport = onReport,
+                                    failed.error, askOnline, onOnlineOnce, onOnlineAlways, onDismissError,
+                                    code = failed.code, onReport = onReport,
                                 )
                             }
-                            ownAudioRefused?.let { OwnAudioRefusedNote(it, onReport, onDismissOwnAudioRefused) }
-                            if (lockedNotes) LockedNotesNote(onDismissLockedNotes)
-                            if (actionFailed) ActionFailedNote(onDismissActionFailed)
+                            FoldValue(ownAudioRefused) { OwnAudioRefusedNote(it, onReport, onDismissOwnAudioRefused) }
+                            Fold(lockedNotes) { LockedNotesNote(onDismissLockedNotes) }
+                            Fold(actionFailed) { ActionFailedNote(onDismissActionFailed) }
                         }
                     },
                 )
-                deleted?.let { UndoBar(it, onUndoDelete, Modifier.align(Alignment.BottomCenter)) }
+                BottomStrip(
+                    deleted = deleted,
+                    moved = moved,
+                    tab = tab,
+                    durationMs = stripMs,
+                    onUndo = onUndoDelete,
+                    onDismissDeleted = onDismissDeleted,
+                    onShowMoved = onShowMoved,
+                    onDismissMoved = onDismissMoved,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
+          }
         }
     }
     val controls = @Composable { scope: ColumnScope ->
-        with(scope) { RecordControls(typeChoice, recording, onTypeChoice, onRecordKey) }
+        with(scope) { RecordControls(recording, kind, pauseSeconds, onRecordKey) }
     }
 
     BoxWithConstraints(
@@ -334,45 +448,48 @@ fun HomeScreen(
     }
 }
 
-/** Type question, type tapes, the hint and the record key with its tape counter. */
+/** The pause rule and the record key with its tape counter. */
 @Composable
 private fun ColumnScope.RecordControls(
-    typeChoice: NoteType?,
     recording: RecordingState,
-    onTypeChoice: (NoteType?) -> Unit,
+    kind: NoteType,
+    pauseSeconds: Int,
     onRecordKey: () -> Unit,
 ) {
     val isRecording = recording is RecordingState.Active
-    // Air above: the question must not stick to the last card of the stack.
-    Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 4.dp)) {
-        Text(
-            stringResource(R.string.home_type_question),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f).alignByBaseline().semantics { heading() },
-        )
-        // The pause rule (author 08.11.2026): said up front, so a list in one item is no surprise.
-        Text(
-            stringResource(R.string.home_pause_rule),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 12.dp).alignByBaseline(),
-        )
+    // Where the recording goes, said before it starts (author 10.11.2026: a recording made on "Done" landed
+    // on another divider without a word) - with the divider's own sign.
+    Fold(!isRecording, Modifier.align(Alignment.CenterHorizontally)) {
+        val into = stringResource(R.string.home_record_into, stringResource(tabNameRes(StackTab.of(kind))))
+        Row(
+            Modifier
+                .padding(start = 20.dp, end = 20.dp, top = 14.dp)
+                .semantics(mergeDescendants = true) { contentDescription = into },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            TypeMark(kind, MaterialTheme.colorScheme.onSurface, size = 16.dp)
+            Text(
+                into,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
-    TypeTapeBar(selected = typeChoice, onSelect = onTypeChoice, modifier = Modifier.padding(vertical = 2.dp))
+    // The pause rule (author 08.11.2026): said up front, so a list in one item is no surprise.
+    // Air above: it must not stick to the last card of the box.
     Text(
-        typeHint(typeChoice),
+        if (pauseSeconds > 0) stringResource(R.string.home_pause_rule, pauseSeconds) else stringResource(R.string.home_pause_off),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        // Always two lines tall (in sp, so also with big text): switching types does not make the bar jump.
-        minLines = 2,
-        maxLines = 3,
-        modifier = Modifier.padding(horizontal = 20.dp),
+        modifier = Modifier.align(Alignment.CenterHorizontally).padding(start = 20.dp, end = 20.dp, top = if (isRecording) 14.dp else 4.dp),
     )
 
-    // During "3, 2, 1" nothing is recorded yet, so the key and its counter are dimmed (the key still cancels).
+    // During "3, 2, 1" nothing is recorded yet: the key says plainly that it cancels (author 11.11.2026 - a dimmed
+    // key looked switched off, and "Record" pressed by mistake had no visible way out).
     val waiting = (recording as? RecordingState.Active)?.countdown?.let { it > 0 } == true
     Column(
-        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 14.dp).alpha(if (waiting) DIMMED_ALPHA else 1f),
+        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val counter = (recording as? RecordingState.Active)?.let {
@@ -380,26 +497,64 @@ private fun ColumnScope.RecordControls(
         }
         RecordButton(
             recording = isRecording,
-            label = stringResource(if (isRecording) R.string.record_stop else R.string.record_start),
-            stateText = (recording as? RecordingState.Active)?.let {
+            label = stringResource(
+                when {
+                    waiting -> R.string.record_cancel
+                    isRecording -> R.string.record_stop
+                    else -> R.string.record_start
+                },
+            ),
+            stateText = if (waiting) null else (recording as? RecordingState.Active)?.let {
                 stringResource(R.string.record_state, spokenDuration(it.elapsedSeconds), spokenDuration(it.limitSeconds))
             },
             onClick = onRecordKey,
         )
         Spacer(Modifier.height(8.dp))
-        // Tape counter in its display window while recording, the key's name otherwise.
-        // The key already says both to screen readers.
-        if (counter != null) {
-            CounterDisplay(counter, Modifier.clearAndSetSemantics { })
-        } else {
-            Text(
-                text = stringResource(R.string.record_start),
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.clearAndSetSemantics { },
-            )
+        // Under the key: its name, "Cancel" during the countdown, the tape counter while recording - each fades
+        // into the next. The key already says all of it to screen readers.
+        val under = when {
+            waiting -> UnderKey.CANCEL
+            counter != null -> UnderKey.COUNTER
+            else -> UnderKey.NAME
+        }
+        val lastCounter = remember { arrayOf("") }
+        if (counter != null) lastCounter[0] = counter
+        val stillNow = TapedoTheme.reduceMotion
+        AnimatedContent(
+            targetState = under,
+            transitionSpec = { fadeSwap(stillNow) },
+            contentAlignment = Alignment.Center,
+            label = "under the key",
+        ) { shown ->
+            when (shown) {
+                UnderKey.COUNTER -> CounterDisplay(counter ?: lastCounter[0], Modifier.clearAndSetSemantics { })
+                UnderKey.CANCEL -> Text(
+                    text = stringResource(R.string.record_cancel),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = TapedoTheme.colors.record,
+                    modifier = Modifier.clearAndSetSemantics { },
+                )
+                UnderKey.NAME -> Text(
+                    text = stringResource(R.string.record_start),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.clearAndSetSemantics { },
+                )
+            }
         }
     }
 }
+
+private enum class Middle { STACK, COUNTDOWN, LISTENING }
+
+private enum class UnderKey { NAME, CANCEL, COUNTER }
+
+private const val SWAP_MS = 220
+
+/** One thing fades into the next in place - at once with "reduce motion". */
+internal fun fadeSwap(still: Boolean): ContentTransform =
+    if (still) EnterTransition.None togetherWith ExitTransition.None
+    else fadeIn(tween(SWAP_MS)) togetherWith fadeOut(tween(SWAP_MS))
 
 /** While recording: the seismograph and the words as they are recognised. */
 @Composable
@@ -408,8 +563,8 @@ private fun ListeningPanel(state: RecordingState.Active, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.Center) {
         Seismograph(state.levels, state.sampleCount, SEISMOGRAPH_SAMPLES, penUp = !state.ready)
         Spacer(Modifier.height(16.dp))
-        if (!state.listening) {
-            // The microphone is not open yet, or the phone restarts its recognizer - words said now would be lost.
+        // The microphone is not open yet, or the phone restarts its recognizer - words said now would be lost.
+        Fold(!state.listening) {
             Text(
                 stringResource(if (state.micOpened) R.string.record_wait else R.string.record_starting),
                 style = MaterialTheme.typography.bodyLarge,
@@ -420,11 +575,11 @@ private fun ListeningPanel(state: RecordingState.Active, modifier: Modifier) {
         }
         if (state.text.isEmpty()) {
             // Only when really listening: a typed "Listening…" (announced once); the REC lamp blinks by the counter.
-            if (state.ready) Text(
+            Fold(state.ready) { Text(
                 stringResource(R.string.record_listening),
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
+            ) }
         } else {
             // The growing text is not re-read on every word.
             Text(
@@ -439,34 +594,48 @@ private fun ListeningPanel(state: RecordingState.Active, modifier: Modifier) {
 /**
  * "3, 2, 1": one big typewriter digit on a round paper dial, so the user knows exactly when to start.
  * The digit is already huge - the system font size is ignored so it never runs off the dial.
+ * A tap on the dial cancels - the hint under it says so, for a "Record" pressed by mistake.
  */
 @Composable
-internal fun CountdownDial(countdown: Int, modifier: Modifier = Modifier) {
+internal fun CountdownDial(countdown: Int, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val colors = TapedoTheme.colors
     val spoken = stringResource(R.string.record_countdown, countdown)
+    val cancel = stringResource(R.string.record_cancel)
     val digit = with(LocalDensity.current) { 120.dp.toSp() }
-    Box(
+    Column(
         modifier
-            .size(200.dp)
-            .background(colors.card, CircleShape)
-            .border(3.dp, colors.record, CircleShape)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClickLabel = cancel, role = Role.Button, onClick = onCancel)
+            .padding(12.dp)
             .clearAndSetSemantics {
                 contentDescription = spoken
                 liveRegion = LiveRegionMode.Polite
+                onClick(label = cancel) { onCancel(); true }
             },
-        contentAlignment = Alignment.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Box(
+            Modifier
+                .size(200.dp)
+                .background(colors.card, CircleShape)
+                .border(3.dp, colors.record, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                countdown.toString(),
+                style = MaterialTheme.typography.displayLarge.copy(fontSize = digit, lineHeight = digit),
+                fontWeight = FontWeight.Bold,
+                color = colors.record,
+            )
+        }
+        Spacer(Modifier.height(14.dp))
         Text(
-            countdown.toString(),
-            style = MaterialTheme.typography.displayLarge.copy(fontSize = digit, lineHeight = digit),
-            fontWeight = FontWeight.Bold,
-            color = colors.record,
+            stringResource(R.string.record_countdown_cancel_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
-
-/** Controls that work but have nothing to do yet (the record key during the countdown). */
-internal const val DIMMED_ALPHA = 0.35f
 
 /** After the countdown, with the microphone open: speak now. */
 internal val RecordingState.Active.ready: Boolean get() = countdown == 0 && listening
@@ -525,6 +694,22 @@ internal fun ErrorNote(
             // Read out at once - the focus is still on the record key.
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
         )
+        // The offline way first: the language pack keeps the voice on the phone (author 11.11.2026).
+        if (error == SpeechError.OFFLINE_UNAVAILABLE) {
+            PaperButton(
+                stringResource(R.string.speech_get_offline_pack),
+                onClick = {
+                    val voice = Intent(Settings.ACTION_VOICE_INPUT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    val general = Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    try {
+                        context.startActivity(voice)
+                    } catch (_: android.content.ActivityNotFoundException) {
+                        context.startActivity(general)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         // Online recognition only after a clear yes - for this recording or from now on.
         if (offlineAsk) {
             PaperButton(stringResource(R.string.speech_online_once), onClick = onOnlineOnce, modifier = Modifier.fillMaxWidth())
@@ -598,34 +783,6 @@ private fun ActionFailedNote(onDismiss: () -> Unit) {
     }
 }
 
-/** "Card deleted - Undo", on a strip of tape at the bottom of the stack. */
-@Composable
-private fun UndoBar(note: Note, onUndo: () -> Unit, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier
-            .padding(12.dp)
-            .fillMaxWidth()
-            .background(scheme.primary, RoundedCornerShape(2.dp))
-            .padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp)
-            .semantics { liveRegion = LiveRegionMode.Polite },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            stringResource(R.string.stack_deleted, note.title),
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onPrimary,
-            maxLines = 2,
-            modifier = Modifier.weight(1f),
-        )
-        PaperButton(
-            stringResource(R.string.stack_undo),
-            onClick = onUndo,
-            style = PaperButtonStyle.ON_INK,
-        )
-    }
-}
-
 @Composable
 internal fun speechErrorText(error: SpeechError): String = stringResource(
     when (error) {
@@ -654,20 +811,6 @@ private fun spokenDuration(seconds: Int): String {
             pluralStringResource(R.plurals.duration_seconds, sec, sec)
     }
 }
-
-/** One line under the type bar saying what the chosen type does. */
-@Composable
-private fun typeHint(type: NoteType?): String = stringResource(
-    when (type) {
-        null -> R.string.type_hint_auto
-        NoteType.NOTE -> R.string.type_hint_note
-        NoteType.CHECKLIST -> R.string.type_hint_checklist
-        NoteType.TASK -> R.string.type_hint_task
-        NoteType.IDEA -> R.string.type_hint_idea
-        NoteType.EVENT -> R.string.type_hint_event
-        NoteType.SHOPPING -> R.string.type_hint_shopping
-    },
-)
 
 /**
  * The recorder's nameplate: the name engraved on a narrow metal strip held by two screws -

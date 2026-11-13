@@ -4,13 +4,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.bakeron.tapedo.core.ai.AiProblem
 import io.github.bakeron.tapedo.core.ai.NoteStructurer
+import io.github.bakeron.tapedo.core.ai.Problem
+import io.github.bakeron.tapedo.core.ai.Refined
+import io.github.bakeron.tapedo.core.ai.LowFunds
 import io.github.bakeron.tapedo.core.ai.StructureResult
+import io.github.bakeron.tapedo.core.ai.WhisperRetyper
 import io.github.bakeron.tapedo.core.data.NoteRepository
 import io.github.bakeron.tapedo.core.model.ChecklistItem
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.model.ShoppingGroup
 import io.github.bakeron.tapedo.core.rules.ListTitles
+import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.settings.RecordingEnd
@@ -21,6 +26,7 @@ import io.github.bakeron.tapedo.core.speech.SpeechError
 import io.github.bakeron.tapedo.core.speech.SpeechEvent
 import io.github.bakeron.tapedo.core.speech.SpeechInput
 import io.github.bakeron.tapedo.data.LockedNotesNotice
+import io.github.bakeron.tapedo.ui.cards.isDone
 import java.io.IOException
 import java.time.LocalDate
 import kotlin.math.max
@@ -34,7 +40,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -65,8 +70,11 @@ sealed interface RecordingState {
         val countdown: Int = 0,
     ) : RecordingState
 
-    /** Speech is done; the rules or the AI are cutting the text into cards. */
-    data class Structuring(val transcript: String) : RecordingState
+    /**
+     * Speech is done; the rules or the AI are cutting the text into cards.
+     * @param retyping Whisper is typing the recording again first - [transcript] is still the phone's text.
+     */
+    data class Structuring(val transcript: String, val retyping: Boolean = false) : RecordingState
 
     /**
      * The cards of a recording, already written to the database (a card with id 0 is not saved yet -
@@ -81,7 +89,25 @@ sealed interface RecordingState {
         val saveFailed: Boolean = false,
         /** "Record more" heard nothing usable (or could not start) - the cards are unchanged. */
         val moreFailed: SpeechError? = null,
+        /** Whisper was on but did not type the recording - why; the phone's text was used. */
+        val whisperProblem: AiProblem? = null,
+        /** Claude wrote the cards, but less than 10% of the top-up is left. */
+        val lowFunds: LowFunds? = null,
+        /** The provider that wrote the cards; null = the rules. "More exact" is offered unless it was Claude. */
+        val by: AiProvider? = null,
+        /** The type picked for the recording - "More exact" asks for the same. */
+        val type: NoteType? = null,
+        /** A Claude key is saved - without it there is no "More exact". */
+        val claudeKey: Boolean = false,
+        val refine: Refine? = null,
     ) : RecordingState
+
+    /** "More exact": Claude is writing the cards again, offers its cards, or could not. */
+    sealed interface Refine {
+        data object Working : Refine
+        data class Offer(val cards: List<Note>) : Refine
+        data class Failed(val problem: AiProblem) : Refine
+    }
 
     /** @param code the recognizer's own error number, for the error report to the author. */
     data class Failed(val error: SpeechError, val code: Int? = null) : RecordingState
@@ -95,7 +121,16 @@ sealed interface StackState {
     data object Failed : StackState
 }
 
-/** What the full-screen card editor is open on. */
+/** A tick moved [note] to the [to] divider - said on a strip, with a button to look there. */
+data class Moved(val note: Note, val to: StackTab)
+
+/** How long the undo / moved strip stays at the bottom of the stack, unless the phone asks for more. */
+internal const val UNDO_MS = 10_000L
+
+/**
+ * What the card view ("Karteczka" - one card on the whole screen, written on directly) is open on.
+ * Every change is saved by itself; there is no separate editor any more (author 13.11.2026).
+ */
 sealed interface Editing {
     val note: Note
 
@@ -123,6 +158,8 @@ class HomeViewModel(
     private val timeSource: TimeSource = TimeSource.Monotonic,
     /** "3, 2, 1" before each recording, so the user knows when to speak (the author's decision 07.11.2026). */
     private val countdownMillis: Long = COUNTDOWN_MS,
+    /** Whisper after "stop", when turned on in Settings; null in tests that do not need it. */
+    private val retyper: WhisperRetyper? = null,
 ) : ViewModel() {
 
     /** Default list titles in the app language - set by the screen, which can read resources. */
@@ -146,22 +183,30 @@ class HomeViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StackState.Loading)
 
+    /** The card open in the card view. Kept here while open, so typing never waits for the database. */
     private val _editing = MutableStateFlow<Editing?>(null)
     val editing: StateFlow<Editing?> = _editing.asStateFlow()
 
-    /** The card open in the preview (one card, whole screen), read fresh from the stack after every change. */
-    private val previewId = MutableStateFlow<Long?>(null)
-    val preview: StateFlow<Note?> = combine(stack, previewId) { st, id ->
-        if (id == null) null else (st as? StackState.Loaded)?.notes?.firstOrNull { it.id == id }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    /** The open card's changes are written a moment after the last one - not on every letter. */
+    private var autosave: Job? = null
 
-    /** Words said in the preview are being added to the card. */
+    /** Whether the open card counted as done when it was opened - a change is told on a strip after closing. */
+    private var openedDone = false
+
+    /** The review window put aside while the user adds by voice to one of its cards - it comes back after. */
+    private var held: RecordingState.Review? = null
+
+    /** Words said in the card view are being added to the card. */
     private val _appending = MutableStateFlow(false)
     val appending: StateFlow<Boolean> = _appending.asStateFlow()
 
     /** The last card deleted from the stack, while "undo" is still offered. */
     private val _deleted = MutableStateFlow<Note?>(null)
     val deleted: StateFlow<Note?> = _deleted.asStateFlow()
+
+    /** The last card a tick moved to another divider, while the strip about it is shown. */
+    private val _moved = MutableStateFlow<Moved?>(null)
+    val moved: StateFlow<Moved?> = _moved.asStateFlow()
 
     /** A change to a saved card (tick, edit, delete) could not be written. */
     private val _actionFailed = MutableStateFlow(false)
@@ -180,6 +225,13 @@ class HomeViewModel(
 
     private var session: Job? = null
     private var undoTimer: Job? = null
+
+    /**
+     * How long the undo / moved strip stays - longer when the phone asks for more time (a screen reader user
+     * needs it to reach "Undo"). Set by the screen; the strip's time line runs for the same time.
+     */
+    var stripMs: Long = UNDO_MS
+    private var movedTimer: Job? = null
     private var saving = false
 
     /** The review window put aside while "record more" listens - it comes back whatever happens. */
@@ -195,8 +247,8 @@ class HomeViewModel(
 
     // --- Type and recording ---
 
-    /** Remembers the type for the next recording; null = "auto". */
-    fun chooseType(type: NoteType?) {
+    /** Remembers the open divider's type - the next recording becomes a card of it. */
+    fun chooseType(type: NoteType) {
         viewModelScope.launch {
             try {
                 store.update { it.copy(noteTypeChoice = type) }
@@ -224,6 +276,12 @@ class HomeViewModel(
      */
     fun startRecording(allowOnlineOnce: Boolean = false, appendTo: Long? = null) {
         if (session?.isActive == true) return
+        // Adding by voice to a card of the review window: the window waits aside and comes back after.
+        val review = _recording.value as? RecordingState.Review
+        if (appendTo != null && review != null && held == null && review.cards.any { it.id == appendTo }) {
+            held = review
+            _recording.value = RecordingState.Idle
+        }
         // Cards still waiting for a decision are never replaced by a new recording.
         if (_recording.value is RecordingState.Review || _recording.value is RecordingState.Structuring) return
         val s = settings.value ?: AppSettings()
@@ -265,7 +323,8 @@ class HomeViewModel(
                 }
             }
             try {
-                speech.listen(s.speechLanguage, allowOnline = allowOnline, skipFirstMs = countdownMillis).collect { e ->
+                val keepAudio = retyper != null && s.whisper != null
+                speech.listen(s.speechLanguage, allowOnline = allowOnline, skipFirstMs = countdownMillis, keepAudio = keepAudio, pauseMillis = s.pauseMillis).collect { e ->
                     when (e) {
                         is SpeechEvent.Level -> level = max(level, e.value)
                         is SpeechEvent.Partial -> {
@@ -279,10 +338,13 @@ class HomeViewModel(
                                 if (it is RecordingState.Active) it.copy(listening = e.on, micOpened = it.micOpened || e.on) else it
                             }
                         }
-                        is SpeechEvent.Done -> when {
-                            appendTo != null -> appendSpoken(appendTo, e.text)
-                            continuing != null -> continueReview(e.text)
-                            else -> onTranscript(e.text)
+                        is SpeechEvent.Done -> {
+                            val (text, whisperProblem) = retyped(s, e, showProgress = appendTo == null)
+                            when {
+                                appendTo != null -> appendSpoken(appendTo, text)
+                                continuing != null -> continueReview(text, whisperProblem)
+                                else -> onTranscript(text, whisperProblem = whisperProblem)
+                            }
                         }
                         is SpeechEvent.Failed -> endRecording(e.error, e.code)
                         // The recording goes on; the note waits on the home screen until dismissed.
@@ -303,15 +365,31 @@ class HomeViewModel(
 
     fun stopRecording() = speech.stop()
 
-    /** Back to the review window when "record more" was listening; otherwise the error (or nothing) on the stack. */
+    /** Whisper's text when it is on and worked; otherwise the phone's text, with Whisper's reason. */
+    private suspend fun retyped(s: AppSettings, done: SpeechEvent.Done, showProgress: Boolean): Pair<String, AiProblem?> {
+        val r = retyper ?: return done.text to null
+        if (s.whisper == null || done.text.isBlank()) return done.text to null
+        if (showProgress) _recording.value = RecordingState.Structuring(done.text.trim(), retyping = true)
+        return when (val outcome = r.retype(s, done.audio)) {
+            null -> done.text to null
+            is WhisperRetyper.Outcome.Text -> outcome.text to null
+            is WhisperRetyper.Outcome.Failed -> done.text to outcome.problem
+        }
+    }
+
+    /**
+     * Back to the review window when "record more" was listening; otherwise the error (or nothing) on the stack.
+     * After adding by voice to a card of the review window, the window comes back (after the error is dismissed).
+     */
     private fun endRecording(error: SpeechError?, code: Int? = null) {
         val review = continuing
         continuing = null
         _recording.value = when {
             review != null -> review.copy(moreFailed = error)
             error != null -> RecordingState.Failed(error, code)
-            else -> RecordingState.Idle
+            else -> held ?: RecordingState.Idle
         }
+        if (error == null) held = null
     }
 
     /**
@@ -321,7 +399,8 @@ class HomeViewModel(
     fun recordMore(allowOnlineOnce: Boolean = false) {
         val review = _recording.value as? RecordingState.Review ?: return
         if (saving || session?.isActive == true) return
-        continuing = review.copy(moreFailed = null)
+        keepCards()
+        continuing = review.copy(moreFailed = null, refine = null)
         _recording.value = RecordingState.Idle
         startRecording(allowOnlineOnce)
     }
@@ -335,7 +414,7 @@ class HomeViewModel(
      * Adds what was said to the review: to the list card as new items (keeping the user's edits),
      * or - with no list among the cards - cuts the whole dictation again, as if it had been one recording.
      */
-    private fun continueReview(text: String) {
+    private fun continueReview(text: String, whisperProblem: AiProblem? = null) {
         val review = continuing ?: return
         continuing = null
         val spoken = text.trim()
@@ -346,19 +425,102 @@ class HomeViewModel(
         val transcript = Phrases.join(listOf(review.transcript, spoken))
         val listIndex = review.cards.indexOfLast { it.type.hasItems }
         if (listIndex < 0) {
-            onTranscript(transcript, replacing = review.cards)
+            onTranscript(transcript, replacing = review.cards, whisperProblem = whisperProblem)
             return
         }
         _recording.value = RecordingState.Structuring(transcript)
         viewModelScope.launch {
-            val (added, problems) = spokenItems(spoken, review.cards[listIndex].type)
+            val (added, result) = spokenItems(spoken, review.cards[listIndex].type)
             val cards = review.cards.mapIndexed { i, card -> if (i == listIndex) card.copy(items = card.items + added) else card }
-            _recording.value = persist(review.copy(transcript = transcript, cards = cards, aiProblems = problems ?: review.aiProblems))
+            _recording.value = persist(
+                review.copy(
+                    transcript = transcript,
+                    cards = cards,
+                    aiProblems = result?.rulesProblems() ?: review.aiProblems,
+                    whisperProblem = whisperProblem,
+                    lowFunds = result?.lowFunds ?: review.lowFunds,
+                    // Claude's cards with items added by someone else are worth asking Claude again.
+                    by = review.by?.takeIf { it == result?.by },
+                ),
+            )
+        }
+    }
+
+    private suspend fun hasClaudeKey(): Boolean = try {
+        structurer.hasKey(AiProvider.ANTHROPIC)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
+    }
+
+    private var refining: Job? = null
+
+    /**
+     * "More exact" (the author's decision 11.11.2026): the whole dictation once more to Claude Sonnet. The cards
+     * on screen stay saved until the user takes Claude's - it may be worse, and it may not answer at all.
+     */
+    fun refine() {
+        val review = _recording.value as? RecordingState.Review ?: return
+        if (saving || refining?.isActive == true || review.refine is RecordingState.Refine.Offer) return
+        _recording.value = review.copy(refine = RecordingState.Refine.Working)
+        refining = viewModelScope.launch {
+            val refined = try {
+                structurer.refine(review.transcript, settings.value ?: AppSettings(), review.type, todayEpochDay(), nowMillis())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Refined.Failed(AiProblem(AiProvider.ANTHROPIC, NoteStructurer.REFINE_MODEL, Problem.OTHER))
+            }
+            _recording.update { st ->
+                // The window may have closed or moved on ("record more") meanwhile - then the answer is not offered.
+                if (st !is RecordingState.Review || st.refine != RecordingState.Refine.Working) return@update st
+                when (refined) {
+                    is Refined.Cards -> st.copy(
+                        refine = if (refined.notes.isEmpty()) RecordingState.Refine.Failed(
+                            AiProblem(AiProvider.ANTHROPIC, NoteStructurer.REFINE_MODEL, Problem.ANSWER),
+                        ) else RecordingState.Refine.Offer(refined.notes),
+                        lowFunds = refined.lowFunds ?: st.lowFunds,
+                    )
+                    is Refined.Failed -> st.copy(refine = RecordingState.Refine.Failed(refined.problem), lowFunds = refined.lowFunds ?: st.lowFunds)
+                }
+            }
+        }
+    }
+
+    /** "Keep these" (or back): Claude's offer goes, the cards on screen stay; a running question is dropped. */
+    fun keepCards() {
+        refining?.cancel()
+        _recording.update { if (it is RecordingState.Review && it.refine != null) it.copy(refine = null) else it }
+    }
+
+    /** "Use these": Claude's cards are written first, and only then the old ones go - nothing is lost on a failed save. */
+    fun acceptRefined() {
+        val review = _recording.value as? RecordingState.Review ?: return
+        val offer = review.refine as? RecordingState.Refine.Offer ?: return
+        if (saving) return
+        saving = true
+        viewModelScope.launch {
+            try {
+                val saved = persist(
+                    review.copy(cards = offer.cards, aiProblems = emptyList(), by = AiProvider.ANTHROPIC, refine = null, moreFailed = null),
+                )
+                if (saved.saveFailed) {
+                    // The old cards are still saved: keep them, offer Claude's again; written ones go back out.
+                    saved.cards.filter { it.id != 0L }.forEach { card -> write { notes.delete(card.id) } }
+                    _recording.value = review.copy(saveFailed = true)
+                } else {
+                    _recording.value = saved
+                    review.cards.filter { it.id != 0L }.forEach { old -> write { notes.delete(old.id) } }
+                }
+            } finally {
+                saving = false
+            }
         }
     }
 
     /** Items said for a list of [type], split and grouped like a new list (rules or the chosen AI); never empty. */
-    private suspend fun spokenItems(spoken: String, type: NoteType): Pair<List<ChecklistItem>, List<AiProblem>?> {
+    private suspend fun spokenItems(spoken: String, type: NoteType): Pair<List<ChecklistItem>, StructureResult?> {
         val s = settings.value ?: AppSettings()
         val result = try {
             structurer.structure(
@@ -374,9 +536,9 @@ class HomeViewModel(
         } catch (e: Exception) {
             null
         }
-        val group = if (type == NoteType.SHOPPING) ShoppingGroup.OTHER else null
+        val group = type.fallbackGroup()
         val items = result?.notes?.flatMap { it.items }.orEmpty().ifEmpty { listOf(ChecklistItem(spoken, group = group)) }
-        return items to result?.rulesProblems()
+        return (if (s.pauseMillis == null) items.asOneItem(group) else items) to result
     }
 
     /** The user refused the microphone permission. */
@@ -384,16 +546,19 @@ class HomeViewModel(
         _recording.value = RecordingState.Failed(SpeechError.NO_PERMISSION)
     }
 
-    /** Closes the error message; the stack shows again. */
+    /** Closes the error message; the stack (or the review window put aside for adding by voice) shows again. */
     fun dismissError() {
-        if (_recording.value is RecordingState.Failed) _recording.value = RecordingState.Idle
+        if (_recording.value is RecordingState.Failed) {
+            _recording.value = held ?: RecordingState.Idle
+            held = null
+        }
     }
 
     /**
      * Cuts what was said into cards (rules or AI), writes them to the database at once and opens the review window.
      * @param replacing saved cards of the same dictation that the new cards take the place of ("record more").
      */
-    fun onTranscript(text: String, replacing: List<Note> = emptyList()) {
+    fun onTranscript(text: String, replacing: List<Note> = emptyList(), whisperProblem: AiProblem? = null) {
         val transcript = text.trim()
         if (transcript.isEmpty()) {
             _recording.value = RecordingState.Failed(SpeechError.NO_SPEECH)
@@ -403,11 +568,13 @@ class HomeViewModel(
         viewModelScope.launch {
             val s = settings.value ?: AppSettings()
             val now = nowMillis()
+            // No "auto" on the home screen any more: an old "auto" choice opens the notes divider.
+            val type = s.noteTypeChoice ?: NoteType.NOTE
             val result = try {
                 structurer.structure(
                     transcript = transcript,
                     settings = s,
-                    chosenType = s.noteTypeChoice,
+                    chosenType = type,
                     listTitles = listTitles,
                     todayEpochDay = todayEpochDay(),
                     nowMillis = now,
@@ -419,8 +586,18 @@ class HomeViewModel(
                 null
             }
             val cards = result?.notes?.takeIf { it.isNotEmpty() }
+                ?.map { card -> if (s.pauseMillis == null) card.copy(items = card.items.asOneItem(card.type.fallbackGroup())) else card }
                 ?: listOf(Note(title = firstWords(transcript), body = transcript, createdAtMillis = now))
-            val review = persist(RecordingState.Review(transcript, cards, result?.rulesProblems().orEmpty()))
+            val review = persist(
+                RecordingState.Review(
+                    transcript, cards, result?.rulesProblems().orEmpty(),
+                    whisperProblem = whisperProblem,
+                    lowFunds = result?.lowFunds,
+                    by = result?.by,
+                    type = type,
+                    claudeKey = hasClaudeKey(),
+                ),
+            )
             _recording.value = review
             // The old cards go only once the new ones are safely written.
             if (!review.saveFailed) replacing.filter { it.id != 0L }.forEach { old -> write { notes.delete(old.id) } }
@@ -452,6 +629,7 @@ class HomeViewModel(
      * not saved yet are written now - the phone may close the app before the user comes back.
      */
     fun onBackground() {
+        autosave?.cancel()
         val edited = _editing.value?.note?.tidy()
         val review = _recording.value as? RecordingState.Review
         viewModelScope.launch {
@@ -468,8 +646,9 @@ class HomeViewModel(
     }
 
     /**
-     * Adds what was said in the preview to a saved card: to a list as new items (split and grouped like a
+     * Adds what was said in the card view to the card: to a list as new items (split and grouped like a
      * new list of that type - by the rules or the chosen AI), to any other card as a new line of text.
+     * The words go onto the card as it is at the end - what the user typed meanwhile stays.
      */
     private fun appendSpoken(id: Long, text: String) {
         val spoken = text.trim()
@@ -477,16 +656,26 @@ class HomeViewModel(
             _recording.value = RecordingState.Failed(SpeechError.NO_SPEECH)
             return
         }
-        _recording.value = RecordingState.Idle
+        _recording.value = held ?: RecordingState.Idle
+        held = null
         _appending.value = true
         viewModelScope.launch {
             try {
-                val note = notes.observeAll().first().firstOrNull { it.id == id } ?: return@launch
-                val updated = if (note.type.hasItems) {
-                    note.copy(items = note.items + spokenItems(spoken, note.type).first)
-                } else {
-                    note.copy(body = listOf(note.body.trim(), spoken).filter { it.isNotEmpty() }.joinToString("\n"))
+                fun current(): Note? = _editing.value?.note?.takeIf { it.id == id }
+                val type = (current() ?: notes.get(id))?.type ?: return@launch
+                val added = if (type.hasItems) spokenItems(spoken, type).first else emptyList()
+                val open = current()
+                val note = open ?: notes.get(id) ?: return@launch
+                val updated = when {
+                    added.isNotEmpty() && note.type.hasItems -> note.copy(items = note.items + added)
+                    note.type.hasItems -> note.copy(items = note.items + ChecklistItem(spoken, group = note.type.fallbackGroup()))
+                    else -> note.copy(body = listOf(note.body.trim(), spoken).filter { it.isNotEmpty() }.joinToString("\n"))
                 }
+                if (open != null) {
+                    autosave?.cancel()
+                    show(updated)
+                }
+                updateReviewCard(updated)
                 write { notes.save(updated) }
             } catch (e: CancellationException) {
                 throw e
@@ -498,31 +687,14 @@ class HomeViewModel(
         }
     }
 
-    // --- Preview ---
-
-    fun openPreview(note: Note) {
-        previewId.value = note.id
-    }
-
-    /** Back from the preview; a recording still running there ends and its words are still added. */
-    fun closePreview() {
-        if (_recording.value is RecordingState.Active) speech.stop()
-        dismissError()
-        previewId.value = null
-    }
-
-    /** Back to the stack first, so undo there brings the card back in the box, not on a preview. */
-    fun deleteFromPreview(note: Note) {
-        closePreview()
-        delete(note)
-    }
-
     // --- Review window ---
 
     /** "Done" (or back): the cards are already saved - closes the window; a failed save is tried again first. */
     fun saveReview() {
         val review = _recording.value as? RecordingState.Review ?: return
         if (saving) return
+        // Closing the window drops Claude's offer (the cards on screen are the ones kept).
+        refining?.cancel()
         if (!review.saveFailed) {
             _recording.value = RecordingState.Idle
             return
@@ -541,6 +713,7 @@ class HomeViewModel(
     /** "Delete" (two taps): removes the whole recording - the saved cards too. */
     fun discardReview() {
         val review = _recording.value as? RecordingState.Review ?: return
+        refining?.cancel()
         _recording.value = RecordingState.Idle
         viewModelScope.launch {
             review.cards.filter { it.id != 0L }.forEach { card -> write { notes.delete(card.id) } }
@@ -556,18 +729,35 @@ class HomeViewModel(
         if (card.id != 0L) viewModelScope.launch { write { notes.delete(card.id) } }
     }
 
-    // --- Editor ---
+    // --- Card view ---
 
+    /** A card of the review window, in the card view. */
     fun editDraft(index: Int) {
         val review = _recording.value as? RecordingState.Review ?: return
         review.cards.getOrNull(index)?.let { _editing.value = Editing.Draft(index, it) }
     }
 
-    fun editSaved(note: Note) {
+    /** A card of the stack, in the card view. */
+    fun openCard(note: Note) {
+        openedDone = note.isDone()
         _editing.value = Editing.Saved(note)
     }
 
+    /** Any change in the card view: on screen at once, in the database a moment later (and on closing). */
     fun changeEditing(note: Note) {
+        if (_editing.value == null) return
+        show(note)
+        updateReviewCard(note)
+        autosave?.cancel()
+        if (note.id != 0L) {
+            autosave = viewModelScope.launch {
+                delay(AUTOSAVE_MS)
+                write { notes.save(note) }
+            }
+        }
+    }
+
+    private fun show(note: Note) {
         _editing.update {
             when (it) {
                 is Editing.Draft -> it.copy(note = note)
@@ -577,37 +767,62 @@ class HomeViewModel(
         }
     }
 
-    /** "Done" or back: keeps the changes. A saved card stays open if the write fails. */
+    /** The review window shows the card as it is now - "record more" and "more exact" work on it. */
+    private fun updateReviewCard(note: Note) {
+        val draft = (_editing.value as? Editing.Draft)?.index
+        fun inReview(r: RecordingState.Review): RecordingState.Review {
+            val i = draft?.takeIf { it in r.cards.indices && r.cards[it].id == note.id }
+                ?: r.cards.indexOfFirst { it.id == note.id && it.id != 0L }.takeIf { it >= 0 }
+                ?: return r
+            return r.copy(cards = r.cards.mapIndexed { j, c -> if (j == i) note else c })
+        }
+        held = held?.let(::inReview)
+        _recording.update { if (it is RecordingState.Review) inReview(it) else it }
+    }
+
+    /**
+     * Back: closes the card view - its changes are already kept. Words still being said end and are still
+     * added. A card from the stack stays open if the last write fails, so nothing typed is lost.
+     */
     fun finishEditing() {
-        when (val e = _editing.value) {
-            null -> Unit
+        val e = _editing.value ?: return
+        autosave?.cancel()
+        if (_recording.value is RecordingState.Active) speech.stop()
+        val card = e.note.tidy()
+        when (e) {
             is Editing.Draft -> {
-                val card = e.note.tidy()
-                _recording.update { st ->
-                    if (st !is RecordingState.Review || e.index !in st.cards.indices) st
-                    else st.copy(cards = st.cards.mapIndexed { i, c -> if (i == e.index) card else c })
-                }
+                updateReviewCard(card)
                 _editing.value = null
+                dismissError()
                 // Already in the database - the edit goes there too (a card not saved yet waits for "try again").
                 if (card.id != 0L) viewModelScope.launch { write { notes.save(card) } }
             }
             is Editing.Saved -> viewModelScope.launch {
-                if (write { notes.save(e.note.tidy()) }) _editing.value = null
+                if (!write { notes.save(card) }) return@launch
+                _editing.value = null
+                dismissError()
+                if (card.isDone() != openedDone) showMoved(card)
             }
         }
     }
 
+    /** "Delete this card": back to the stack (or the review window), where undo is offered as before. */
     fun deleteEditing() {
-        when (val e = _editing.value) {
-            null -> Unit
-            is Editing.Draft -> removeCard(e.index)
-            is Editing.Saved -> {
-                // Back to the stack, not to the preview of a deleted card (undo would bring it back on screen).
-                previewId.value = null
-                delete(e.note)
-            }
+        val e = _editing.value ?: return
+        autosave?.cancel()
+        // A recording into this card is dropped - there is nothing left to add it to.
+        if (_recording.value is RecordingState.Active) {
+            session?.cancel()
+            _recording.value = RecordingState.Idle
         }
         _editing.value = null
+        dismissError()
+        held?.let { _recording.value = it }
+        held = null
+        when (e) {
+            is Editing.Draft -> removeCard(e.index)
+            is Editing.Saved -> delete(e.note)
+        }
     }
 
     // --- Stack ---
@@ -618,11 +833,37 @@ class HomeViewModel(
 
     fun toggleItem(note: Note, index: Int) {
         val items = note.items.mapIndexed { i, item -> if (i == index) item.copy(checked = !item.checked) else item }
-        viewModelScope.launch { write { notes.save(note.copy(items = items)) } }
+        saveTick(note, note.copy(items = items))
     }
 
     fun toggleDone(note: Note) {
-        viewModelScope.launch { write { notes.save(note.copy(done = !note.done)) } }
+        saveTick(note, note.copy(done = !note.done))
+    }
+
+    /**
+     * A tick that moves the card to "Done" or back to its own divider is said on a strip at the bottom
+     * (author 10.11.2026: an unticked list vanished from "Done" without a word). A tick in the card view is
+     * told when the view closes, so the strip is there when the card box is in sight again.
+     */
+    private fun saveTick(before: Note, after: Note) {
+        viewModelScope.launch {
+            if (!write { notes.save(after) } || before.isDone() == after.isDone()) return@launch
+            showMoved(after)
+        }
+    }
+
+    private fun showMoved(note: Note) {
+        _moved.value = Moved(note, if (note.isDone()) StackTab.DONE else StackTab.of(note.type))
+        movedTimer?.cancel()
+        movedTimer = viewModelScope.launch {
+            delay(stripMs)
+            _moved.value = null
+        }
+    }
+
+    fun dismissMoved() {
+        movedTimer?.cancel()
+        _moved.value = null
     }
 
     fun delete(note: Note) {
@@ -631,11 +872,17 @@ class HomeViewModel(
                 _deleted.value = note
                 undoTimer?.cancel()
                 undoTimer = launch {
-                    delay(UNDO_MS)
+                    delay(stripMs)
                     _deleted.value = null
                 }
             }
         }
+    }
+
+    /** The strip's "x": the strip goes, the card stays deleted. */
+    fun dismissDeleted() {
+        undoTimer?.cancel()
+        _deleted.value = null
     }
 
     /** Puts the deleted card back with the same id, so it returns to the same place in the stack. */
@@ -683,15 +930,27 @@ class HomeViewModel(
 
     private companion object {
         const val COUNTDOWN_MS = 3_000L
+        const val AUTOSAVE_MS = 600L
         const val TICK_MS = 50L
         const val DECAY = 0.75f
         const val LISTENING_AGAIN_JOLT = 0.5f
-        const val UNDO_MS = 10_000L
     }
 }
 
 /** Samples across the seismograph strip: 120 x 50 ms = the last 6 seconds. */
 const val SEISMOGRAPH_SAMPLES = 120
+
+/**
+ * Pauses make no new items (Settings, 0 s): what one recording gave is one item - the rules or the AI may
+ * still have cut it at "and" or a comma. Its shop section stays when all parts agree.
+ */
+internal fun List<ChecklistItem>.asOneItem(fallbackGroup: ShoppingGroup?): List<ChecklistItem> {
+    if (size < 2) return this
+    val group = map { it.group }.distinct().singleOrNull() ?: fallbackGroup
+    return listOf(ChecklistItem(joinToString(", ") { it.text.trim() }, group = group))
+}
+
+private fun NoteType.fallbackGroup(): ShoppingGroup? = if (this == NoteType.SHOPPING) ShoppingGroup.OTHER else null
 
 /** Before saving an edited card: no empty list items, a title even when the user cleared it. */
 internal fun Note.tidy(): Note {

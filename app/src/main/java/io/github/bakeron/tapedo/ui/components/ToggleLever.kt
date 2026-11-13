@@ -81,7 +81,7 @@ fun ToggleLever(
         }
         // LED next to the word: lit when on.
         Canvas(Modifier.size(8.dp).clearAndSetSemantics { }) {
-            drawCircle(if (checked) colors.record else colors.rule)
+            drawCircle(if (checked) colors.record else colors.ledOff)
         }
         Box(contentAlignment = Alignment.CenterStart) {
             allLabels.forEach {

@@ -92,6 +92,39 @@ class NoteStructurerTest {
     }
 
     @Test
+    fun `a busy model sends the note to the next one without resting the provider until tomorrow`() = runTest {
+        val usage = MemoryAiUsage()
+        val gateway = Gateway(mapOf(GROQ to fails(Problem.BUSY, "rate-limited upstream"), OPENROUTER to { cards }))
+        val s = structurer(gateway, usage)
+
+        val first = s.run(on(GROQ, OPENROUTER))
+        assertTrue(first.notes.single().byAi)
+        assertEquals(Problem.BUSY, first.problems.single().problem)
+        assertFalse(usage.limitHit(GROQ, today))
+
+        // The next note asks Groq again.
+        s.run(on(GROQ, OPENROUTER))
+        assertEquals(listOf(GROQ, OPENROUTER, GROQ, OPENROUTER), gateway.asked)
+    }
+
+    @Test
+    fun `a limit per minute of a few seconds is waited out once, a longer one goes to the next provider`() = runTest {
+        var groqCalls = 0
+        val short = Gateway(
+            mapOf(GROQ to { if (groqCalls++ == 0) throw AiException(Problem.BUSY, "TPM. Please try again in 2.5s.") else cards }),
+        )
+        val start = testScheduler.currentTime
+        val shortResult = structurer(short).run(on(GROQ))
+        assertTrue(shortResult.notes.single().byAi)
+        assertEquals(listOf(GROQ, GROQ), short.asked)
+        assertTrue(testScheduler.currentTime - start >= 2_500)
+
+        val long = Gateway(mapOf(GROQ to fails(Problem.BUSY, "TPM. Please try again in 40s."), OPENROUTER to { cards }))
+        assertTrue(structurer(long).run(on(GROQ, OPENROUTER)).notes.single().byAi)
+        assertEquals(listOf(GROQ, OPENROUTER), long.asked)
+    }
+
+    @Test
     fun `a wrong key or a missing free plan goes to the next one, asked again with the next note`() = runTest {
         val gateway = Gateway(mapOf(GROQ to fails(Problem.KEY), GEMINI to fails(Problem.NO_FREE_TIER), ANTHROPIC to { cards }))
         val s = structurer(gateway)
@@ -196,10 +229,61 @@ class NoteStructurerTest {
     }
 
     @Test
-    fun `default priority from the settings reaches the rules`() = runTest {
+    fun `a card with no priority said gets low - the green tape`() = runTest {
         val result = structurer(Gateway(emptyMap())).structure(
-            "zadzwonić do mamy", AppSettings(defaultPriority = Priority.LOW), null, ListTitles(), today, 0L,
+            "zadzwonić do mamy", AppSettings(), null, ListTitles(), today, 0L,
         )
         assertEquals(Priority.LOW, result.notes.single().priority)
+    }
+
+    @Test
+    fun `the result says which provider wrote the cards - none for the rules`() = runTest {
+        val gateway = Gateway(mapOf(GROQ to fails(Problem.KEY), OPENROUTER to { cards }))
+        assertEquals(OPENROUTER, structurer(gateway).run(on(GROQ, OPENROUTER)).by)
+        assertEquals(null, structurer(Gateway(emptyMap())).run(AppSettings()).by)
+    }
+
+    @Test
+    fun `more exact asks Claude Sonnet even when Claude is off and another Claude model is set`() = runTest {
+        val usage = MemoryAiUsage()
+        val gateway = Gateway(mapOf(ANTHROPIC to { cards }))
+        val settings = on(GROQ).copy(aiModels = mapOf(ANTHROPIC to "claude-haiku-5-5"))
+        val refined = structurer(gateway, usage).refine("kup mleko", settings, null, today, 0L)
+        assertEquals(listOf(ANTHROPIC), gateway.asked)
+        assertEquals(listOf("claude-sonnet-5-5"), gateway.models)
+        assertTrue((refined as Refined.Cards).notes.single().byAi)
+        assertEquals(1, usage.callsToday(ANTHROPIC, today))
+    }
+
+    @Test
+    fun `more exact without a Claude key asks nobody`() = runTest {
+        val gateway = Gateway(emptyMap())
+        val s = structurer(gateway, secrets = Secrets(mapOf(GROQ to "k")))
+        assertFalse(s.hasKey(ANTHROPIC))
+        assertTrue(s.hasKey(GROQ))
+        val refined = s.refine("kup mleko", on(GROQ), null, today, 0L)
+        assertEquals(Problem.NO_KEY, (refined as Refined.Failed).problem.problem)
+        assertTrue(gateway.asked.isEmpty())
+    }
+
+    @Test
+    fun `a failed more exact gives the reason, never cards from the rules`() = runTest {
+        val usage = MemoryAiUsage()
+        val gateway = Gateway(mapOf(ANTHROPIC to fails(Problem.LIMIT, "rate_limit_error")))
+        val refined = structurer(gateway, usage).refine("kup mleko", on(), null, today, 0L)
+        val failed = refined as Refined.Failed
+        assertEquals(Problem.LIMIT, failed.problem.problem)
+        assertEquals("claude-sonnet-5-5", failed.problem.model)
+        assertTrue(usage.limitHit(ANTHROPIC, today))
+    }
+
+    @Test
+    fun `more exact respects the daily limit of calls to Claude`() = runTest {
+        val usage = MemoryAiUsage()
+        repeat(10) { usage.addCall(ANTHROPIC, today) }
+        val gateway = Gateway(mapOf(ANTHROPIC to { cards }))
+        val refined = structurer(gateway, usage).refine("kup mleko", on(GROQ, limit = 10), null, today, 0L)
+        assertEquals(Problem.CAP, (refined as Refined.Failed).problem.problem)
+        assertTrue(gateway.asked.isEmpty())
     }
 }

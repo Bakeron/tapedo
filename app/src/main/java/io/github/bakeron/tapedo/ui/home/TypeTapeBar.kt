@@ -104,7 +104,7 @@ private fun TypeTape(type: NoteType?, text: String, selected: Boolean, tilt: Flo
     ) {
         Row(
             Modifier
-                .rotate(if (selected) 0f else tilt)
+                .rotate(if (selected) 0f else TapedoTheme.tilt(tilt))
                 .then(if (selected) Modifier.shadow(2.dp, shape) else Modifier)
                 .background(if (selected) scheme.primary else colors.card, shape)
                 .border(1.dp, if (selected) scheme.primary else scheme.outline, shape)

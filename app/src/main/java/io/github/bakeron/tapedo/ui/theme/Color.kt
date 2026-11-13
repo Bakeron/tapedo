@@ -55,6 +55,8 @@ data class TapedoColors(
     val knob: Color,
     /** 1 px light along the knob's top edge. */
     val knobLight: Color,
+    /** An unlit LED socket on a switch track - visible on its own (3:1), not only next to the lit one. */
+    val ledOff: Color,
     /** Recessed counter window and the ink of its digits (amber in Panel, like an old hi-fi display). */
     val display: Color,
     val displayInk: Color,
@@ -78,6 +80,7 @@ internal val LightTapedoColors = TapedoColors(
     track = Paper.track,
     knob = Paper.card,
     knobLight = Color.White,
+    ledOff = Paper.controlEdge,
     display = Paper.display,
     displayInk = Paper.graphite,
     tracePaper = Paper.card,
@@ -99,6 +102,7 @@ internal val DarkTapedoColors = TapedoColors(
     track = Panel.track,
     knob = Panel.knob,
     knobLight = Panel.knobLight,
+    ledOff = Panel.rule,
     display = Panel.display,
     displayInk = Panel.amber,
     tracePaper = Panel.display,

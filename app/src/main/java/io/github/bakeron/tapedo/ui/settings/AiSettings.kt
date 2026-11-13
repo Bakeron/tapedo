@@ -46,6 +46,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -69,6 +70,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.ai.AiProblem
+import io.github.bakeron.tapedo.core.ai.LowFunds
+import io.github.bakeron.tapedo.core.ai.Spent
+import io.github.bakeron.tapedo.core.ai.TopUpInput
+import io.github.bakeron.tapedo.core.ai.USD_PLN
+import io.github.bakeron.tapedo.core.ai.lowFunds
 import io.github.bakeron.tapedo.core.ai.Problem
 import io.github.bakeron.tapedo.core.ai.UsedUp
 import io.github.bakeron.tapedo.core.settings.AiProvider
@@ -82,6 +88,10 @@ import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
 import io.github.bakeron.tapedo.ui.components.ToggleLever
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 import kotlinx.coroutines.delay
 
 /** What the AI part of Settings can do - wired to [SettingsViewModel] by the route. */
@@ -96,6 +106,8 @@ class AiActions(
     val check: (AiProvider) -> Unit = {},
     val fetchModels: (AiProvider) -> Unit = {},
     val setDailyLimit: (Int) -> Unit = {},
+    /** Claude's top-up in US cents; null clears it. */
+    val setTopUp: (Int?) -> Unit = {},
 )
 
 private class ProviderTexts(
@@ -150,11 +162,14 @@ fun problemText(p: Problem): String = stringResource(
         Problem.DENIED -> R.string.ai_problem_denied
         Problem.MODEL -> R.string.ai_problem_model
         Problem.LIMIT -> R.string.ai_problem_limit
+        Problem.BUSY -> R.string.ai_problem_busy
         Problem.CAP -> R.string.ai_problem_cap
         Problem.NO_KEY -> R.string.ai_problem_no_key
         Problem.KEY_UNREADABLE -> R.string.ai_problem_key_unreadable
         Problem.OFFLINE -> R.string.ai_problem_offline
         Problem.ANSWER -> R.string.ai_problem_answer
+        Problem.NO_AUDIO -> R.string.ai_problem_no_audio
+        Problem.TOO_LONG -> R.string.ai_problem_too_long
         Problem.OTHER -> R.string.ai_problem_other
     },
 )
@@ -306,10 +321,12 @@ private fun ProviderCard(p: AiProvider, on: Boolean, settings: AppSettings, st: 
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
         )
+        val low = if (p == AiProvider.ANTHROPIC) lowFunds(settings.claudeTopUpUsd, st.spent?.sinceTopUp) else null
         val warning = if (!on) null else when {
             st.keySuffix == null -> stringResource(R.string.ai_no_key)
             st.usedUp == UsedUp.APP -> stringResource(R.string.ai_used_up_app, settings.aiDailyLimit)
             st.usedUp == UsedUp.PROVIDER -> stringResource(R.string.ai_used_up_provider, name)
+            low != null -> lowFundsText(low)
             else -> null
         }
         FoldValue(warning) { Warning(it) }
@@ -335,6 +352,138 @@ private fun ProviderBody(p: AiProvider, texts: ProviderTexts, settings: AppSetti
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
         )
+        if (p == AiProvider.ANTHROPIC) TopUp(settings, st.spent, actions)
+    }
+}
+
+@Composable
+private fun appLocale(): Locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+
+/** "1,23 $" / "$1.23"; a few calls under a cent are not shown as zero. */
+private fun usdText(usd: Double, locale: Locale): String {
+    val small = usd > 0 && usd < 0.005
+    val n = String.format(locale, "%.2f", if (small) 0.01 else usd.coerceAtLeast(0.0))
+    // No-break space: "1,23" and "$" must not land on two lines.
+    val text = if (locale.language == "pl") "$n $" else "$$n"
+    return if (small) "< $text" else text
+}
+
+/** Dollars in złoty at the rough rate - always shown as "about". */
+private fun plnText(usd: Double, locale: Locale) = String.format(locale, "%.2f", usd.coerceAtLeast(0.0) * USD_PLN)
+
+private fun dayText(epochDay: Long, locale: Locale): String =
+    LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
+
+@Composable
+private fun lowFundsText(low: LowFunds): String {
+    val locale = appLocale()
+    return stringResource(R.string.ai_low_funds, usdText(low.left, locale), usdText(low.topUp, locale))
+}
+
+/** After a recording: Claude answered, but less than 10% of the top-up is left. */
+@Composable
+fun LowFundsWarning(low: LowFunds, modifier: Modifier = Modifier) {
+    Warning(lowFundsText(low) + " " + stringResource(R.string.ai_low_funds_where), modifier)
+}
+
+/**
+ * The last top-up of the Claude account (in $, as Anthropic counts; about how much in złoty). Spending is
+ * counted from the day it is typed in. Below: spent of it and what is left, today and this month.
+ */
+@Composable
+private fun TopUp(settings: AppSettings, spent: Spent?, actions: AiActions) {
+    val scheme = MaterialTheme.colorScheme
+    val locale = appLocale()
+    val cents = settings.claudeTopUpCents
+    val saved = cents?.let { String.format(locale, "%.2f", it / 100.0) }.orEmpty()
+    var draft by rememberSaveable(saved) { mutableStateOf(saved) }
+    var wrong by rememberSaveable { mutableStateOf(false) }
+    var justSaved by remember { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
+    val label = stringResource(R.string.ai_topup)
+    fun save() {
+        when (val v = TopUpInput.parse(draft)) {
+            TopUpInput.Wrong -> wrong = true
+            TopUpInput.Cleared -> {
+                wrong = false
+                if (cents != null) {
+                    actions.setTopUp(null)
+                    justSaved = true
+                }
+            }
+            is TopUpInput.Cents -> {
+                wrong = false
+                if (v.cents != cents) {
+                    actions.setTopUp(v.cents)
+                    justSaved = true
+                }
+            }
+        }
+    }
+    LaunchedEffect(justSaved) {
+        if (justSaved) {
+            delay(3_000)
+            justSaved = false
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
+        LineField(
+            value = draft,
+            onValueChange = {
+                draft = it.take(16)
+                wrong = false
+            },
+            label = label,
+            placeholder = String.format(locale, "%.2f", 5.0),
+            secret = false,
+            onDone = { focus.clearFocus() },
+            onLeave = ::save,
+            number = true,
+        )
+        FoldValue(if (wrong) stringResource(R.string.ai_topup_wrong) else null) { Warning(it) }
+        Fold(justSaved) {
+            Text(
+                stringResource(R.string.ai_model_saved),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
+        val usd = settings.claudeTopUpUsd
+        val day = settings.claudeTopUpDay
+        Text(
+            if (usd != null && day != null) {
+                stringResource(R.string.ai_topup_pln, plnText(usd, locale), dayText(day, locale))
+            } else {
+                stringResource(R.string.ai_topup_hint)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onSurfaceVariant,
+        )
+        if (spent != null) {
+            Column(
+                Modifier.padding(top = 6.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val since = spent.sinceTopUp
+                if (usd != null && day != null && since != null) {
+                    val left = (usd - since).coerceAtLeast(0.0)
+                    Text(
+                        stringResource(
+                            R.string.ai_spent,
+                            dayText(day, locale), usdText(since, locale), usdText(usd, locale), usdText(left, locale), plnText(left, locale),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    lowFunds(usd, since)?.let { Warning(lowFundsText(it) + " " + stringResource(R.string.ai_low_funds_here)) }
+                }
+                Text(
+                    stringResource(R.string.ai_spent_periods, usdText(spent.today, locale), usdText(spent.month, locale)),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(stringResource(R.string.ai_spent_hint), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            }
+        }
     }
 }
 
@@ -606,6 +755,8 @@ private fun LineField(
     secret: Boolean,
     onDone: () -> Unit = {},
     onLeave: () -> Unit = {},
+    /** A sum of money: the number keyboard with a decimal point. */
+    number: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
@@ -618,7 +769,11 @@ private fun LineField(
         singleLine = true,
         visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(
-            keyboardType = if (secret) KeyboardType.Password else KeyboardType.Uri,
+            keyboardType = when {
+                secret -> KeyboardType.Password
+                number -> KeyboardType.Decimal
+                else -> KeyboardType.Uri
+            },
             autoCorrectEnabled = false,
             imeAction = ImeAction.Done,
         ),

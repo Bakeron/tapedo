@@ -42,8 +42,11 @@ fun aiHttpClient(engine: HttpClientEngine): HttpClient = HttpClient(engine) {
 /** The message of an answer with no text - "Check connection" still counts it as working. */
 const val EMPTY_ANSWER = "empty answer"
 
-/** An answer and the model that wrote it (as the provider names it; null when it does not say). */
-data class AiAnswer(val text: String, val model: String?)
+/**
+ * An answer and the model that wrote it (as the provider names it; null when it does not say).
+ * [tokens] only from Claude - its cost goes to the spending counter.
+ */
+data class AiAnswer(val text: String, val model: String?, val tokens: Tokens? = null)
 
 /** One question, one answer - what the note structurer needs from a provider. Swappable in tests. */
 fun interface AiChat {
@@ -117,7 +120,7 @@ class HttpAiGateway(private val http: HttpClient) : AiGateway {
             .filter { it.str("type") == "text" }
             .joinToString("") { it.str("text").orEmpty() }
         if (text.isBlank()) throw empty()
-        return AiAnswer(text, root.str("model"))
+        return AiAnswer(text, root.str("model"), Tokens.fromUsage(root["usage"] as? JsonObject))
     }
 
     override suspend fun freeModels(provider: AiProvider, key: String?): List<String> = when (provider) {
@@ -147,40 +150,40 @@ class HttpAiGateway(private val http: HttpClient) : AiGateway {
         Model(o.str("id") ?: return@mapNotNull null, (o["active"] as? JsonPrimitive)?.booleanOrNull != false)
     }
 
-    /** A provider's answer as JSON; an error answer becomes [AiException] with its kind. */
-    private suspend fun call(key: String?, block: suspend () -> HttpResponse): JsonObject {
-        val response = try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Timeouts, no network, DNS - the exception text may hold the address, so only the kind is kept.
-            throw AiException(Problem.OFFLINE)
-        }
-        val text = try {
-            response.bodyAsText()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            throw AiException(Problem.OFFLINE)
-        }
-        val status = response.status.value
-        if (status !in 200..299) throw ProblemReader.error(status, text, key)
-        return try {
-            lenient.parseToJsonElement(text) as? JsonObject
-        } catch (e: Exception) {
-            null
-        } ?: throw AiException(Problem.ANSWER, "not JSON")
-    }
+    private suspend fun call(key: String?, block: suspend () -> HttpResponse): JsonObject = providerJson(key, block)
 
     private fun empty() = AiException(Problem.ANSWER, EMPTY_ANSWER)
-
-    private companion object {
-        val lenient = Json { isLenient = true }
-    }
 }
 
-private fun JsonObject.str(name: String): String? = (this[name] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+/** A provider's answer as JSON; an error answer becomes [AiException] with its kind. */
+internal suspend fun providerJson(key: String?, block: suspend () -> HttpResponse): JsonObject {
+    val response = try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // Timeouts, no network, DNS - the exception text may hold the address, so only the kind is kept.
+        throw AiException(Problem.OFFLINE)
+    }
+    val text = try {
+        response.bodyAsText()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        throw AiException(Problem.OFFLINE)
+    }
+    val status = response.status.value
+    if (status !in 200..299) throw ProblemReader.error(status, text, key)
+    return try {
+        lenient.parseToJsonElement(text) as? JsonObject
+    } catch (e: Exception) {
+        null
+    } ?: throw AiException(Problem.ANSWER, "not JSON")
+}
+
+private val lenient = Json { isLenient = true }
+
+internal fun JsonObject.str(name: String): String? = (this[name] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
 private fun JsonArray?.orEmpty(): List<JsonElement> = this ?: emptyList()
 

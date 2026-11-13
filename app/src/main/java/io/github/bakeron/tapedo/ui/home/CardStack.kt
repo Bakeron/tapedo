@@ -1,9 +1,9 @@
 package io.github.bakeron.tapedo.ui.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
@@ -45,6 +44,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
+import io.github.bakeron.tapedo.ui.cards.DoneMark
 import io.github.bakeron.tapedo.ui.cards.PencilBox
 import io.github.bakeron.tapedo.ui.cards.PriorityTape
 import io.github.bakeron.tapedo.ui.cards.RuledText
@@ -69,18 +70,22 @@ import io.github.bakeron.tapedo.ui.cards.TypeTapeMark
 import io.github.bakeron.tapedo.ui.cards.appLocale
 import io.github.bakeron.tapedo.ui.cards.handStrike
 import io.github.bakeron.tapedo.ui.cards.isDone
+import io.github.bakeron.tapedo.ui.cards.kindNumbers
 import io.github.bakeron.tapedo.ui.cards.marginLine
 import io.github.bakeron.tapedo.ui.cards.matches
 import io.github.bakeron.tapedo.ui.cards.metaLine
+import io.github.bakeron.tapedo.ui.cards.numberedName
 import io.github.bakeron.tapedo.ui.cards.typeNameRes
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.settings.priorityName
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 import java.time.LocalDate
 
-/** The dividers of the card box: everything still open, one per kind of card, and the done pile. */
+/**
+ * The dividers of the card box: one per kind of card, and the done pile. The open divider is also where
+ * the next recording goes - it becomes a card of that kind (author 10.11.2026: no "All", no type bar).
+ */
 enum class StackTab(val type: NoteType?) {
-    ALL(null),
     SHOPPING(NoteType.SHOPPING),
     CHECKLIST(NoteType.CHECKLIST),
     TASK(NoteType.TASK),
@@ -92,19 +97,24 @@ enum class StackTab(val type: NoteType?) {
 
     fun holds(note: Note): Boolean = when (this) {
         DONE -> note.isDone()
-        ALL -> !note.isDone()
         else -> !note.isDone() && note.type == type
+    }
+
+    companion object {
+        fun of(type: NoteType): StackTab = entries.first { it.type == type }
     }
 }
 
 /**
- * The saved cards as a card box: dividers on top (with how many cards each holds), a search line,
+ * The saved cards as a card box: dividers on top (the kind's sign and how many cards it holds), a search line,
  * and the cards as narrow strips - their top edges, as seen in the box - so ten fit on a screen.
  * Tap opens the card; tasks tick off right on the strip; the × throws a card out (undo on the bar below).
  */
 @Composable
 fun CardStack(
     stack: StackState,
+    tab: StackTab,
+    onSelectTab: (StackTab) -> Unit,
     onOpen: (Note) -> Unit,
     onToggleDone: (Note) -> Unit,
     onRetry: () -> Unit,
@@ -114,26 +124,24 @@ fun CardStack(
 ) {
     val colors = TapedoTheme.colors
     val reduceMotion = TapedoTheme.reduceMotion
-    var tabName by rememberSaveable { mutableStateOf(StackTab.ALL.name) }
     var query by rememberSaveable { mutableStateOf("") }
+    // "Back" first clears the search - it undoes the last move instead of closing the app.
+    BackHandler(enabled = query.isNotEmpty()) { query = "" }
 
     val notes = (stack as? StackState.Loaded)?.notes.orEmpty()
-    val counts = remember(notes) { StackTab.entries.associateWith { tab -> notes.count(tab::holds) } }
-    // Empty dividers are not shown; a divider that just emptied (last list ticked off) falls back to "All".
-    val tabs = StackTab.entries.filter { it == StackTab.ALL || counts.getValue(it) > 0 }
-    val tab = StackTab.valueOf(tabName).takeIf { it in tabs } ?: StackTab.ALL
+    val counts = remember(notes) { StackTab.entries.associateWith { t -> notes.count(t::holds) } }
+    val numbers = remember(notes) { kindNumbers(notes) }
     val shown = remember(notes, tab, query) { notes.filter { tab.holds(it) && it.matches(query) } }
 
     Column(modifier) {
-        if (notes.isNotEmpty()) {
-            DividerTabs(tabs, tab, counts, onSelect = { tabName = it.name })
-        }
+        // Every divider is always there, also empty: it is where the next recording goes.
+        DividerTabs(tab, counts, onSelect = onSelectTab)
         // The inside of the box: same colour as the chosen divider, so the two read as one piece.
         Column(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .then(if (notes.isNotEmpty()) Modifier.background(colors.cardEdge) else Modifier),
+                .background(colors.cardEdge),
         ) {
             if (notes.isNotEmpty()) {
                 SearchLine(query, onChange = { query = it }, Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp))
@@ -148,11 +156,13 @@ fun CardStack(
                     StackState.Loading -> Unit
                     StackState.Failed -> item(key = "failed") { StackFailed(onRetry) }
                     is StackState.Loaded -> when {
-                        notes.isEmpty() -> item(key = "empty") { EmptyCard() }
+                        // An empty kind's divider: the dashed card says the red button fills it.
+                        shown.isEmpty() && query.isBlank() && tab != StackTab.DONE -> item(key = "empty") { EmptyCard() }
                         shown.isEmpty() -> item(key = "none") { NothingFound(query) }
                         else -> items(shown, key = { it.id }) { note ->
                             NoteStrip(
                                 note,
+                                number = numbers[note.id],
                                 onOpen = { onOpen(note) },
                                 onToggleDone = { onToggleDone(note) },
                                 onDelete = { onDelete(note) },
@@ -167,54 +177,58 @@ fun CardStack(
 }
 
 /**
- * Card-box dividers. The chosen one stands taller and joins the box below (same paper, no edge between),
- * the others sit lower behind it - the choice shows by height and shape, not by colour alone.
+ * Card-box dividers: only the kind's drawn sign and the count, so all seven fit side by side. The chosen one
+ * stands taller and joins the box below (same paper, no edge between), the others sit lower behind it - the
+ * choice shows by height and shape, not by colour alone. Screen readers hear the name and the count.
  */
 @Composable
-private fun DividerTabs(tabs: List<StackTab>, selected: StackTab, counts: Map<StackTab, Int>, onSelect: (StackTab) -> Unit) {
+private fun DividerTabs(selected: StackTab, counts: Map<StackTab, Int>, onSelect: (StackTab) -> Unit) {
     val colors = TapedoTheme.colors
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)
     Row(
         Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
             .padding(horizontal = 12.dp)
             .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
-        tabs.forEach { tab ->
+        StackTab.entries.forEach { tab ->
             val isSelected = tab == selected
+            val count = counts.getValue(tab)
+            val desc = pluralStringResource(R.plurals.tab_desc, count, stringResource(tabNameRes(tab)), count)
             // The whole 48 dp is the touch target; the visible divider is lower when not chosen.
             Box(
                 Modifier
+                    .weight(1f)
                     .height(48.dp)
-                    .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(tab) }),
+                    .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(tab) })
+                    .semantics { contentDescription = desc },
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 Row(
                     Modifier
+                        .fillMaxWidth()
                         .height(if (isSelected) 46.dp else 38.dp)
                         .background(if (isSelected) colors.cardEdge else colors.card, shape)
                         .then(if (isSelected) Modifier else Modifier.border(1.dp, colors.controlEdge, shape))
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
                 ) {
                     val ink = if (isSelected) scheme.onSurface else scheme.onSurfaceVariant
-                    tab.type?.let { TypeMark(it, ink, size = 14.dp) }
+                    val size = if (isSelected) 20.dp else 17.dp
+                    val type = tab.type
+                    if (type != null) TypeMark(type, ink, size = size) else DoneMark(ink, size = size)
                     Text(
-                        stringResource(tabNameRes(tab)),
-                        style = MaterialTheme.typography.labelLarge,
+                        count.toString(),
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = ink,
                         maxLines = 1,
-                    )
-                    Text(
-                        counts.getValue(tab).toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = scheme.onSurfaceVariant,
+                        softWrap = false,
+                        modifier = Modifier.clearAndSetSemantics { },
                     )
                 }
             }
@@ -273,7 +287,14 @@ private fun SearchLine(query: String, onChange: (String) -> Unit, modifier: Modi
  * Done cards (on the "Done" divider) have their title struck through.
  */
 @Composable
-private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+private fun NoteStrip(
+    note: Note,
+    number: Int?,
+    onOpen: () -> Unit,
+    onToggleDone: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = TapedoTheme.colors
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
@@ -282,8 +303,15 @@ private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, 
     val shape = RoundedCornerShape(3.dp)
     val done = note.isDone()
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    // "Zakupy 1", "Zadanie 2" in the order recorded (author 10.11.2026); an event keeps its own title.
+    val numbered = number != null && note.type != NoteType.EVENT
+    val label = number?.takeIf { numbered }?.let { numberedName(note.type, it) } ?: note.title
 
-    Box(modifier.fillMaxWidth()) {
+    // A crooked priority tape sticks out about 9 dp above the strip. The strip's fade in and out (after "Undo",
+    // a new card) draws it in a layer cut to its own bounds, so the tape lost its top (author 11.11.2026) -
+    // the strip keeps that room inside its bounds. Straight tapes fit already.
+    val tapeRoom = if (note.type != NoteType.IDEA && TapedoTheme.tilt(1f) != 0f) 10.dp else 0.dp
+    Box(modifier.fillMaxWidth().padding(top = tapeRoom)) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -309,7 +337,7 @@ private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, 
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    note.title,
+                    label,
                     style = MaterialTheme.typography.titleMedium,
                     color = if (done) scheme.onSurfaceVariant else scheme.onSurface,
                     maxLines = 1,
@@ -317,14 +345,18 @@ private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, 
                     onTextLayout = { layout = it },
                     modifier = Modifier.handStrike(done, { layout }, scheme.onSurface),
                 )
+                // The numbered label already names the kind - only the date, time and place under it.
                 val meta = metaLine(context, note, today, locale)
-                Text(
-                    (stringResource(typeNameRes(note.type)) + if (meta.isNotEmpty()) "  ·  $meta" else "").uppercase(locale),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                val second = if (numbered) meta else stringResource(typeNameRes(note.type)) + if (meta.isNotEmpty()) "  ·  $meta" else ""
+                if (second.isNotEmpty()) {
+                    Text(
+                        second.uppercase(locale),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             if (note.type.hasItems && note.items.isNotEmpty()) {
                 val ticked = note.items.count { it.checked }
@@ -343,7 +375,7 @@ private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, 
                 color = scheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 8.dp).clearAndSetSemantics { },
             )
-            val deleteDesc = stringResource(R.string.strip_delete_desc, note.title)
+            val deleteDesc = stringResource(R.string.strip_delete_desc, label)
             IconButton(onClick = onDelete, modifier = Modifier.semantics { contentDescription = deleteDesc }) {
                 Text("×", style = MaterialTheme.typography.titleLarge, color = scheme.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics { })
             }
@@ -367,8 +399,7 @@ private fun NoteStrip(note: Note, onOpen: () -> Unit, onToggleDone: () -> Unit, 
     }
 }
 
-private fun tabNameRes(tab: StackTab): Int = when (tab) {
-    StackTab.ALL -> R.string.tab_all
+internal fun tabNameRes(tab: StackTab): Int = when (tab) {
     StackTab.SHOPPING -> R.string.tab_shopping
     StackTab.CHECKLIST -> R.string.tab_checklist
     StackTab.TASK -> R.string.tab_task
@@ -399,7 +430,7 @@ private fun EmptyCard() {
         Modifier
             .fillMaxWidth()
             .padding(top = 24.dp)
-            .rotate(-1.2f)
+            .rotate(TapedoTheme.tilt(-1.2f))
             .background(colors.card.copy(alpha = 0.6f), RoundedCornerShape(3.dp))
             .drawBehind {
                 drawRoundRect(

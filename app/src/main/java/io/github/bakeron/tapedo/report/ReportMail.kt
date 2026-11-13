@@ -31,6 +31,20 @@ object ReportMail {
 
     val available: Boolean get() = ADDRESS.isNotEmpty()
 
+    /** The author's address, for "About" (empty in a build without it). */
+    val address: String get() = ADDRESS
+
+    /** An empty mail to the author - a question, an idea, anything. */
+    fun write(context: Context) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$ADDRESS")))
+        } catch (e: ActivityNotFoundException) {
+            val clipboard = context.getSystemService(ClipboardManager::class.java)
+            clipboard?.setPrimaryClip(ClipData.newPlainText(ADDRESS, ADDRESS))
+            Toast.makeText(context, context.getString(R.string.report_no_mail_address, ADDRESS), Toast.LENGTH_LONG).show()
+        }
+    }
+
     fun send(context: Context, problem: Problem, language: String) {
         val device = DeviceInfo(
             appVersion = runCatching {

@@ -57,6 +57,29 @@ fun typeNameRes(type: NoteType): Int = when (type) {
     NoteType.SHOPPING -> R.string.note_type_shopping
 }
 
+/** "Lista 2", not "Lista punktów 2" - the short name of a numbered card. */
+fun numberedNameRes(type: NoteType): Int =
+    if (type == NoteType.CHECKLIST) R.string.default_checklist_title else typeNameRes(type)
+
+/**
+ * The cards of each kind numbered in the order they were recorded - the first task is "Zadanie 1"
+ * (author 10.11.2026: "Zakupy" over "Zakupy" on every strip was a muddle). Note id -> number.
+ */
+fun kindNumbers(notes: List<Note>): Map<Long, Int> =
+    notes.groupBy { it.type }.values.flatMap { same ->
+        same.sortedWith(compareBy({ it.createdAtMillis }, { it.id })).mapIndexed { i, note -> note.id to i + 1 }
+    }.toMap()
+
+@Composable
+fun numberedName(type: NoteType, number: Int): String =
+    stringResource(R.string.card_numbered, stringResource(numberedNameRes(type)), number)
+
+/** A list titled only with its kind ("Lista", "Zakupy:") - the header above says the same. */
+fun titleIsKindName(note: Note, kindNames: List<String>): Boolean {
+    val title = note.title.trim().trimEnd(':', '.').trim()
+    return kindNames.any { it.equals(title, ignoreCase = true) }
+}
+
 @Composable
 fun groupName(group: ShoppingGroup?): String = stringResource(groupNameRes(group))
 
@@ -83,6 +106,19 @@ fun Note.matches(query: String): Boolean {
         body.contains(q, ignoreCase = true) ||
         place?.contains(q, ignoreCase = true) == true ||
         items.any { it.text.contains(q, ignoreCase = true) }
+}
+
+/**
+ * The title only repeats the text: the rules build it from the first sentence's words in order (skipping
+ * ones that do not fit, ending with "…"), so every title word shows up in the body in the same order.
+ * Such a title is not shown on a whole card (author 11.11.2026) - the text says it all.
+ */
+fun titleComesFromBody(note: Note): Boolean {
+    fun words(s: String) = s.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+    val title = words(note.title)
+    if (title.isEmpty()) return false
+    val body = words(note.body).iterator()
+    return title.all { w -> body.asSequence().any { it == w } }
 }
 
 /** The rules often keep the whole sentence as the body - no need to print the title twice. */

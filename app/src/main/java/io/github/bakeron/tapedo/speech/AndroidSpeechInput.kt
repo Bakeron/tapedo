@@ -89,7 +89,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             SpeechRecognizer.createSpeechRecognizer(context)
         }
 
-    override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long): Flow<SpeechEvent> = callbackFlow {
+    override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long, keepAudio: Boolean, pauseMillis: Long?): Flow<SpeechEvent> = callbackFlow {
         val onDevice = onDeviceAvailable()
         if (!onDevice && !SpeechRecognizer.isRecognitionAvailable(context)) {
             trySend(SpeechEvent.Failed(SpeechError.NOT_AVAILABLE))
@@ -105,6 +105,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             ContinuousMic(
                 skipMs = skipFirstMs,
                 onLevel = { trySend(SpeechEvent.Level(it)) },
+                keepAll = keepAudio,
             ).takeIf { it.start() }
         } else {
             null
@@ -114,7 +115,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         // Pauses become commas by the clock, not by where the recognizer ends its phrases. Some
         // recognizers end a phrase with "no match" (or an empty result) after showing it - what the
         // user saw on screen is still kept.
-        val transcript = Transcript()
+        val transcript = Transcript(pauseMillis)
         var stopping = false
         // Speech began and its phrase has no result yet - stopListening now would throw the phrase away.
         var speaking = false
@@ -144,7 +145,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         fun finish() {
             if (closed) return
             trySend(
-                if (transcript.isEmpty()) SpeechEvent.Failed(SpeechError.NO_SPEECH) else SpeechEvent.Done(transcript.text()),
+                if (transcript.isEmpty()) SpeechEvent.Failed(SpeechError.NO_SPEECH) else SpeechEvent.Done(transcript.text(), mic?.recorded()),
             )
             close()
         }

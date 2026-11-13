@@ -32,6 +32,22 @@ class TranscriptTest {
     }
 
     @Test
+    fun `the pause set in Settings decides, and with pauses off there is never a comma`() {
+        val five = Transcript(5_000)
+        five.phraseEnded("mleko", 0)
+        five.phraseEnded("chleb", 4_999)
+        five.phraseEnded("masło", 9_999)
+        assertEquals("mleko chleb, masło", five.text())
+
+        val never = Transcript(null)
+        never.partial("mleko", 0)
+        never.partial("mleko chleb", 8_000)
+        never.phraseEnded("mleko chleb", 8_500)
+        never.phraseEnded("masło", 30_000)
+        assertEquals("mleko chleb masło", never.text())
+    }
+
+    @Test
     fun `a pause shorter than two seconds is a space, two seconds or more a comma`() {
         val t = Transcript()
         t.phraseEnded("Monitor gigabajt", 0)

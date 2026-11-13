@@ -10,12 +10,15 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import io.github.bakeron.tapedo.core.ai.TopUpInput
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.SettingsStore
+import io.github.bakeron.tapedo.core.settings.WhisperProvider
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -29,10 +32,13 @@ private val Context.settingsDataStore by preferencesDataStore(
     corruptionHandler = settingsCorruptionHandler,
 )
 
-/** Settings in Jetpack DataStore - small key-value file, read and written off the main thread. */
-class DataStoreSettings(private val store: DataStore<Preferences>) : SettingsStore {
+/**
+ * Settings in Jetpack DataStore - small key-value file, read and written off the main thread.
+ * @param phoneLanguage the phone's language: speech language until the user picks one.
+ */
+class DataStoreSettings(private val store: DataStore<Preferences>, private val phoneLanguage: String = "pl") : SettingsStore {
 
-    constructor(context: Context) : this(context.applicationContext.settingsDataStore)
+    constructor(context: Context, phoneLanguage: String) : this(context.applicationContext.settingsDataStore, phoneLanguage)
 
     override val settings: Flow<AppSettings> = store.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
@@ -49,11 +55,12 @@ class DataStoreSettings(private val store: DataStore<Preferences>) : SettingsSto
             maxRecordingSeconds = p[MAX_SECONDS]?.takeIf { it in AppSettings.MAX_RECORDING_OPTIONS }
                 ?: d.maxRecordingSeconds,
             silenceSeconds = p[SILENCE_SECONDS]?.takeIf { it in AppSettings.SILENCE_OPTIONS } ?: d.silenceSeconds,
-            speechLanguage = p[SPEECH_LANGUAGE]?.takeIf { it in AppSettings.SPEECH_LANGUAGES } ?: d.speechLanguage,
+            pauseSeconds = p[PAUSE_SECONDS]?.takeIf { it in AppSettings.PAUSE_OPTIONS } ?: d.pauseSeconds,
+            speechLanguage = p[SPEECH_LANGUAGE]?.takeIf { it in AppSettings.SPEECH_LANGUAGES }
+                ?: AppSettings.speechLanguageFor(phoneLanguage),
             onlineSpeech = p[ONLINE_SPEECH].toEnum(d.onlineSpeech),
             // Anything that is not a type name (including "AUTO" or nothing) means "auto".
             noteTypeChoice = NoteType.entries.firstOrNull { it.name == p[NOTE_TYPE] },
-            defaultPriority = p[PRIORITY].toEnum(d.defaultPriority),
             theme = p[THEME].toEnum(d.theme),
             reduceMotion = p[REDUCE_MOTION] ?: d.reduceMotion,
             aiProviders = p[AI_PROVIDERS]?.let { list -> list.split(',').mapNotNull(AiProvider::ofId).toSet() }
@@ -64,6 +71,10 @@ class DataStoreSettings(private val store: DataStore<Preferences>) : SettingsSto
             }.toMap(),
             aiDailyLimit = p[AI_DAILY_LIMIT]?.takeIf { it in AppSettings.AI_DAILY_LIMITS } ?: d.aiDailyLimit,
             textScale = p[TEXT_SCALE]?.takeIf { it in AppSettings.TEXT_SCALES } ?: d.textScale,
+            whisper = WhisperProvider.entries.firstOrNull { it.name == p[WHISPER] },
+            tiltedPaper = p[TILTED_PAPER] ?: d.tiltedPaper,
+            claudeTopUpCents = p[CLAUDE_TOP_UP]?.takeIf { it in 1..TopUpInput.MAX_CENTS },
+            claudeTopUpDay = p[CLAUDE_TOP_UP_DAY]?.takeIf { it >= 0 },
         )
     }
 
@@ -71,10 +82,10 @@ class DataStoreSettings(private val store: DataStore<Preferences>) : SettingsSto
         p[RECORDING_END] = s.recordingEnd.name
         p[MAX_SECONDS] = s.maxRecordingSeconds
         p[SILENCE_SECONDS] = s.silenceSeconds
+        p[PAUSE_SECONDS] = s.pauseSeconds
         p[SPEECH_LANGUAGE] = s.speechLanguage
         p[ONLINE_SPEECH] = s.onlineSpeech.name
         p[NOTE_TYPE] = s.noteTypeChoice?.name ?: AUTO
-        p[PRIORITY] = s.defaultPriority.name
         p[THEME] = s.theme.name
         p[REDUCE_MOTION] = s.reduceMotion
         // Kept in the order they are asked, so the file reads the same as the screen.
@@ -86,6 +97,10 @@ class DataStoreSettings(private val store: DataStore<Preferences>) : SettingsSto
         }
         p[AI_DAILY_LIMIT] = s.aiDailyLimit
         p[TEXT_SCALE] = s.textScale
+        p[WHISPER] = s.whisper?.name ?: OFF
+        p[TILTED_PAPER] = s.tiltedPaper
+        s.claudeTopUpCents?.let { p[CLAUDE_TOP_UP] = it } ?: p.remove(CLAUDE_TOP_UP)
+        s.claudeTopUpDay?.let { p[CLAUDE_TOP_UP_DAY] = it } ?: p.remove(CLAUDE_TOP_UP_DAY)
     }
 
     private inline fun <reified E : Enum<E>> String?.toEnum(default: E): E =
@@ -95,12 +110,13 @@ class DataStoreSettings(private val store: DataStore<Preferences>) : SettingsSto
         val RECORDING_END = stringPreferencesKey("recording_end")
         val MAX_SECONDS = intPreferencesKey("max_recording_seconds")
         val SILENCE_SECONDS = intPreferencesKey("silence_seconds")
+        val PAUSE_SECONDS = intPreferencesKey("pause_seconds")
         val SPEECH_LANGUAGE = stringPreferencesKey("speech_language")
         val ONLINE_SPEECH = stringPreferencesKey("online_speech")
         // New key name: the old "default type" value must not turn into a manual choice.
         val NOTE_TYPE = stringPreferencesKey("note_type_choice")
         const val AUTO = "AUTO"
-        val PRIORITY = stringPreferencesKey("default_priority")
+        // "default_priority" (until 11.11.2026) may still be stored - it is no longer read.
         val THEME = stringPreferencesKey("theme")
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
         /** One provider before 0.5 - read once to keep the user's choice, then removed. */
@@ -109,5 +125,10 @@ class DataStoreSettings(private val store: DataStore<Preferences>) : SettingsSto
         val AI_DAILY_LIMIT = intPreferencesKey("ai_daily_limit")
         fun modelKey(provider: AiProvider) = stringPreferencesKey("ai_model_${provider.id}")
         val TEXT_SCALE = floatPreferencesKey("text_scale")
+        val WHISPER = stringPreferencesKey("whisper")
+        const val OFF = "OFF"
+        val TILTED_PAPER = booleanPreferencesKey("tilted_paper")
+        val CLAUDE_TOP_UP = intPreferencesKey("claude_top_up_cents")
+        val CLAUDE_TOP_UP_DAY = longPreferencesKey("claude_top_up_day")
     }
 }

@@ -24,7 +24,9 @@ private val Context.aiUsageDataStore by preferencesDataStore(
 
 /**
  * AI calls per provider and day in a small DataStore file (no database migration needed): keys
- * `calls:<provider>:<epoch day>` for the last 30 days and `limit:<provider>` = the day the provider said "limit".
+ * `calls:<provider>:<epoch day>` for the last 30 days, `limit:<provider>` = the day the provider said "limit",
+ * and `claude:<epoch day>` = Claude's cost that day in millionths of a dollar, kept for about a year
+ * (the spending counter adds up the days since the last top-up).
  */
 class DataStoreAiUsage(private val store: DataStore<Preferences>) : AiUsage {
 
@@ -61,12 +63,38 @@ class DataStoreAiUsage(private val store: DataStore<Preferences>) : AiUsage {
         store.edit { it.remove(limitKey(provider)) }
     }
 
-    /** Only the last 30 days are shown - older counts are removed so the file stays small. */
+    private fun claudeKey(day: Long) = longPreferencesKey("claude:$day")
+
+    override suspend fun addClaudeCost(day: Long, microUsd: Long) {
+        store.edit { p ->
+            val key = claudeKey(day)
+            p[key] = (p[key] ?: 0L) + microUsd
+            dropOld(p, day)
+        }
+    }
+
+    override suspend fun claudeCostMicros(fromDay: Long, toDay: Long): Long =
+        prefs().asMap().entries.sumOf { (key, value) ->
+            val day = key.name.takeIf { it.startsWith("claude:") }?.substringAfter(':')?.toLongOrNull()
+            if (day != null && day in fromDay..toDay) (value as? Long ?: 0L) else 0L
+        }
+
+    /** Calls are shown for 30 days, Claude's cost for about a year - older days go, so the file stays small. */
     private fun dropOld(p: MutablePreferences, today: Long) {
         val old = p.asMap().keys.filter { key ->
-            val day = key.name.takeIf { it.startsWith("calls:") }?.substringAfterLast(':')?.toLongOrNull()
-            day != null && day < today - 29
+            val name = key.name
+            val day = name.substringAfterLast(':').toLongOrNull()
+            when {
+                day == null -> false
+                name.startsWith("calls:") -> day < today - 29
+                name.startsWith("claude:") -> day < today - CLAUDE_DAYS_KEPT
+                else -> false
+            }
         }
         old.forEach { p.remove(it) }
+    }
+
+    private companion object {
+        const val CLAUDE_DAYS_KEPT = 400
     }
 }

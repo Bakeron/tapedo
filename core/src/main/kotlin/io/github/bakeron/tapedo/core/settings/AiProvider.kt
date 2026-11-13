@@ -23,11 +23,15 @@ enum class AiProvider(
         "https://console.groq.com/keys",
     ),
     OPENROUTER(
-        "openrouter", true, "google/gemma-4-31b-it:free", 3_500,
-        listOf("google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-3.5-super-vl:free", "openrouter/free"),
+        // "openrouter/free" picks a free model that is not busy at the moment - one popular free model
+        // was often "rate-limited upstream" after a single call (Tablica ofert, 7.11.2026).
+        "openrouter", true, "openrouter/free", 3_500,
+        listOf("openrouter/free", "google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-3.5-super-vl:free"),
         "https://openrouter.ai/keys",
     ),
-    ANTHROPIC("anthropic", false, "claude-opus-5-5", 500, emptyList(), "https://platform.claude.com/settings/keys"),
+    // Sonnet: accurate enough for sorting notes at about 2-3 grosze a minute of speech; Opus costs twice as much
+    // for no gain here, Haiku is cheaper but wrong more often (author's shared AI rules, 11.11.2026).
+    ANTHROPIC("anthropic", false, "claude-sonnet-5-5", 500, emptyList(), "https://platform.claude.com/settings/keys"),
     OPENAI("openai", false, "gpt-6-luna", 500, emptyList(), "https://platform.openai.com/api-keys"),
     GEMINI("gemini", false, "gemini-3.5-flash-lite", 500, emptyList(), "https://aistudio.google.com/apikey"),
     ;
