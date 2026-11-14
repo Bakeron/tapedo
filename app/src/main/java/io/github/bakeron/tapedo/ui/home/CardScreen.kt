@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onPlaced
@@ -62,9 +63,10 @@ import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 
 /**
  * "Karteczka": one card on the whole screen, with everything in one place (author 13.11.2026 - reading here
- * and writing in a separate editor was chaos). From the top: the card itself, written on directly; the wide
- * "Add by voice" key with the live line; type, priority and "Share"; "Delete card" at the bottom of the screen,
- * away from the ticks (undo is offered on the stack). Every change is kept by itself - back just closes.
+ * and writing in a separate editor was chaos). From the top: the card itself, written on directly (a list has
+ * "Add by voice" next to "Add item"); the live line, and on a text card the wide "Add by voice" key; type,
+ * priority, then "Share" and "Delete card" at the end, away from the ticks (undo is offered on the stack).
+ * Every change is kept by itself - back just closes.
  */
 @Composable
 fun CardScreen(
@@ -114,12 +116,15 @@ fun CardScreen(
         }
     }
 
+    val listCard = note.type.hasItems
     val scroll = rememberScrollState()
     // Where the voice block lies in the scrolled column - a long card scrolls down to it when recording starts.
     val voice = remember { floatArrayOf(0f, 0f) } // top, bottom (px)
     val margin = with(LocalDensity.current) { 16.dp.toPx() }
     LaunchedEffect(active != null) {
         if (active == null) return@LaunchedEffect
+        // On a list the block only appears now - wait one frame so its place below is measured.
+        withFrameNanos { }
         val viewport = scroll.viewportSize.toFloat()
         val target = when {
             voice[1] > scroll.value + viewport -> (voice[1] - viewport + margin).toInt()
@@ -173,10 +178,30 @@ fun CardScreen(
                     }
                 }
 
-                EditableCard(note, number, onChange)
+                // The black "Add by voice" key: on a list next to "Add item" inside the card (author 14.11.2026),
+                // on a text card under it, with the hint.
+                val voiceKey: @Composable () -> Unit = {
+                    PaperButton(
+                        stringResource(
+                            when {
+                                // During "3, 2, 1" nothing is recorded yet - the key says plainly that it cancels.
+                                counting -> R.string.record_cancel
+                                active != null -> R.string.preview_add_stop
+                                else -> R.string.preview_add_voice
+                            },
+                        ),
+                        onClick = onRecordKey,
+                        style = PaperButtonStyle.FILLED,
+                        // A card whose first save failed has nothing in the database to add to yet.
+                        enabled = !appending && note.id != 0L,
+                        modifier = if (listCard) Modifier else Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    )
+                }
+                EditableCard(note, number, onChange, voiceKey = if (listCard) voiceKey else null)
 
-                // Add by voice, right under the card: the live line and words while recording, a short hint otherwise.
-                Column(
+                // Under the card: the live line and words while recording; "adding" after it; the hint and the key
+                // on a text card. An idle list has nothing here, so no empty gap.
+                if (active != null || appending || !listCard) Column(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 4.dp)
@@ -214,36 +239,17 @@ fun CardScreen(
                         )
                     } else {
                         Text(
-                            stringResource(
-                                when {
-                                    appending -> R.string.preview_adding
-                                    note.type.hasItems -> R.string.preview_add_hint_list
-                                    else -> R.string.preview_add_hint_text
-                                },
-                            ),
+                            stringResource(if (appending) R.string.preview_adding else R.string.preview_add_hint_text),
                             style = MaterialTheme.typography.bodySmall,
                             color = scheme.onSurfaceVariant,
                             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                         )
                     }
-                    PaperButton(
-                        stringResource(
-                            when {
-                                // During "3, 2, 1" nothing is recorded yet - the key says plainly that it cancels.
-                                counting -> R.string.record_cancel
-                                active != null -> R.string.preview_add_stop
-                                else -> R.string.preview_add_voice
-                            },
-                        ),
-                        onClick = onRecordKey,
-                        style = PaperButtonStyle.FILLED,
-                        // A card whose first save failed has nothing in the database to add to yet.
-                        enabled = !appending && note.id != 0L,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    )
+                    if (!listCard) voiceKey()
                 }
 
-                CardOptions(note, onChange, Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+                // "Delete card" scrolls with the rest, next to "Share" at the very end - far from the ticks.
+                CardOptions(note, onChange, onDelete, Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
             }
             // "3, 2, 1" in the middle, over the card - the same dial as on the main screen.
             val lastDigit = remember { intArrayOf(3) }
@@ -258,13 +264,5 @@ fun CardScreen(
                 CountdownDial(lastDigit[0], onCancel = onStopAppend)
             }
         }
-
-        // At the bottom of the screen, where the black key used to be - far from the ticks.
-        PaperButton(
-            stringResource(R.string.editor_delete),
-            onClick = onDelete,
-            style = PaperButtonStyle.DANGER,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).heightIn(min = 48.dp),
-        )
     }
 }

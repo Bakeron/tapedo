@@ -882,14 +882,34 @@
     root.appendChild(header(S("editor_title"), closeCard));
     var col = h("div", { class: "cardCol" });
     col.appendChild(editableCard(note, number));
-    var hint = hasItems(note.type) ? S("preview_add_hint_list") : S("preview_add_hint_text");
-    col.appendChild(h("div", { class: "voice" },
-      h("div", { class: "bodySmall variant" }, hint),
-      pbtn(S("preview_add_voice"), function (e, b) { bubble(b, D("mic")); }, "filled", { wide: true, style: { minHeight: "52px" } })));
+    // A list has "Add by voice" inside the card, next to "Add item"; a text card keeps the wide key and the hint.
+    if (!hasItems(note.type)) {
+      col.appendChild(h("div", { class: "voice" },
+        h("div", { class: "bodySmall variant" }, S("preview_add_hint_text")),
+        voiceKey({ wide: true, style: { minHeight: "52px" } })));
+    }
     col.appendChild(cardOptions(note));
     root.appendChild(h("div", { class: "scroll grow", "data-scroll": "card" }, col));
-    root.appendChild(h("div", { class: "deleteBar col" }, pbtn(S("editor_delete"), deleteEditing, "danger", { wide: true })));
     return root;
+  }
+
+  function voiceKey(opts) { return pbtn(S("preview_add_voice"), function (e, b) { bubble(b, D("mic")); }, "filled", opts); }
+
+  // Keys side by side, equally wide; when any label is too wide for its half (bigger text), one under the other
+  // (ui/components/PairOrStack.kt).
+  function pairOrStack(keys, stackGap) {
+    var el = h("div", { class: "pair" });
+    el.style.setProperty("--stackGap", stackGap + "px");
+    keys.forEach(function (k) { el.appendChild(k); });
+    after(function () {
+      el.classList.remove("stack");
+      el.classList.add("measure");
+      var half = (el.clientWidth - 12) / keys.length;
+      var tooWide = keys.some(function (k) { return k.offsetWidth > half; });
+      el.classList.remove("measure");
+      if (tooWide) el.classList.add("stack");
+    });
+    return el;
   }
 
   function paperWidth(type) { return type === "SHOPPING" ? 86 : type === "IDEA" ? 82 : 100; }
@@ -1046,10 +1066,12 @@
             onclick: function () { edit({ items: st.editing.items.filter(function (_, j) { return j !== i; }) }, true); } }, h("span", { "aria-hidden": "true" }, "×"))));
       });
     });
-    el.appendChild(pbtn(S("editor_add_item"), function () {
+    var keys = pairOrStack([pbtn(S("editor_add_item"), function () {
       focusItem = items.length;
       edit({ items: st.editing.items.concat([{ text: "", checked: false, group: shopping ? "OTHER" : null }]) }, true);
-    }, "", { style: { marginTop: "8px" } }));
+    }), voiceKey()], 8);
+    keys.style.marginTop = "8px";
+    el.appendChild(keys);
     return el;
   }
 
@@ -1081,12 +1103,12 @@
       el.appendChild(h("div", { class: "col", style: { gap: "10px" } }, labelTape(S("editor_field_priority")),
         slide("priority", PRIORITIES, note.priority, priorityName, function (p) { edit({ priority: p }, true); })));
     }
-    el.appendChild(pbtn(S("card_share"), function (e, b) {
+    el.appendChild(pairOrStack([pbtn(S("card_share"), function (e, b) {
       var n = tidy(st.editing);
       if (navigator.share) {
         navigator.share({ title: n.title, text: shareText(n) }).catch(function (err) { if (err && err.name !== "AbortError") bubble(b, D("off")); });
       } else bubble(b, D("off"));
-    }, "", { wide: true }));
+    }), pbtn(S("editor_delete"), deleteEditing, "danger")], 18));
     return el;
   }
 

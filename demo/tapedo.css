@@ -201,7 +201,11 @@ textarea.ruledArea { background-repeat: repeat-y; background-size: 100% calc(25p
 .typeTape .led i { display: block; width: 100%; height: 100%; border-radius: 50%; background: var(--rule); }
 .typeTape.sel .led { border-color: var(--onPrimary); }
 .typeTape.sel .led i { background: var(--record); }
-.deleteBar { padding: 10px 16px; flex: none; }
+.pair { display: flex; gap: 12px; }
+.pair > .pbtn { flex: 1 1 0; min-width: 0; align-self: stretch; }
+.pair.measure > .pbtn { flex: none; width: max-content; }
+.pair.stack { flex-direction: column; gap: var(--stackGap, 18px); }
+.pair.stack > .pbtn { flex: none; width: 100%; }
 
 /* SlideSelector: a slide switch with a knob and LEDs. */
 .slide { position: relative; min-height: 52px; background: var(--track); border: 1px solid var(--controlEdge); border-radius: 5px; padding: 3px; }

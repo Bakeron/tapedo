@@ -53,7 +53,9 @@ import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.model.Priority
 import io.github.bakeron.tapedo.core.model.ShoppingGroup
 import io.github.bakeron.tapedo.ui.components.LabelTape
+import io.github.bakeron.tapedo.ui.components.PairOrStack
 import io.github.bakeron.tapedo.ui.components.PaperButton
+import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
 import io.github.bakeron.tapedo.ui.components.RubberStamp
 import io.github.bakeron.tapedo.ui.components.SlideSelector
 import io.github.bakeron.tapedo.ui.home.TypeTapeBar
@@ -66,10 +68,16 @@ import java.time.LocalDate
  * The card in the card view, written on directly (author 13.11.2026: reading in one place and writing in
  * another was chaos): its kind on top ("Zadanie 3"), the title, text or items to tick, add and remove,
  * place, date, time and "done", on the paper of its kind with the priority tape and the AI stamp.
- * Every change goes to [onChange] at once.
+ * Every change goes to [onChange] at once. A list shows [voiceKey] ("Add by voice") next to "Add item".
  */
 @Composable
-fun EditableCard(note: Note, number: Int?, onChange: (Note) -> Unit, modifier: Modifier = Modifier) {
+fun EditableCard(
+    note: Note,
+    number: Int?,
+    onChange: (Note) -> Unit,
+    modifier: Modifier = Modifier,
+    voiceKey: (@Composable () -> Unit)? = null,
+) {
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val locale = appLocale()
@@ -113,7 +121,7 @@ fun EditableCard(note: Note, number: Int?, onChange: (Note) -> Unit, modifier: M
                     )
                 }
                 if (note.type.hasItems) {
-                    ItemsEditor(note) { onChange(note.copy(items = it)) }
+                    ItemsEditor(note, voiceKey) { onChange(note.copy(items = it)) }
                 }
                 if (note.type == NoteType.EVENT) {
                     PaperField(
@@ -166,9 +174,9 @@ fun EditableCard(note: Note, number: Int?, onChange: (Note) -> Unit, modifier: M
     }
 }
 
-/** Under the card: its type, its priority (not for an idea) and "Share". */
+/** Under the card: its type, its priority (not for an idea), then "Share" and "Delete card" as the last keys. */
 @Composable
-fun CardOptions(note: Note, onChange: (Note) -> Unit, modifier: Modifier = Modifier) {
+fun CardOptions(note: Note, onChange: (Note) -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val locale = appLocale()
     val today = remember { LocalDate.now().toEpochDay() }
@@ -192,11 +200,17 @@ fun CardOptions(note: Note, onChange: (Note) -> Unit, modifier: Modifier = Modif
                 )
             }
         }
-        PaperButton(
-            stringResource(R.string.card_share),
-            onClick = { shareNote(context, note.tidy(), today, locale) },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        PairOrStack(Modifier.fillMaxWidth()) {
+            PaperButton(
+                stringResource(R.string.card_share),
+                onClick = { shareNote(context, note.tidy(), today, locale) },
+            )
+            PaperButton(
+                stringResource(R.string.editor_delete),
+                onClick = onDelete,
+                style = PaperButtonStyle.DANGER,
+            )
+        }
     }
 }
 
@@ -283,7 +297,7 @@ private fun PaperField(
  * A shopping list keeps its shop sections ("NABIAŁ"), printed like on a till receipt.
  */
 @Composable
-private fun ItemsEditor(note: Note, onChange: (List<ChecklistItem>) -> Unit) {
+private fun ItemsEditor(note: Note, voiceKey: (@Composable () -> Unit)?, onChange: (List<ChecklistItem>) -> Unit) {
     val items = note.items
     val shopping = note.type == NoteType.SHOPPING
     val scheme = MaterialTheme.colorScheme
@@ -365,14 +379,16 @@ private fun ItemsEditor(note: Note, onChange: (List<ChecklistItem>) -> Unit) {
                 }
             }
         }
-        PaperButton(
-            stringResource(R.string.editor_add_item),
-            onClick = {
-                onChange(items + ChecklistItem("", group = if (shopping) ShoppingGroup.OTHER else null))
-                focusIndex = items.size
-            },
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        PairOrStack(Modifier.fillMaxWidth().padding(top = 8.dp), stackGap = 8.dp) {
+            PaperButton(
+                stringResource(R.string.editor_add_item),
+                onClick = {
+                    onChange(items + ChecklistItem("", group = if (shopping) ShoppingGroup.OTHER else null))
+                    focusIndex = items.size
+                },
+            )
+            voiceKey?.invoke()
+        }
     }
 }
 
