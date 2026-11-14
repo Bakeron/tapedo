@@ -16,6 +16,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
@@ -59,8 +61,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -176,8 +180,34 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
     editing?.let { last[0] = it }
     if (screen == HomeShown.REVIEW) last[1] = recording
     val stillNow = TapedoTheme.reduceMotion
+
+    // First steps: on the first start (and when asked for again in Settings), over the card box only.
+    // Closed at once on screen; the setting is written behind - its change also clears "closed" for next time.
+    val tourSpots = remember { TourSpots() }
+    var tourStep by rememberSaveable { mutableIntStateOf(0) }
+    var tourClosed by rememberSaveable(settings?.firstStepsSeen) { mutableStateOf(false) }
+    val touring = settings?.firstStepsSeen == false && !tourClosed &&
+        screen == HomeShown.BOX && recording !is RecordingState.Active
+    val finishTour = {
+        tourClosed = true
+        tourStep = 0
+        viewModel.finishFirstSteps()
+    }
+
+    Box(Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalTourSpots provides tourSpots) {
     AnimatedContent(
         targetState = screen,
+        // Under the tips the screen is out of a screen reader's reach - only the slip is read.
+        // Nor can the keyboard focus wander there.
+        modifier = if (touring) {
+            Modifier
+                .clearAndSetSemantics { }
+                .focusProperties { onEnter = { cancelFocusChange() } }
+                .focusGroup()
+        } else {
+            Modifier
+        },
         transitionSpec = { fadeSwap(stillNow) },
         label = "home screens",
     ) { target ->
@@ -261,6 +291,17 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onDismissOwnAudioRefused = viewModel::dismissOwnAudioRefused,
             onReport = report,
             pauseSeconds = settings?.pauseSeconds ?: AppSettings().pauseSeconds,
+        )
+    }
+    }
+    }
+    if (touring) {
+        FirstStepsOverlay(
+            step = tourStep,
+            spots = tourSpots,
+            onNext = { if (tourStep == FirstStep.entries.lastIndex) finishTour() else tourStep++ },
+            onBack = { if (tourStep == 0) finishTour() else tourStep-- },
+            onSkip = finishTour,
         )
     }
     }
@@ -426,7 +467,7 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Nameplate(stringResource(R.string.app_name))
-                IconButton(onClick = onOpenSettings) {
+                IconButton(onClick = onOpenSettings, modifier = Modifier.tourSpot(TourSpot.SETTINGS)) {
                     Icon(painterResource(R.drawable.ic_settings), contentDescription = stringResource(R.string.home_open_settings))
                 }
             }
@@ -508,6 +549,7 @@ private fun ColumnScope.RecordControls(
                 stringResource(R.string.record_state, spokenDuration(it.elapsedSeconds), spokenDuration(it.limitSeconds))
             },
             onClick = onRecordKey,
+            modifier = Modifier.tourSpot(TourSpot.RECORD),
         )
         Spacer(Modifier.height(8.dp))
         // Under the key: its name, "Cancel" during the countdown, the tape counter while recording - each fades

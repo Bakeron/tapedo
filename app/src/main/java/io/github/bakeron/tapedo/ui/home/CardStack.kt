@@ -141,6 +141,7 @@ fun CardStack(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .tourSpot(TourSpot.BOX)
                 .background(colors.cardEdge),
         ) {
             if (notes.isNotEmpty()) {
@@ -190,6 +191,7 @@ private fun DividerTabs(selected: StackTab, counts: Map<StackTab, Int>, onSelect
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
+            .tourSpot(TourSpot.TABS)
             .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.Bottom,

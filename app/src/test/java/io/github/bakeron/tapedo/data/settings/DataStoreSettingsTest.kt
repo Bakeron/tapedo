@@ -74,6 +74,7 @@ class DataStoreSettingsTest {
             AppSettings.TEXT_SCALES.map { d.copy(textScale = it) } +
             (WhisperProvider.entries + null).map { d.copy(whisper = it) } +
             listOf(true, false).map { d.copy(tiltedPaper = it) } +
+            listOf(true, false).map { d.copy(firstStepsSeen = it) } +
             listOf(d.copy(claudeTopUpCents = 2050, claudeTopUpDay = 20_404L), d.copy(claudeTopUpCents = null, claudeTopUpDay = null)) +
             AppSettings(
                 recordingEnd = RecordingEnd.STOP_BUTTON, maxRecordingSeconds = 600, silenceSeconds = 12,
@@ -94,7 +95,7 @@ class DataStoreSettingsTest {
         val names = raw.data.first().asMap().keys.map { it.name }.sorted()
         assertEquals(
             listOf(
-                "ai_daily_limit", "ai_providers", "max_recording_seconds", "note_type_choice", "online_speech",
+                "ai_daily_limit", "ai_providers", "first_steps_seen", "max_recording_seconds", "note_type_choice", "online_speech",
                 "pause_seconds", "recording_end", "reduce_motion", "silence_seconds", "speech_language", "text_scale", "theme",
                 "tilted_paper", "whisper",
             ),

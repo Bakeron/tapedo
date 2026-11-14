@@ -373,4 +373,24 @@
     <string name="preview_add_hint_list">Powiedz, co dopisać do listy, np. „masło i jajka”.</string>
     <string name="preview_add_hint_text">To, co powiesz, dopisze się na końcu tekstu.</string>
     <string name="preview_adding">Dopisuję…</string>
+    <!-- First steps -->
+    <string name="first_steps_pane">Pierwsze kroki</string>
+    <string name="first_steps_count">%1$d z %2$d</string>
+    <string name="first_steps_skip">Pomiń</string>
+    <string name="first_steps_next">Dalej</string>
+    <string name="first_steps_done">Zaczynam</string>
+    <string name="first_steps_record_title">Czerwony klawisz nagrywa</string>
+    <string name="first_steps_record_body">Naciśnij go i po „3, 2, 1” powiedz, co chcesz zapamiętać. Nagranie kończy się samo po chwili ciszy albo gdy naciśniesz klawisz jeszcze raz - z tego, co powiesz, powstaje karteczka.</string>
+    <string name="first_steps_tabs_title">Przekładki to rodzaje karteczek</string>
+    <string name="first_steps_tabs_body">Zakupy, listy, zadania, wydarzenia, notatki i pomysły mają swoje przekładki, a skończone sprawy leżą w „Zrobione”. Nagranie trafia do otwartej przekładki - wybierz ją, zanim naciśniesz klawisz.</string>
+    <string name="first_steps_box_title">Pudełko z karteczkami</string>
+    <string name="first_steps_box_body">Tu leżą karteczki z otwartej przekładki. Dotknij karteczki, żeby ją przeczytać, poprawić albo dopisać coś głosem. Zadanie odhaczysz od razu w kratce, a × wyrzuca karteczkę (przez chwilę można to cofnąć). Gdy karteczek przybędzie, nad nimi pojawi się wyszukiwanie.</string>
+    <string name="first_steps_priority_title">Taśma w rogu to priorytet</string>
+    <string name="first_steps_priority_body">Każda taśma ma swój kolor i wzór. Priorytet zmienisz po otwarciu karteczki. Pomysły nie mają priorytetu.</string>
+    <string name="first_steps_priority_high">Wysoki - paski. Powiedz w nagraniu „pilne” albo „ważne”.</string>
+    <string name="first_steps_priority_medium">Średni - kropki.</string>
+    <string name="first_steps_priority_low">Niski - gładka. Tak zaczyna każda nowa karteczka.</string>
+    <string name="first_steps_settings_title">Ustawienia</string>
+    <string name="first_steps_settings_body">Tu zmienisz długość nagrania, przerwę, która robi nowy punkt listy, język mowy, motyw „Papier” albo „Panel” i wielkość tekstu. AI nie jest potrzebne - bez niego karteczki pisze sam telefon. Te podpowiedzi pokażesz znowu w zakładce „O aplikacji”.</string>
+    <string name="settings_first_steps">Pokaż pierwsze kroki</string>
 </resources>

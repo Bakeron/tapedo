@@ -75,6 +75,7 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val p
             tiltedPaper = p[TILTED_PAPER] ?: d.tiltedPaper,
             claudeTopUpCents = p[CLAUDE_TOP_UP]?.takeIf { it in 1..TopUpInput.MAX_CENTS },
             claudeTopUpDay = p[CLAUDE_TOP_UP_DAY]?.takeIf { it >= 0 },
+            firstStepsSeen = p[FIRST_STEPS_SEEN] ?: d.firstStepsSeen,
         )
     }
 
@@ -101,6 +102,7 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val p
         p[TILTED_PAPER] = s.tiltedPaper
         s.claudeTopUpCents?.let { p[CLAUDE_TOP_UP] = it } ?: p.remove(CLAUDE_TOP_UP)
         s.claudeTopUpDay?.let { p[CLAUDE_TOP_UP_DAY] = it } ?: p.remove(CLAUDE_TOP_UP_DAY)
+        p[FIRST_STEPS_SEEN] = s.firstStepsSeen
     }
 
     private inline fun <reified E : Enum<E>> String?.toEnum(default: E): E =
@@ -130,5 +132,6 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val p
         val TILTED_PAPER = booleanPreferencesKey("tilted_paper")
         val CLAUDE_TOP_UP = intPreferencesKey("claude_top_up_cents")
         val CLAUDE_TOP_UP_DAY = longPreferencesKey("claude_top_up_day")
+        val FIRST_STEPS_SEEN = booleanPreferencesKey("first_steps_seen")
     }
 }

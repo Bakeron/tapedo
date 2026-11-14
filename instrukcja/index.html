@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tapedo - instrukcja</title>
+<meta name="description" content="Instrukcja aplikacji Tapedo na Androida: nagrywanie, karteczki, przekładki, priorytety i ustawienia - krok po kroku, ze zrzutami ekranu.">
+<style>
+  /*
+   * The leaflet folded into the box of a new pocket recorder: a narrow paper booklet, numbered chapters on
+   * label-maker tape, screenshots with yellow marker numbers - the same marker the app's "first steps" use.
+   * Light = the app's "Paper" theme, dark = "Panel".
+   */
+  :root {
+    --bg: #ece6d8;
+    --card: #fbf8f0;
+    --ink: #24211c;
+    --muted: #5e594f;
+    --rule: #d6ccb8;
+    --margin: #c4574a;
+    --link: #1f5a8a;
+    --tape: #2b2925;
+    --tape-ink: #fbf8f0;
+    --marker: #e8b04a;
+    --marker-ink: #24211c;
+    --frame: #3a3833;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413;
+      --card: #222120;
+      --ink: #ece7dd;
+      --muted: #b7b0a3;
+      --rule: #3c3a36;
+      --margin: #e0806f;
+      --link: #8cc1ec;
+      --tape: #e0a440;
+      --tape-ink: #1c1b19;
+      --marker: #e8b04a;
+      --marker-ink: #1c1b19;
+      --frame: #55524b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-padding-top: 1rem; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 1.0625rem/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  .cover, section {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--margin);
+    padding: 1.25rem 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .tape {
+    display: inline-block;
+    background: var(--tape);
+    color: var(--tape-ink);
+    font: 700 0.85rem/1 ui-monospace, "Courier New", monospace;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.4rem 0.6rem;
+    margin: 0 0 0.6rem;
+  }
+  h1, h2, h3 { font-family: ui-monospace, "Courier New", monospace; line-height: 1.25; }
+  h1 { font-size: 1.75rem; margin: 0 0 0.5rem; }
+  h2 { font-size: 1.25rem; margin: 0 0 0.75rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--rule); }
+  p, ul, ol { margin: 0.5rem 0; }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: 0.3rem 0; }
+  a { color: var(--link); text-underline-offset: 0.15em; }
+  a:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  b, strong { font-weight: 650; }
+  .muted { color: var(--muted); font-size: 0.95rem; }
+  .key {
+    display: inline-block;
+    border: 1.5px solid currentColor;
+    border-radius: 3px;
+    padding: 0 0.35em;
+    font-size: 0.92em;
+    font-weight: 600;
+  }
+  .toc { columns: 2 14rem; column-gap: 2rem; padding-left: 1.6rem; }
+  .toc li { break-inside: avoid; }
+
+  /* A screenshot and its numbered legend side by side; one under the other on a phone. */
+  .shot { display: grid; grid-template-columns: minmax(0, 17rem) minmax(0, 1fr); gap: 1.25rem; align-items: start; margin: 1rem 0 0.5rem; }
+  .shot.solo { grid-template-columns: minmax(0, 17rem); }
+  .shot.pair { grid-template-columns: repeat(2, minmax(0, 17rem)); }
+  @media (max-width: 40rem) {
+    .shot, .shot.pair { grid-template-columns: minmax(0, 1fr); }
+    .phone { max-width: 19rem; margin: 0 auto; }
+  }
+  figure { margin: 0; }
+  .phone {
+    position: relative;
+    border: 6px solid var(--frame);
+    border-radius: 18px;
+    overflow: hidden;
+    background: var(--frame);
+  }
+  .phone img { display: block; width: 100%; height: auto; }
+  figcaption { font-size: 0.9rem; color: var(--muted); margin-top: 0.4rem; text-align: center; }
+  /* Marker numbers: a yellow dot with a dark typed digit and a dark ring, so it reads on light and dark screens. */
+  .pin {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    transform: translate(-50%, -50%);
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    background: var(--marker);
+    color: var(--marker-ink);
+    border: 2px solid #1c1b19;
+    font: 700 0.85rem/1.35rem ui-monospace, "Courier New", monospace;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  }
+  .legend { list-style: none; padding: 0; margin: 0; counter-reset: pin; }
+  .legend li { position: relative; padding-left: 2.2rem; margin: 0 0 0.6rem; }
+  .legend li::before {
+    counter-increment: pin;
+    content: counter(pin);
+    position: absolute;
+    left: 0;
+    top: 0.05rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background: var(--marker);
+    color: var(--marker-ink);
+    border: 2px solid #1c1b19;
+    font: 700 0.8rem/1.25rem ui-monospace, "Courier New", monospace;
+    text-align: center;
+  }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; padding-left: 2.4rem; margin: 0 0 0.7rem; }
+  .steps li::before {
+    counter-increment: step;
+    content: counter(step) ".";
+    position: absolute;
+    left: 0;
+    font: 700 1rem/1.6 ui-monospace, "Courier New", monospace;
+    color: var(--margin);
+  }
+  .note {
+    border-left: 3px solid var(--marker);
+    padding: 0.4rem 0 0.4rem 0.8rem;
+    margin: 0.75rem 0;
+  }
+  .back { font-size: 0.9rem; margin-top: 1rem; }
+  footer { text-align: center; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+
+<header class="cover">
+  <p class="tape">Tapedo · instrukcja</p>
+  <h1>Mów w biegu - Tapedo rozpisze to na karteczki</h1>
+  <p>Tapedo to dyktafon na Androida, który z tego, co powiesz, robi osobne karteczki: notatki, listy do odhaczania, zadania z terminem, wydarzenia, pomysły i listy zakupów podzielone na działy sklepu. Działa bez konta i bez internetu, a karteczki zostają tylko w Twoim telefonie.</p>
+  <p class="muted">Zrzuty ekranu pochodzą z wersji 1.9 z wymyślonymi karteczkami. Przy zrzutach są żółte numery - pod nimi lub obok opisane jest, co jest pod każdym numerem.</p>
+  <h2 id="spis">Spis treści</h2>
+  <ol class="toc">
+    <li><a href="#pierwsze-kroki">Pierwsze uruchomienie</a></li>
+    <li><a href="#ekran-glowny">Ekran główny</a></li>
+    <li><a href="#nagrywanie">Nagrywanie</a></li>
+    <li><a href="#po-nagraniu">Okno po nagraniu</a></li>
+    <li><a href="#karteczka">Karteczka</a></li>
+    <li><a href="#listy">Listy i zakupy</a></li>
+    <li><a href="#zrobione">Odhaczanie i „Zrobione”</a></li>
+    <li><a href="#usuwanie">Usuwanie i „Cofnij”</a></li>
+    <li><a href="#priorytety">Priorytety</a></li>
+    <li><a href="#szukanie">Szukanie</a></li>
+    <li><a href="#ustawienia">Ustawienia</a></li>
+    <li><a href="#prywatnosc">Prywatność</a></li>
+    <li><a href="#problemy">Gdy coś nie działa</a></li>
+  </ol>
+</header>
+
+<section id="pierwsze-kroki">
+  <p class="tape">1</p>
+  <h2>Pierwsze uruchomienie</h2>
+  <p>Przy pierwszym uruchomieniu Tapedo pokazuje pięć podpowiedzi „Pierwsze kroki”. Reszta ekranu jest przyciemniona, a żółty marker zakreśla to, o czym mowa: czerwony klawisz, przekładki, pudełko z karteczkami, priorytety i ustawienia.</p>
+  <div class="shot pair">
+    <figure>
+      <div class="phone"><img src="img/kroki-1.webp" width="540" height="1110" loading="lazy" alt="Pierwsza podpowiedź „Czerwony klawisz nagrywa”: ekran przyciemniony, czerwony klawisz zakreślony żółtym markerem, strzałka od karteczki z opisem do klawisza, przyciski Pomiń i Dalej."></div>
+      <figcaption>Podpowiedź 1 z 5 (motyw „Papier”)</figcaption>
+    </figure>
+    <figure>
+      <div class="phone"><img src="img/kroki-3-panel.webp" width="540" height="1110" loading="lazy" alt="Trzecia podpowiedź „Pudełko z karteczkami” w ciemnym motywie Panel: pudełko obwiedzione żółtą ramką, karteczka z opisem leży na jego dolnej części."></div>
+      <figcaption>Podpowiedź 3 z 5 (motyw „Panel”)</figcaption>
+    </figure>
+  </div>
+  <ol class="steps">
+    <li><span class="key">Dalej</span> przechodzi do następnej podpowiedzi, na ostatniej jest <span class="key">Zaczynam</span>.</li>
+    <li><span class="key">Pomiń</span> zamyka wszystkie podpowiedzi od razu.</li>
+    <li>Przycisk <b>Wstecz</b> telefonu cofa do poprzedniej podpowiedzi, a na pierwszej je zamyka.</li>
+    <li>Z klawiaturą: strzałka w prawo - dalej, strzałka w lewo - wstecz, Esc - pomiń.</li>
+  </ol>
+  <p>Podpowiedzi pojawiają się tylko raz. Żeby zobaczyć je znowu, otwórz <b>Ustawienia → O aplikacji</b> i naciśnij <span class="key">Pokaż pierwsze kroki</span>. Przy włączonym „Ogranicz animacje” marker i strzałka pojawiają się od razu, bez rysowania.</p>
+  <p>Przy pierwszym nagraniu Android zapyta o dostęp do mikrofonu - bez niego Tapedo nie usłyszy notatki.</p>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="ekran-glowny">
+  <p class="tape">2</p>
+  <h2>Ekran główny</h2>
+  <p>Ekran główny wygląda jak dyktafon z kartoteką: na górze przekładki pudełka, w środku karteczki, na dole czerwony klawisz.</p>
+  <div class="shot">
+    <figure>
+      <div class="phone">
+        <img src="img/glowny.webp" width="540" height="1110" loading="lazy" alt="Ekran główny: przekładki z liczbą karteczek, otwarta przekładka Zadania z trzema zadaniami, pole wyszukiwania, czerwony klawisz nagrywania.">
+        <span class="pin" style="--x:93%;--y:4%" aria-hidden="true">1</span>
+        <span class="pin" style="--x:50%;--y:10.3%" aria-hidden="true">2</span>
+        <span class="pin" style="--x:85%;--y:16.5%" aria-hidden="true">3</span>
+        <span class="pin" style="--x:18.5%;--y:42.7%" aria-hidden="true">4</span>
+        <span class="pin" style="--x:50%;--y:42.7%" aria-hidden="true">5</span>
+        <span class="pin" style="--x:89%;--y:47%" aria-hidden="true">6</span>
+        <span class="pin" style="--x:93%;--y:39.3%" aria-hidden="true">7</span>
+        <span class="pin" style="--x:12%;--y:77.2%" aria-hidden="true">8</span>
+        <span class="pin" style="--x:50%;--y:88.3%" aria-hidden="true">9</span>
+      </div>
+    </figure>
+    <ol class="legend">
+      <li><b>Ustawienia</b> (pokrętło) - patrz <a href="#ustawienia">Ustawienia</a>.</li>
+      <li><b>Przekładki</b> - zakupy, listy, zadania, wydarzenia, notatki, pomysły i „Zrobione”. Liczba obok znaku mówi, ile karteczek leży za przekładką. Dotknij przekładki, żeby ją otworzyć.</li>
+      <li><b>Szukaj w karteczkach</b> - pojawia się, gdy masz już jakieś karteczki.</li>
+      <li><b>Kratka zadania</b> - odhacza zadanie od razu, bez otwierania.</li>
+      <li><b>Pasek karteczki</b> - dotknij, żeby otworzyć karteczkę. Karteczki tego samego rodzaju są ponumerowane („Zadanie 1”, „Zadanie 2”), pod nazwą jest termin.</li>
+      <li><b>×</b> - wyrzuca karteczkę (przez chwilę można to cofnąć).</li>
+      <li><b>Taśma w rogu</b> - priorytet karteczki, patrz <a href="#priorytety">Priorytety</a>.</li>
+      <li><b>Nagranie trafi do:</b> - przekładka, na którą trafi następne nagranie, a pod spodem przypomnienie, ile sekund przerwy robi nowy punkt listy.</li>
+      <li><b>Czerwony klawisz</b> - zaczyna i kończy nagrywanie.</li>
+    </ol>
+  </div>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="nagrywanie">
+  <p class="tape">3</p>
+  <h2>Nagrywanie</h2>
+  <ol class="steps">
+    <li><b>Otwórz przekładkę</b>, na którą ma trafić karteczka, np. „Zakupy”. Nad klawiszem widać „Nagranie trafi do: Zakupy”.</li>
+    <li><b>Naciśnij czerwony klawisz.</b> Klawisz zapada się jak w magnetofonie, a na środku pojawia się odliczanie „3, 2, 1”. Pomyłka? Dotknij tarczy z cyfrą albo klawisza - nagrywanie się nie zacznie.</li>
+    <li><b>Mów, gdy telefon krótko zadrga.</b> Na pasku papieru milimetrowego pisak rysuje poziom głosu, a pod nim pojawiają się rozpoznane słowa. Ekran w tym czasie nie gaśnie.</li>
+    <li><b>Przerwa robi nowy punkt.</b> Gdy mówisz listę, zrób przerwę (domyślnie 2 sekundy) między punktami: „chleb … mleko … jajka”. Długość przerwy ustawisz w ustawieniach.</li>
+    <li><b>Koniec.</b> Nagranie kończy się samo po chwili ciszy (domyślnie 7 sekund), po ponownym naciśnięciu klawisza albo po przycisku Wstecz - to, co powiedziałeś, zostaje zapisane. Licznik pod klawiszem pokazuje czas, np. „0:12 / 1:00” - najdłuższe nagranie ustawisz w ustawieniach.</li>
+  </ol>
+  <h3>Słowa, które Tapedo rozumie bez AI</h3>
+  <ul>
+    <li><b>„pilne”, „ważne”, „natychmiast”</b> - wysoki priorytet; <b>„kiedyś”, „bez pośpiechu”</b> - niski.</li>
+    <li><b>„jutro”, „pojutrze”, „w piątek”</b> - termin zadania.</li>
+    <li><b>„o 16”, „o 10:30”</b> - godzina wydarzenia. Miejsce wydarzenia rozpoznaje AI, a bez AI wpiszesz je w karteczce.</li>
+    <li>Zakupy same dzielą się na działy sklepu: warzywa i owoce, pieczywo, nabiał, napoje i inne.</li>
+  </ul>
+  <h3 id="pakiet">Pytanie o rozpoznawanie przez internet</h3>
+  <div class="shot">
+    <figure>
+      <div class="phone">
+        <img src="img/pakiet.webp" width="540" height="1110" loading="lazy" alt="Czerwona ramka z informacją, że telefon nie ma pakietu offline dla tego języka, i przyciskami: Pobierz pakiet językowy, Tym razem przez internet, Zawsze przez internet, Zamknij.">
+        <span class="pin" style="--x:11%;--y:41.1%" aria-hidden="true">1</span>
+        <span class="pin" style="--x:11%;--y:47.9%" aria-hidden="true">2</span>
+        <span class="pin" style="--x:11%;--y:54.8%" aria-hidden="true">3</span>
+        <span class="pin" style="--x:31%;--y:61.6%" aria-hidden="true">4</span>
+      </div>
+    </figure>
+    <div>
+      <p>Tapedo najpierw rozpoznaje mowę w samym telefonie. Jeśli telefon nie ma pakietu językowego offline, nic nie zostaje wysłane, a Tapedo pyta:</p>
+      <ol class="legend">
+        <li><b>Pobierz pakiet językowy</b> - otwiera ustawienia rozpoznawania mowy telefonu. Po pobraniu głos nigdy nie wychodzi z telefonu.</li>
+        <li><b>Tym razem przez internet</b> - tylko to jedno nagranie idzie do rozpoznawania Google.</li>
+        <li><b>Zawsze przez internet</b> - od teraz bez pytania (zmienisz to w Ustawieniach → Nagrywanie).</li>
+        <li><b>Zamknij</b> - nic nie nagrywa.</li>
+      </ol>
+    </div>
+  </div>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="po-nagraniu">
+  <p class="tape">4</p>
+  <h2>Okno po nagraniu</h2>
+  <p>Po nagraniu karteczki są <b>już zapisane</b>. Okno pokazuje, co z nagrania wyszło - możesz to poprawić, nagrać więcej albo wyrzucić.</p>
+  <div class="shot">
+    <figure>
+      <div class="phone">
+        <img src="img/po-nagraniu.webp" width="540" height="1110" loading="lazy" alt="Okno po nagraniu: tekst „chleb, mleko, jajka, pomidory, kawa ziarnista”, karteczka zakupów podzielona na działy sklepu z kratkami, przyciski Usuń tę karteczkę, Nagraj dalej, Usuń i Gotowe.">
+        <span class="pin" style="--x:38%;--y:4.1%" aria-hidden="true">1</span>
+        <span class="pin" style="--x:50%;--y:44%" aria-hidden="true">2</span>
+        <span class="pin" style="--x:46%;--y:68.2%" aria-hidden="true">3</span>
+        <span class="pin" style="--x:73%;--y:88.4%" aria-hidden="true">4</span>
+        <span class="pin" style="--x:11.7%;--y:89.5%" aria-hidden="true">5</span>
+        <span class="pin" style="--x:83%;--y:95.5%" aria-hidden="true">6</span>
+      </div>
+    </figure>
+    <ol class="legend">
+      <li><b>Usłyszane</b> - tekst rozpoznany z nagrania.</li>
+      <li><b>Karteczki</b> - jedno nagranie może dać kilka karteczek (np. zadanie i listę zakupów). Dotknij karteczki, żeby ją zmienić.</li>
+      <li><b>Usuń tę karteczkę</b> - wyrzuca tylko tę jedną karteczkę.</li>
+      <li><b>Nagraj dalej</b> - dopowiedz resztę; nowe słowa dołączą do tego nagrania.</li>
+      <li><b>Usuń</b> - wyrzuca wszystkie karteczki z tego nagrania (po pytaniu „Na pewno usunąć?”).</li>
+      <li><b>Gotowe</b> - wraca do pudełka. Przycisk Wstecz robi to samo.</li>
+    </ol>
+  </div>
+  <p class="note">Gdy w ustawieniach masz klucz do Claude, w tym oknie jest też <span class="key">Dokładniej - Claude (ok. 2-3 gr)</span>: te same słowa idą jeszcze raz do Claude Sonnet 5.5, który trafniej dzieli je na karteczki. Obecne karteczki zostają, dopóki nie wybierzesz <span class="key">Zamień na te</span>.</p>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="karteczka">
+  <p class="tape">5</p>
+  <h2>Karteczka</h2>
+  <p>Otwarta karteczka zajmuje cały ekran. Piszesz na niej od razu - <b>każda zmiana zapisuje się sama</b>, nie ma przycisku „Zapisz”.</p>
+  <div class="shot">
+    <figure>
+      <div class="phone">
+        <img src="img/karteczka.webp" width="540" height="1110" loading="lazy" alt="Otwarta karteczka „Zadanie 1”: tytuł, treść, termin jutro z przyciskiem Usuń termin, kratka Zrobione, przycisk Dopisz głosem, wybór typu i priorytetu, przyciski Udostępnij i Usuń karteczkę.">
+        <span class="pin" style="--x:7%;--y:8.5%" aria-hidden="true">1</span>
+        <span class="pin" style="--x:90%;--y:15.5%" aria-hidden="true">2</span>
+        <span class="pin" style="--x:21%;--y:16.6%" aria-hidden="true">3</span>
+        <span class="pin" style="--x:22%;--y:25%" aria-hidden="true">4</span>
+        <span class="pin" style="--x:62%;--y:40.3%" aria-hidden="true">5</span>
+        <span class="pin" style="--x:40%;--y:47.9%" aria-hidden="true">6</span>
+        <span class="pin" style="--x:80%;--y:59.8%" aria-hidden="true">7</span>
+        <span class="pin" style="--x:20%;--y:67.2%" aria-hidden="true">8</span>
+        <span class="pin" style="--x:34%;--y:79.3%" aria-hidden="true">9</span>
+        <span class="pin" style="--x:9%;--y:93.1%" aria-hidden="true">10</span>
+        <span class="pin" style="--x:56%;--y:93.1%" aria-hidden="true">11</span>
+      </div>
+    </figure>
+    <ol class="legend">
+      <li><b>Wstecz</b> - wraca do pudełka (zmiany są już zapisane).</li>
+      <li><b>Taśma priorytetu</b> - kolor i wzór priorytetu.</li>
+      <li><b>Tytuł</b> - pierwszy wiersz karteczki.</li>
+      <li><b>Treść</b> - cały tekst; pisz w nim jak w zwykłym notesie.</li>
+      <li><b>Termin</b> (zadanie) albo data, godzina i miejsce (wydarzenie). <span class="key">Usuń termin</span> zostawia zadanie bez daty.</li>
+      <li><b>Zrobione</b> - odhacza zadanie.</li>
+      <li><b>Dopisz głosem</b> - nagrywa i dopisuje słowa na końcu tekstu (albo jako nowe punkty listy). <span class="key">Zakończ dopisywanie</span> kończy.</li>
+      <li><b>Typ</b> - zmienia rodzaj karteczki (np. notatka w listę); przesuń pasek palcem, żeby zobaczyć wszystkie.</li>
+      <li><b>Priorytet</b> - wysoki, średni albo niski.</li>
+      <li><b>Udostępnij</b> - wysyła tekst karteczki do innej aplikacji (SMS, komunikator, poczta).</li>
+      <li><b>Usuń karteczkę</b> - wyrzuca ją i wraca do pudełka, gdzie przez chwilę można ją przywrócić.</li>
+    </ol>
+  </div>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="listy">
+  <p class="tape">6</p>
+  <h2>Listy i zakupy</h2>
+  <div class="shot">
+    <figure>
+      <div class="phone">
+        <img src="img/zakupy.webp" width="540" height="1110" loading="lazy" alt="Lista zakupów: działy Warzywa i owoce, Pieczywo, Nabiał, Napoje, kratki przy punktach, odhaczony chleb, krzyżyki do usuwania punktów, przyciski Dodaj punkt i Dopisz głosem.">
+        <span class="pin" style="--x:46%;--y:27.3%" aria-hidden="true">1</span>
+        <span class="pin" style="--x:10%;--y:39.8%" aria-hidden="true">2</span>
+        <span class="pin" style="--x:90%;--y:39.8%" aria-hidden="true">3</span>
+        <span class="pin" style="--x:30.6%;--y:74%" aria-hidden="true">4</span>
+        <span class="pin" style="--x:67.9%;--y:74%" aria-hidden="true">5</span>
+      </div>
+    </figure>
+    <ol class="legend">
+      <li><b>Działy sklepu</b> - zakupy same układają się w działy sklepu.</li>
+      <li><b>Kratka</b> - odhacza kupiony punkt.</li>
+      <li><b>×</b> - usuwa punkt z listy.</li>
+      <li><b>Dodaj punkt</b> - nowy punkt do wpisania z klawiatury.</li>
+      <li><b>Dopisz głosem</b> - powiedz, co dopisać, np. „masło i jajka”.</li>
+    </ol>
+  </div>
+  <p>Zwykła lista (przekładka „Listy”, np. rzeczy do spakowania) działa tak samo, tylko bez działów sklepu. Na pasku w pudełku widać postęp, np. „1/5”.</p>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="zrobione">
+  <p class="tape">7</p>
+  <h2>Odhaczanie i „Zrobione”</h2>
+  <ul>
+    <li>Zadanie odhaczysz kratką na pasku w pudełku albo kratką <b>Zrobione</b> w otwartej karteczce.</li>
+    <li>Odhaczona karteczka przechodzi na przekładkę <b>„Zrobione”</b> (ostatnia, ze znakiem pudełka), a jej tytuł jest przekreślony ręcznie. Na dole ekranu pojawia się na chwilę pasek „Karteczka jest teraz na przekładce „Zrobione”” z przyciskiem <span class="key">Pokaż</span>.</li>
+    <li>Żeby przywrócić zadanie, otwórz „Zrobione” i odznacz kratkę - wróci na swoją przekładkę.</li>
+  </ul>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="usuwanie">
+  <p class="tape">8</p>
+  <h2>Usuwanie i „Cofnij”</h2>
+  <div class="shot">
+    <figure>
+      <div class="phone">
+        <img src="img/cofnij.webp" width="540" height="1110" loading="lazy" alt="Ciemny pasek na dole pudełka: Usunięto „Kod do furtki u Kowalskich to gwiazdka”, przycisk Cofnij, kółko z krzyżykiem i cienka linia odmierzająca czas.">
+        <span class="pin" style="--x:30%;--y:62.5%" aria-hidden="true">1</span>
+        <span class="pin" style="--x:82.6%;--y:62.5%" aria-hidden="true">2</span>
+        <span class="pin" style="--x:94.6%;--y:60%" aria-hidden="true">3</span>
+        <span class="pin" style="--x:50%;--y:73.5%" aria-hidden="true">4</span>
+      </div>
+    </figure>
+    <ol class="legend">
+      <li><b>Pasek „Usunięto …”</b> - mówi, która karteczka wypadła z pudełka.</li>
+      <li><b>Cofnij</b> - przywraca karteczkę na miejsce.</li>
+      <li><b>Kółko z ×</b> - zamyka pasek od razu.</li>
+      <li><b>Linia czasu</b> - kurczy się; gdy zniknie, pasek też (dłużej, gdy telefon ma w ułatwieniach dostępu ustawiony dłuższy czas na reakcję).</li>
+    </ol>
+  </div>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="priorytety">
+  <p class="tape">9</p>
+  <h2>Priorytety</h2>
+  <div class="shot">
+    <figure>
+      <div class="phone"><img src="img/kroki-4.webp" width="540" height="1110" loading="lazy" alt="Podpowiedź „Taśma w rogu to priorytet”: trzy taśmy - czerwona w paski (wysoki), żółta w kropki (średni), zielona gładka (niski)."></div>
+    </figure>
+    <div>
+      <p>Taśma przyklejona w rogu karteczki to jej priorytet. Każdy priorytet ma <b>inny kolor i inny wzór</b>, więc rozróżnisz je także bez widzenia kolorów:</p>
+      <ul>
+        <li><b>Wysoki</b> - czerwona taśma w paski. Powiedz w nagraniu „pilne” albo „ważne”.</li>
+        <li><b>Średni</b> - żółta taśma w kropki.</li>
+        <li><b>Niski</b> - zielona, gładka. Tak zaczyna każda nowa karteczka; „kiedyś” też daje niski.</li>
+      </ul>
+      <p>Priorytet zmienisz w otwartej karteczce. <b>Pomysły nie mają priorytetu.</b></p>
+    </div>
+  </div>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="szukanie">
+  <p class="tape">10</p>
+  <h2>Szukanie</h2>
+  <ol class="steps">
+    <li>Otwórz przekładkę, na której chcesz szukać - szukanie działa w otwartej przekładce.</li>
+    <li>Dotknij pola <b>Szukaj w karteczkach</b> i wpisz kawałek słowa. Lista zawęża się od razu; w tym czasie klawisz nagrywania chowa się, żeby było miejsce na wyniki.</li>
+    <li><b>×</b> w polu albo przycisk Wstecz czyści szukanie.</li>
+  </ol>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="ustawienia">
+  <p class="tape">11</p>
+  <h2>Ustawienia</h2>
+  <p>Pokrętło w prawym górnym rogu ekranu głównego otwiera ustawienia. Są podzielone na cztery przekładki. Przy większości ustawień jest <b>Wyjaśnij</b> - rozwija krótki opis.</p>
+
+  <h3>Nagrywanie</h3>
+  <div class="shot">
+    <figure>
+      <div class="phone">
+        <img src="img/ust-nagrywanie.webp" width="540" height="1110" loading="lazy" alt="Ustawienia, przekładka Nagrywanie: Koniec nagrania (Po ciszy albo Przyciskiem stop), suwaki Cisza przed końcem 7 s, Pauza robi nowy punkt 2 s, Najdłuższe nagranie 1 min, Język mowy.">
+        <span class="pin" style="--x:50%;--y:23%" aria-hidden="true">1</span>
+        <span class="pin" style="--x:84.8%;--y:15.5%" aria-hidden="true">2</span>
+        <span class="pin" style="--x:90%;--y:50.7%" aria-hidden="true">3</span>
+        <span class="pin" style="--x:90%;--y:68.6%" aria-hidden="true">4</span>
+        <span class="pin" style="--x:90%;--y:86.4%" aria-hidden="true">5</span>
+      </div>
+    </figure>
+    <ol class="legend">
+      <li><b>Koniec nagrania</b> - „Po ciszy” (nagranie kończy się samo) albo „Przyciskiem stop” (słucha, dopóki nie naciśniesz klawisza).</li>
+      <li><b>Wyjaśnij</b> - krótki opis ustawienia.</li>
+      <li><b>Cisza przed końcem</b> - po ilu sekundach ciszy kończy się nagranie (3-30 s, domyślnie 7).</li>
+      <li><b>Pauza robi nowy punkt</b> - ile sekund przerwy zaczyna nowy punkt listy (0-10 s, domyślnie 2). „Nigdy” - jedno nagranie to jeden punkt.</li>
+      <li><b>Najdłuższe nagranie</b> - zabezpieczenie, gdy zapomnisz zatrzymać (10 s - 60 min, domyślnie 1 min).</li>
+    </ol>
+  </div>
+  <p>Niżej na tej przekładce: <b>Język mowy</b> (polski albo angielski) i <b>Rozpoznawanie przez internet</b> - „Pytaj” (domyślnie), „Zawsze” albo „Nigdy”.</p>
+
+  <h3>AI</h3>
+  <div class="shot">
+    <figure>
+      <div class="phone">
+        <img src="img/ust-ai.webp" width="540" height="1110" loading="lazy" alt="Ustawienia, przekładka AI: opis działania AI i reguł, fiszki dostawców Groq, OpenRouter i Claude z przełącznikami Wyłączone i opisem dokładności.">
+        <span class="pin" style="--x:8%;--y:20%" aria-hidden="true">1</span>
+        <span class="pin" style="--x:58.6%;--y:44%" aria-hidden="true">2</span>
+        <span class="pin" style="--x:30%;--y:50.5%" aria-hidden="true">3</span>
+        <span class="pin" style="--x:50%;--y:87.8%" aria-hidden="true">4</span>
+      </div>
+    </figure>
+    <ol class="legend">
+      <li><b>Opis</b> - co robi AI, a co proste reguły bez AI.</li>
+      <li><b>Przełącznik dostawcy</b> - włącza dostawcę AI. Można włączyć kilku - Tapedo pyta ich po kolei.</li>
+      <li><b>Pokaż</b> - rozwija instrukcję zdobycia klucza API, pole na klucz, wybór modelu i dzienny limit zapytań.</li>
+      <li><b>Claude</b> - płatny, najdokładniejszy. Możesz wpisać kwotę doładowania konta, a Tapedo policzy szacunkowe wydatki.</li>
+    </ol>
+  </div>
+  <p><b>AI nie jest potrzebne.</b> Bez niego karteczki rozpisują proste reguły w telefonie. Darmowi dostawcy to Groq i OpenRouter, płatni - Claude, OpenAI i Gemini. Przy każdym jest uczciwy opis, jak dokładnie działa. Klucz API wklejasz sam; zostaje zaszyfrowany w telefonie. Do dostawcy trafia tylko tekst notatki.</p>
+  <p>Na dole tej przekładki jest <b>Whisper</b> (domyślnie wyłączony): po „stop” nagranie idzie do Groq albo OpenAI i wraca przepisane dokładniej niż przez telefon. Wybór dostawcy Whisper to zgoda na wysłanie nagrania.</p>
+
+  <h3>Wygląd</h3>
+  <div class="shot">
+    <figure>
+      <div class="phone">
+        <img src="img/ust-wyglad.webp" width="540" height="1110" loading="lazy" alt="Ustawienia, przekładka Wygląd: Wielkość tekstu 90-130%, Motyw Jak w systemie / Papier / Panel, Język aplikacji Polski / English, dźwigienki Ogranicz animacje i Krzywe karteczki.">
+        <span class="pin" style="--x:4.5%;--y:23%" aria-hidden="true">1</span>
+        <span class="pin" style="--x:4.5%;--y:42.8%" aria-hidden="true">2</span>
+        <span class="pin" style="--x:4.5%;--y:55.2%" aria-hidden="true">3</span>
+        <span class="pin" style="--x:25%;--y:70.7%" aria-hidden="true">4</span>
+        <span class="pin" style="--x:25%;--y:86.4%" aria-hidden="true">5</span>
+      </div>
+    </figure>
+    <ol class="legend">
+      <li><b>Wielkość tekstu</b> - 90-130%, dodatkowo do wielkości ustawionej w telefonie.</li>
+      <li><b>Motyw</b> - „Papier” (jasny, jak karteczka), „Panel” (ciemny, jak obudowa dyktafonu) albo jak w systemie.</li>
+      <li><b>Język aplikacji</b> - polski albo angielski.</li>
+      <li><b>Ogranicz animacje</b> - wszystko zmienia się od razu, bez ruchu. Włącza się też samo, gdy animacje są wyłączone w systemie.</li>
+      <li><b>Krzywe karteczki</b> - karteczki i taśmy leżą lekko krzywo, jak rzucone na biurko (domyślnie wyłączone).</li>
+    </ol>
+  </div>
+
+  <h3>O aplikacji</h3>
+  <ul>
+    <li><span class="key">Pokaż pierwsze kroki</span> - podpowiedzi z <a href="#pierwsze-kroki">pierwszego uruchomienia</a> jeszcze raz.</li>
+    <li><b>Kontakt z autorem</b> i <span class="key">Wyślij błąd autorowi aplikacji</span> - otwiera Twoją pocztę z gotową wiadomością (wersja, model telefonu, kod błędu - bez notatek i nagrań). Wysyłasz ją sam.</li>
+    <li><span class="key">Polityka prywatności</span>, numer wersji i <span class="key">Licencje open source</span>.</li>
+  </ul>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="prywatnosc">
+  <p class="tape">12</p>
+  <h2>Prywatność w skrócie</h2>
+  <ul>
+    <li>Karteczki są zaszyfrowane i zapisane tylko w tym telefonie. Nie ma konta ani serwera autora.</li>
+    <li>Tapedo nie zapisuje dźwięku - zostaje sam tekst.</li>
+    <li>Głos wychodzi z telefonu tylko za Twoją zgodą: przy rozpoznawaniu przez internet (do Google) albo przy włączonym Whisper (do Groq lub OpenAI).</li>
+    <li>Przy włączonym AI do wybranego dostawcy trafia tylko tekst notatki.</li>
+    <li>Bez reklam, statystyk i raportów o awariach wysyłanych w tle.</li>
+  </ul>
+  <p>Pełna polityka: <a href="https://bakeron.github.io/tapedo/privacy.html">polityka prywatności Tapedo</a>.</p>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<section id="problemy">
+  <p class="tape">13</p>
+  <h2>Gdy coś nie działa</h2>
+  <ul>
+    <li><b>„Tapedo nie usłyszy notatki bez dostępu do mikrofonu”</b> - naciśnij <span class="key">Otwórz ustawienia telefonu</span> i zezwól na mikrofon.</li>
+    <li><b>„Nic nie słychać”</b> - naciśnij klawisz i powiedz jeszcze raz, bliżej telefonu.</li>
+    <li><b>Brak pakietu offline</b> - patrz <a href="#pakiet">pytanie o rozpoznawanie przez internet</a>.</li>
+    <li><b>AI nie odpowiada</b> (brak sieci, limit, zły klucz) - karteczki i tak powstają, rozpisane przez reguły. W oknie po nagraniu widać powód.</li>
+    <li><b>Błąd, którego nie da się naprawić samemu</b> - w komunikacie jest <span class="key">Wyślij błąd autorowi aplikacji</span>.</li>
+  </ul>
+  <p class="back"><a href="#spis">↑ Spis treści</a></p>
+</section>
+
+<footer>
+  <p>Tapedo - aplikacja open source na licencji MIT.</p>
+</footer>
+
+</main>
+</body>
+</html>

@@ -258,6 +258,17 @@ class HomeViewModel(
         }
     }
 
+    /** "First steps" gone through or skipped - not shown again until asked for in Settings. */
+    fun finishFirstSteps() {
+        viewModelScope.launch {
+            try {
+                store.update { it.copy(firstStepsSeen = true) }
+            } catch (e: IOException) {
+                // Not remembered: the tips come back on the next start - annoying, but nothing is lost.
+            }
+        }
+    }
+
     /** No offline language pack: the user agreed to online recognition - always from now on. */
     fun allowOnlineAlways(appendTo: Long? = null) {
         viewModelScope.launch {

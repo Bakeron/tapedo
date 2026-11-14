@@ -56,6 +56,8 @@ data class AppSettings(
     val claudeTopUpCents: Int? = null,
     /** Epoch day the top-up was typed in - Claude's spending is counted from it. */
     val claudeTopUpDay: Long? = null,
+    /** "First steps" (the tips on the home screen) were gone through or skipped; Settings can show them again. */
+    val firstStepsSeen: Boolean = false,
 ) {
     /** The top-up in dollars, only together with its day - a sum alone has nothing to count from. */
     val claudeTopUpUsd: Double? get() = claudeTopUpCents?.takeIf { claudeTopUpDay != null }?.let { it / 100.0 }

@@ -345,4 +345,24 @@
     <string name="preview_add_hint_list">Say what to add to the list, e.g. “butter and eggs”.</string>
     <string name="preview_add_hint_text">What you say is added at the end of the text.</string>
     <string name="preview_adding">Adding…</string>
+    <!-- First steps -->
+    <string name="first_steps_pane">First steps</string>
+    <string name="first_steps_count">%1$d of %2$d</string>
+    <string name="first_steps_skip">Skip</string>
+    <string name="first_steps_next">Next</string>
+    <string name="first_steps_done">Let’s start</string>
+    <string name="first_steps_record_title">The red key records</string>
+    <string name="first_steps_record_body">Press it and after “3, 2, 1” say what you want to remember. The recording stops by itself after a moment of silence, or when you press the key again - what you said becomes a card.</string>
+    <string name="first_steps_tabs_title">Dividers are kinds of cards</string>
+    <string name="first_steps_tabs_body">Shopping, lists, tasks, events, notes and ideas each have a divider, and finished things go to “Done”. A recording lands behind the open divider - pick it before you press the key.</string>
+    <string name="first_steps_box_title">The card box</string>
+    <string name="first_steps_box_body">The cards behind the open divider are here. Tap a card to read it, fix it or add to it by voice. Tick a task off right in its box; × throws a card out (you can undo it for a moment). Once there are more cards, a search line shows up above them.</string>
+    <string name="first_steps_priority_title">The tape on the corner is the priority</string>
+    <string name="first_steps_priority_body">Each tape has its own colour and pattern. Change the priority after opening the card. Ideas have no priority.</string>
+    <string name="first_steps_priority_high">High - stripes. Say “urgent” or “important” in the recording.</string>
+    <string name="first_steps_priority_medium">Medium - dots.</string>
+    <string name="first_steps_priority_low">Low - plain. Every new card starts like this.</string>
+    <string name="first_steps_settings_title">Settings</string>
+    <string name="first_steps_settings_body">Change the recording length, the pause that starts a new list item, the speech language, the “Paper” or “Panel” theme and the text size here. AI is not needed - without it the phone writes the cards itself. Show these tips again on the “About” tab.</string>
+    <string name="settings_first_steps">Show first steps</string>
 </resources>

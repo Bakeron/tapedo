@@ -462,7 +462,17 @@ fun SettingsScreen(
 
                     // The same air above and below as a setting on the other dividers.
                     SettingsTab.ABOUT -> Section(null) {
-                        Box(Modifier.padding(vertical = 10.dp)) { Footer(onOpenLicenses, settings.speechLanguage) }
+                        Box(Modifier.padding(vertical = 10.dp)) {
+                            Footer(
+                                onOpenLicenses,
+                                settings.speechLanguage,
+                                // The tips are on the home screen - go back there to see them.
+                                onShowFirstSteps = {
+                                    onChange { it.copy(firstStepsSeen = false) }
+                                    onBack()
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -655,7 +665,7 @@ private fun onDeviceRecognition(): Boolean {
 private fun Rule() = HorizontalDivider(thickness = 1.dp, color = TapedoTheme.colors.rule)
 
 @Composable
-private fun Footer(onOpenLicenses: () -> Unit, speechLanguage: String) {
+private fun Footer(onOpenLicenses: () -> Unit, speechLanguage: String, onShowFirstSteps: () -> Unit) {
     val context = LocalContext.current
     val uri = LocalUriHandler.current
     val version = remember(context) {
@@ -670,6 +680,8 @@ private fun Footer(onOpenLicenses: () -> Unit, speechLanguage: String) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.height(12.dp))
+        PaperButton(stringResource(R.string.settings_first_steps), onClick = onShowFirstSteps)
         if (ReportMail.available) {
             Spacer(Modifier.height(14.dp))
             Text(stringResource(R.string.settings_contact), style = MaterialTheme.typography.titleSmall)
