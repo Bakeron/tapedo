@@ -1,0 +1,263 @@
+/* Tapedo in the browser - the same look as the Android app (ui/theme, ui/components). 1 dp = 1 CSS px,
+   1 sp = 1 CSS px times the app's own text size (--ts). Colours: ui/theme/Color.kt. */
+
+@font-face { font-family: "Bricolage"; src: url("fonts/bricolage.ttf") format("truetype"); font-weight: 200 800; font-display: block; }
+@font-face { font-family: "Courier Prime"; src: url("fonts/courier_prime.ttf") format("truetype"); font-weight: 400; font-display: block; }
+@font-face { font-family: "Courier Prime"; src: url("fonts/courier_prime_bold.ttf") format("truetype"); font-weight: 700; font-display: block; }
+
+/* Paper (light): a pocket recorder lying on warm paper. */
+.app {
+  --desk: #F3ECDF; --card: #FBF7EF; --cardEdge: #E2D7C3; --rule: #D9CDB8;
+  --onSurface: #2B2A28; --onSurfaceVariant: #5E594F; --outline: #5E594F;
+  --primary: #2B2A28; --onPrimary: #FBF7EF;
+  --record: #B8352A; --stamp: #2F5D8A; --controlEdge: #8A8275; --track: #DDD1BA;
+  --knob: #FBF7EF; --knobLight: #FFFFFF; --ledOff: #8A8275;
+  --display: #E6DCC9; --displayInk: #2B2A28;
+  --tapeHigh: #E0614F; --tapeMedium: #E8B04A; --tapeLow: #9DBFA4; --tapeInk: #2B2A28;
+  --ts: 1;
+}
+/* Panel (dark): a graphite hi-fi panel with an amber display backlight. */
+.app.dark {
+  --desk: #1C1B19; --card: #292724; --cardEdge: #3A3733; --rule: #45413B;
+  --onSurface: #EDE4D3; --onSurfaceVariant: #B0A795; --outline: #B0A795;
+  --primary: #F2A93B; --onPrimary: #1C1B19;
+  --record: #EE6A55; --stamp: #8DB4DB; --controlEdge: #857D6E; --track: #181715;
+  --knob: #4A4640; --knobLight: #5E5850; --ledOff: #45413B;
+  --display: #121110; --displayInk: #F2A93B;
+  --tapeHigh: #D9604E; --tapeMedium: #E0A440; --tapeLow: #86A98D; --tapeInk: #1C1B19;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: #1C1B19; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+body.paper { background: #E9E1D2; }
+
+/* The phone's screen: full width on a phone, a phone-wide column on a big screen. */
+.app {
+  position: relative; margin: 0 auto; width: 100%; max-width: 412px; height: 100vh; height: 100dvh;
+  overflow: hidden; background: var(--desk); color: var(--onSurface);
+  font-family: "Bricolage", system-ui, sans-serif;
+  /* Android sets only the weight of the variable font; browsers would also pick an optical size per text size. */
+  font-optical-sizing: none;
+}
+.app * { font-optical-sizing: none; }
+@media (min-width: 440px) { .app { border-left: 1px solid var(--controlEdge); border-right: 1px solid var(--controlEdge); } }
+.layer { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--desk); }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; }
+input, textarea { font: inherit; color: inherit; background: transparent; border: 0; outline: 0; padding: 0; margin: 0; width: 100%; resize: none; display: block; caret-color: var(--primary); }
+input::placeholder, textarea::placeholder { color: var(--onSurfaceVariant); opacity: 1; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.scroll { overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.hscroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.hscroll::-webkit-scrollbar { display: none; }
+.grow { flex: 1 1 0; min-height: 0; min-width: 0; }
+.row { display: flex; flex-direction: row; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Typography: ui/theme/Type.kt (Material 3 sizes, Bricolage for labels, Courier Prime for text).
+   Line heights are rounded up to whole screen pixels as Compose does (tapedo.js sets --lh-*); the body styles
+   have no lineHeightStyle, so Compose trims the leading above the first line and below the last (--trim). */
+.displaySmall { font-family: "Bricolage"; font-weight: 600; font-size: calc(36px * var(--ts)); line-height: var(--lh-displaySmall, calc(44px * var(--ts))); }
+.headlineMedium { font-family: "Bricolage"; font-weight: 600; font-size: calc(28px * var(--ts)); line-height: var(--lh-headlineMedium, calc(36px * var(--ts))); }
+.headlineSmall { font-family: "Bricolage"; font-weight: 600; font-size: calc(24px * var(--ts)); line-height: var(--lh-headlineSmall, calc(32px * var(--ts))); }
+.titleLarge { font-family: "Bricolage"; font-weight: 600; font-size: calc(22px * var(--ts)); line-height: var(--lh-titleLarge, calc(28px * var(--ts))); }
+.titleMedium { font-family: "Bricolage"; font-weight: 500; font-size: calc(16px * var(--ts)); line-height: var(--lh-titleMedium, calc(24px * var(--ts))); letter-spacing: calc(.15px * var(--ts)); }
+.titleSmall { font-family: "Bricolage"; font-weight: 500; font-size: calc(14px * var(--ts)); line-height: var(--lh-titleSmall, calc(20px * var(--ts))); letter-spacing: calc(.1px * var(--ts)); }
+.labelLarge { font-family: "Bricolage"; font-weight: 600; font-size: calc(14px * var(--ts)); line-height: var(--lh-labelLarge, calc(20px * var(--ts))); letter-spacing: calc(.6px * var(--ts)); }
+.labelMedium { font-family: "Bricolage"; font-weight: 500; font-size: calc(12px * var(--ts)); line-height: var(--lh-labelMedium, calc(16px * var(--ts))); letter-spacing: calc(.8px * var(--ts)); }
+.labelSmall { font-family: "Bricolage"; font-weight: 500; font-size: calc(12px * var(--ts)); line-height: var(--lh-labelSmall, calc(16px * var(--ts))); letter-spacing: calc(1px * var(--ts)); }
+.bodyLarge, .bodyMedium, .bodySmall { font-family: "Courier Prime", monospace; font-weight: 400; line-height: var(--lh); letter-spacing: var(--ls, 0);
+  margin-block: calc(-1 * var(--trim)); }
+.bodyLarge { font-size: calc(17px * var(--ts)); --lh: var(--lh-bodyLarge, calc(25px * var(--ts))); --trim: var(--trim-bodyLarge, 0px); --ry: var(--ry-bodyLarge, 0px); --ls: var(--ls-bodyLarge, 0px); }
+.bodyMedium { font-size: calc(15px * var(--ts)); --lh: var(--lh-bodyMedium, calc(22px * var(--ts))); --trim: var(--trim-bodyMedium, 0px); --ry: var(--ry-bodyMedium, 0px); --ls: var(--ls-bodyMedium, 0px); }
+.bodySmall { font-size: calc(13px * var(--ts)); --lh: var(--lh-bodySmall, calc(18px * var(--ts))); --trim: var(--trim-bodySmall, 0px); --ry: var(--ry-bodySmall, 0px); --ls: var(--ls-bodySmall, 0px); }
+.bold { font-weight: 700; }
+.medium { font-weight: 500; }
+.variant { color: var(--onSurfaceVariant); }
+.recordInk { color: var(--record); }
+.underline { text-decoration: underline; }
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Ruled text (ui/cards/Paper.kt RuledText): a faint rule under every line, spaced by the text's own lines. */
+.ruled { background-repeat: repeat-y; background-size: 100% var(--lh);
+  background-image: linear-gradient(to bottom, transparent var(--ry), var(--rc, var(--rule)) var(--ry), var(--rc, var(--rule)) calc(var(--ry) + 1px), transparent calc(var(--ry) + 1px)); }
+.marginLine { position: relative; padding-left: 12px; }
+.marginLine::before { content: ""; position: absolute; left: .25px; top: 0; bottom: 0; width: 1.5px; background: color-mix(in srgb, var(--record) 50%, transparent); }
+
+/* Icon button: 48 dp touch target, 24 dp icon. */
+.iconBtn { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex: none; color: var(--onSurface); }
+.iconBtn:hover { background: color-mix(in srgb, var(--onSurface) 8%, transparent); }
+.iconBtn svg { width: 24px; height: 24px; }
+
+/* PaperButton (ui/components/PaperButton.kt). */
+.pbtn { min-height: 48px; border-radius: 3px; border: 1.5px solid var(--outline); padding: 10px 16px; display: inline-flex; align-items: center; justify-content: center; text-align: center; color: var(--onSurface); align-self: flex-start; }
+.pbtn:hover { background-color: color-mix(in srgb, var(--onSurface) 6%, transparent); }
+.pbtn.filled { background: var(--primary); border-color: var(--primary); color: var(--onPrimary); }
+.pbtn.filled:hover { background: color-mix(in srgb, var(--primary) 88%, var(--onPrimary)); }
+.pbtn.danger { border-color: var(--record); color: var(--record); }
+.pbtn.onInk { border-color: var(--onPrimary); color: var(--onPrimary); }
+.pbtn.wide { align-self: stretch; width: 100%; }
+.pbtn[aria-disabled="true"] { opacity: .45; cursor: default; }
+.pbtn[aria-disabled="true"]:hover { background-color: transparent; }
+.pbtn.filled[aria-disabled="true"]:hover { background: var(--primary); }
+
+/* LabelTape: embossed label-maker tape. */
+.labelTape { align-self: flex-start; background: var(--primary); color: var(--onPrimary); border-radius: 1px; padding: 3px 10px; text-transform: uppercase; letter-spacing: calc(2.4px * var(--ts)); text-shadow: 0 1.5px 0 rgba(0,0,0,.35); }
+
+/* RubberStamp. */
+.stamp { align-self: flex-end; color: var(--stamp); border: 1.5px solid var(--stamp); border-radius: 3px; padding: 2px 7px; opacity: .9; text-transform: uppercase; letter-spacing: calc(1.6px * var(--ts)); font-weight: 700; }
+
+/* ---------- Home ---------- */
+.topRow { padding: 4px 4px 0 20px; justify-content: space-between; flex: none; }
+.nameplate { background: var(--track); border: 1px solid var(--controlEdge); border-radius: 2px; padding: 5px 8px; gap: 10px; }
+.nameplate .name { letter-spacing: calc(4px * var(--ts)); font-weight: 700; text-shadow: 0 1.5px 0 color-mix(in srgb, var(--knobLight) 80%, transparent); }
+.middle { position: relative; display: flex; flex-direction: column; }
+.tabs { padding: 0 12px; gap: 3px; align-items: flex-end; flex: none; }
+.tab { flex: 1 1 0; min-width: 0; height: 48px; display: flex; align-items: flex-end; }
+.tab .face { width: 100%; height: 38px; background: var(--card); border: 1px solid var(--controlEdge); border-radius: 6px 6px 0 0; padding: 0 2px; display: flex; align-items: center; justify-content: center; gap: 3px; color: var(--onSurfaceVariant); }
+.tab.sel .face { height: 46px; background: var(--cardEdge); border-color: transparent; color: var(--onSurface); }
+.box { background: var(--cardEdge); display: flex; flex-direction: column; }
+.search { margin: 10px 12px 0; min-height: 48px; background: var(--card); border: 1px solid var(--outline); border-radius: 3px; padding-left: 14px; flex: none; }
+.search input { flex: 1; }
+.list { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.strip { position: relative; flex: none; }
+.strip .paper { margin: 4px 4px 0; background: var(--card); border: 1px solid var(--controlEdge); border-radius: 3px; min-height: 60px; padding: 6px 4px 6px 36px; display: flex; align-items: center; cursor: pointer; }
+.strip .paper:hover { background: color-mix(in srgb, var(--card) 94%, var(--onSurface)); }
+.strip .tick { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; flex: none; margin-right: 4px; }
+.strip .texts { flex: 1; min-width: 0; }
+.strip .meta { text-transform: uppercase; white-space: pre; }
+.strip .typeTape { position: absolute; left: 0; top: 50%; margin-top: 2px; transform: translateY(-50%); }
+.strip .prio { position: absolute; right: 0; top: 0; width: 34px; height: 12px; }
+.typeTapeMark { background: var(--primary); border-radius: 1px; padding: 7px 5px; display: flex; }
+.strike { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.titleWrap { position: relative; display: inline-block; max-width: 100%; vertical-align: top; }
+.emptyCard { margin-top: 24px; background: color-mix(in srgb, var(--card) 60%, transparent); border-radius: 3px; padding: 18px 20px; position: relative; }
+.emptyCard > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+
+.controls { flex: none; display: flex; flex-direction: column; align-items: center; }
+.into { padding: 14px 20px 0; gap: 6px; }
+.pauseRule { padding: 4px 20px 0; text-align: center; }
+.keyCol { width: 100%; padding: 8px 0 14px; display: flex; flex-direction: column; align-items: center; }
+.recKey { width: 112px; height: 112px; border-radius: 50%; background: var(--cardEdge); border: 1px solid var(--controlEdge); display: flex; align-items: center; justify-content: center; }
+.recKey:focus-visible { outline: none; border: 3px solid var(--primary); }
+.recKey .dome { width: 84px; height: 84px; border-radius: 50%; background: var(--record); position: relative;
+  border: 2px solid color-mix(in srgb, var(--card) 35%, transparent);
+  box-shadow: 0 3px 4px rgba(0,0,0,.22), 0 6px 10px rgba(0,0,0,.18);
+  transition: transform .25s cubic-bezier(.3,1.6,.5,1), box-shadow .25s; }
+.recKey.down .dome { transform: scale(.92); box-shadow: 0 1px 1.5px rgba(0,0,0,.25); }
+.recKey .dome svg { position: absolute; inset: -2px; width: 84px; height: 84px; }
+.underKey { margin-top: 8px; }
+
+/* Bottom strip: the undo tape (ui/home/BottomStrip.kt). */
+.stripArea { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; }
+.tapeStrip { position: relative; padding: 22px 22px 12px; pointer-events: none; }
+.tapeStrip .body { background: var(--primary); border-radius: 2px; pointer-events: auto; }
+.tapeStrip .msg { padding: 6px 14px 4px 16px; min-height: 48px; box-sizing: content-box; }
+.tapeStrip .timeline { height: 3px; background: color-mix(in srgb, var(--onPrimary) 75%, transparent); transform-origin: left; }
+.tapeStrip .rivet { position: absolute; right: 0; top: 0; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
+
+/* Demo bubble: what does not work in the browser says so. */
+.bubble { position: absolute; z-index: 20; max-width: 300px; background: var(--card); color: var(--onSurface); border: 1.5px solid var(--record); border-radius: 3px; padding: 10px 14px; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+.bubble::after { content: ""; position: absolute; left: var(--ax, 50%); width: 10px; height: 10px; background: var(--card); border-right: 1.5px solid var(--record); border-bottom: 1.5px solid var(--record); transform: translateX(-50%) rotate(45deg); bottom: -6.5px; }
+.bubble.below::after { bottom: auto; top: -6.5px; transform: translateX(-50%) rotate(225deg); }
+
+/* ---------- Card view ---------- */
+.header { padding: 4px; flex: none; }
+.cardCol { padding: 8px 12px; display: flex; flex-direction: column; gap: 16px; }
+.paperBox { position: relative; align-self: center; }
+.cardPaper { position: relative; margin: 6px 6px 0 0; background: var(--card); border: 1px solid var(--cardEdge); border-radius: 3px; box-shadow: 0 1px 1.5px rgba(0,0,0,.22), 0 0 1px rgba(0,0,0,.12); }
+.cardPaper.receipt { background: none; border: 0; box-shadow: none; }
+.cardPaper.receipt > svg.receiptBg { position: absolute; left: 0; top: 0; overflow: visible; filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
+.cardPaper.grid { background-image: linear-gradient(to right, var(--grid) .8px, transparent .8px), linear-gradient(to bottom, var(--grid) .8px, transparent .8px); background-size: 18px 18px; background-position: 17.6px 17.6px; --grid: color-mix(in srgb, var(--rule) 55%, transparent); }
+.cardPaper .content { position: relative; padding: 12px 16px; display: flex; flex-direction: column; gap: 16px; }
+.cardPaper.task .content { padding-top: 24px; }
+.cardPaper.idea .content { padding-top: 22px; }
+.cardPaper.receipt .content { padding-bottom: 20px; }
+.punch { position: absolute; left: 50%; top: 1px; width: 22px; height: 22px; margin-left: -11px; }
+.pin { position: absolute; left: 50%; top: 0; width: 26px; height: 26px; margin-left: -13px; z-index: 2; pointer-events: none; }
+.calHead { background: var(--record); color: var(--desk); border-radius: 3px 3px 0 0; padding: 8px 44px 8px 16px; }
+.perforation { height: 8px; display: block; width: 100%; }
+.cardPrio { position: absolute; right: -4px; top: 4px; width: 64px; height: 20px; z-index: 3; }
+.field .line { height: 1px; background: var(--outline); margin-top: 6px; }
+.field.focus .line { height: 2px; background: var(--primary); }
+.field input, .field textarea { margin-top: 4px; }
+.field .bodyLarge { margin-top: calc(4px - var(--trim)); margin-bottom: calc(-1 * var(--trim)); }
+textarea.ruledArea { background-repeat: repeat-y; background-size: 100% calc(25px * var(--ts));
+  background-image: linear-gradient(to bottom, transparent calc(25px * var(--ts) - 1px), var(--rule) calc(25px * var(--ts) - 1px)); }
+.itemRow { min-height: 44px; border-bottom: 1px solid var(--rule); }
+.itemRow .box44 { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; flex: none; }
+.receiptRule { margin-top: 8px; height: 6px; background-image: linear-gradient(to right, var(--outline) 6px, transparent 6px); background-size: 10px 1px; background-repeat: repeat-x; background-position: 0 2.5px; }
+.toggleRow { min-height: 48px; gap: 10px; cursor: pointer; }
+.voice { padding: 0 4px; display: flex; flex-direction: column; gap: 8px; }
+.options { padding: 8px 4px; display: flex; flex-direction: column; gap: 18px; }
+.typeBar { padding: 0 16px; gap: 8px; }
+.typeTape { min-height: 48px; padding: 6px 0; display: flex; align-items: center; flex: none; }
+.typeTape .face { background: var(--card); border: 1px solid var(--outline); border-radius: 1px; padding: 8px 12px; gap: 7px; color: var(--onSurfaceVariant); text-transform: uppercase; letter-spacing: calc(1.6px * var(--ts)); font-weight: 500; white-space: nowrap; }
+.typeTape.sel .face { background: var(--primary); border-color: var(--primary); color: var(--onPrimary); font-weight: 700; text-shadow: 0 1.5px 0 rgba(0,0,0,.35); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.typeTape .led { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--controlEdge); padding: 2px; flex: none; }
+.typeTape .led i { display: block; width: 100%; height: 100%; border-radius: 50%; background: var(--rule); }
+.typeTape.sel .led { border-color: var(--onPrimary); }
+.typeTape.sel .led i { background: var(--record); }
+.deleteBar { padding: 10px 16px; flex: none; }
+
+/* SlideSelector: a slide switch with a knob and LEDs. */
+.slide { position: relative; min-height: 52px; background: var(--track); border: 1px solid var(--controlEdge); border-radius: 5px; padding: 3px; }
+.slide .knobArea { position: absolute; inset: 3px; pointer-events: none; }
+.slide .knob { position: absolute; top: 0; bottom: 0; left: 0; background: var(--knob); border: 1.5px solid var(--outline); border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.28);
+  transition: transform .45s cubic-bezier(.3,1.35,.55,1); }
+.slide .knob::after { content: ""; position: absolute; left: 1.5px; right: 1.5px; top: 0; height: 1px; background: var(--knobLight); }
+.slide .opts { position: relative; display: flex; min-height: 46px; }
+.slide .opt { flex: 1 1 0; min-width: 0; min-height: 46px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; color: var(--onSurfaceVariant); font-weight: 500; text-align: center; }
+.slide .opt .led { width: 8px; height: 8px; border-radius: 50%; background: var(--ledOff); margin-bottom: 5px; flex: none; transition: background-color .35s; }
+.slide .opt.sel { color: var(--onSurface); font-weight: 700; }
+.slide .opt.sel .led { background: var(--record); }
+.still .slide .knob, .still .slide .opt .led { transition: none; }
+
+/* ToggleLever. */
+.lever { min-height: 56px; gap: 14px; cursor: pointer; flex: none; }
+.lever .arm { transition: transform .4s cubic-bezier(.3,1.5,.55,1); transform-box: view-box; }
+.still .lever .arm { transition: none; }
+.lever .ledDot { width: 8px; height: 8px; border-radius: 50%; background: var(--ledOff); flex: none; }
+.lever.on .ledDot { background: var(--record); }
+.lever .words { display: grid; }
+.lever .words > * { grid-area: 1 / 1; }
+
+/* CounterSlider: the tape counter. */
+.counter { position: relative; padding-top: 26px; touch-action: none; cursor: pointer; }
+.counter .area { position: relative; height: 48px; }
+.counter .groove { position: absolute; left: 15px; right: 15px; top: 17px; height: 14px; }
+.counter .thumb { position: absolute; top: 9px; width: 30px; height: 30px; margin-left: -15px; display: flex; align-items: center; justify-content: center; }
+.counter .dot { width: 24px; height: 24px; border-radius: 50%; background: var(--record); border: 3px solid var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.counter .readout { position: absolute; bottom: calc(100% + 2px); white-space: nowrap; color: var(--displayInk); background: var(--display); border: 1px solid var(--controlEdge); border-radius: 2px; padding: 0 5px; font-weight: 700; margin: 0; line-height: calc(var(--lh) - 2 * var(--trim)); }
+
+/* ---------- Settings ---------- */
+.setTabs { padding: 0 12px; gap: 3px; align-items: flex-end; flex: none; }
+.setTab { min-height: 48px; display: flex; align-items: flex-end; flex: none; }
+.setTab span { background: var(--card); border: 1px solid var(--controlEdge); border-radius: 6px 6px 0 0; padding: 10px 16px; color: var(--onSurfaceVariant); font-weight: 500; white-space: nowrap; }
+.setTab.sel span { background: var(--cardEdge); border-color: transparent; padding: 14px 16px; color: var(--onSurface); font-weight: 700; }
+.setBody { background: var(--cardEdge); }
+.setPage { padding: 16px 16px 24px; display: flex; flex-direction: column; gap: 20px; }
+.section { margin-top: 6px; background: var(--card); border: 1px solid var(--cardEdge); border-radius: 4px; padding: 8px 14px; display: flex; flex-direction: column; }
+.setting { padding: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+.explain { min-height: 48px; padding: 0 4px 0 12px; display: grid; align-items: center; justify-items: center; flex: none; }
+.explain > * { grid-area: 1 / 1; }
+.hr { height: 1px; background: var(--rule); flex: none; }
+.provider { background: var(--desk); border: 1px solid var(--cardEdge); border-radius: 3px; padding: 6px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+.provider.on { border: 1.5px solid var(--controlEdge); }
+.foldLabel { gap: 4px; }
+.foldLabel .arrow { display: inline-flex; width: 6px; justify-content: center; align-items: center; transition: transform .22s; }
+.still .foldLabel .arrow { transition: none; }
+.warn { gap: 8px; align-items: flex-start; }
+.warn .bang { margin-top: 1px; min-width: 18px; height: 18px; border: 1.5px solid var(--record); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--record); font-weight: 700; flex: none; }
+.step { gap: 10px; align-items: flex-start; }
+.step .num { min-width: 24px; height: 24px; border: 1.5px solid var(--onSurfaceVariant); background: var(--card); border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0 4px; flex: none; }
+.lineField { min-height: 48px; padding: 12px 0 8px; border-bottom: 1.5px solid var(--outline); }
+.lineField:focus-within { border-bottom: 2.5px solid var(--primary); }
+.modelTape { min-height: 48px; padding: 6px 0; display: inline-flex; align-items: center; }
+.modelTape span { background: var(--card); border: 1px solid var(--controlEdge); border-radius: 2px; padding: 8px 10px; }
+.modelTape.sel span { background: var(--primary); border-color: var(--primary); color: var(--onPrimary); }
+.flow { display: flex; flex-wrap: wrap; gap: 8px; }
+.licenseText { background: var(--card); border: 1px solid var(--cardEdge); border-radius: 3px; padding: calc(14px - var(--trim)) 14px; margin: 0; }
