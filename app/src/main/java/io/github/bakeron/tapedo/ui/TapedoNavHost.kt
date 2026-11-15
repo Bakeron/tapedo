@@ -11,6 +11,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.Lifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -44,32 +46,43 @@ fun TapedoNavHost(container: AppContainer, debugTranscript: String? = null) {
         popEnterTransition = { if (still) EnterTransition.None else fadeIn(initialAlpha = 0.6f) },
         popExitTransition = { if (still) ExitTransition.None else fadeOut() },
     ) {
-        composable<HomeDestination> {
+        composable<HomeDestination> { entry ->
             val vm = viewModel {
                 HomeViewModel(
                     container.settings, container.speech, container.notes, container.structurer, container.lockedNotice,
                     retyper = container.whisper,
                 )
             }
-            HomeRoute(vm, onOpenSettings = { nav.navigate(SettingsDestination) }, debugTranscript = debugTranscript)
+            HomeRoute(vm, onOpenSettings = { if (entry.isOnTop) nav.navigate(SettingsDestination) }, debugTranscript = debugTranscript)
         }
         // Settings and licences slide up from below, like a card pulled out from under the recorder,
         // and slide back down; the recorder stays put behind them.
         composable<SettingsDestination>(
             enterTransition = { cardIn(still) },
             popExitTransition = { cardOut(still) },
-        ) {
+        ) { entry ->
             val vm = viewModel { SettingsViewModel(container.settings, container.secrets, container.aiUsage, container.aiConnection, container.speech) }
-            SettingsRoute(vm, onBack = { nav.popBackStack() }, onOpenLicenses = { nav.navigate(LicensesDestination) })
+            SettingsRoute(
+                vm,
+                onBack = { if (entry.isOnTop) nav.popBackStack() },
+                onOpenLicenses = { if (entry.isOnTop) nav.navigate(LicensesDestination) },
+            )
         }
         composable<LicensesDestination>(
             enterTransition = { cardIn(still) },
             popExitTransition = { cardOut(still) },
-        ) {
-            LicensesScreen(onBack = { nav.popBackStack() })
+        ) { entry ->
+            LicensesScreen(onBack = { if (entry.isOnTop) nav.popBackStack() })
         }
     }
 }
+
+/**
+ * Only the screen on top may navigate. A second quick tap on the back arrow (or on the gear) would
+ * otherwise act again while the screen is already leaving - popping the home screen too left a blank page.
+ */
+private val NavBackStackEntry.isOnTop: Boolean
+    get() = lifecycle.currentState == Lifecycle.State.RESUMED
 
 private val cardSpring = spring<IntOffset>(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
 

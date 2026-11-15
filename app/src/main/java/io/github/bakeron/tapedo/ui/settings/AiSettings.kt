@@ -529,6 +529,9 @@ private fun Step(number: Int, text: String) {
     }
 }
 
+/** How many keys are readable on screen now (main thread only) - see [KeyField]. */
+private var keysShown = 0
+
 /** A key: typed once, saved straight to the phone's vault, shown only as "••••1234" unless "Show key". */
 @Composable
 private fun KeyField(p: AiProvider, st: ProviderState, actions: AiActions) {
@@ -536,9 +539,12 @@ private fun KeyField(p: AiProvider, st: ProviderState, actions: AiActions) {
     val label = stringResource(R.string.ai_key)
     // While the key is readable on screen, no screenshot or screen recording may catch it.
     val window = LocalActivity.current?.window
+    // Counted: with two keys shown, hiding one must not lift the block while the other is still readable.
     DisposableEffect(st.shown, window) {
-        if (st.shown) window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        onDispose { if (st.shown) window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        if (st.shown && window != null && keysShown++ == 0) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose {
+            if (st.shown && window != null && --keysShown == 0) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
     }
     LaunchedEffect(st.keyNote) {
         if (st.keyNote != null) {

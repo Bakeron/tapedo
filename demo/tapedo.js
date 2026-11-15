@@ -5,23 +5,28 @@
   "use strict";
 
   var STR = window.TAPEDO_STRINGS;
+  // Until the fonts are in, the page is only its background - dark at once on a dark system (no light flash).
+  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) document.body.classList.remove("paper");
   var NS = "http://www.w3.org/2000/svg";
   var UNDO_MS = 10000;
   var USD_PLN = 4.0;
-  var VERSION = "1.8";
-  var PRIVACY_URL = "https://bakeron.github.io/tapedo/privacy.html";
+  var VERSION = "2.2";
+  var PRIVACY_URL = "https://tapedo.szymonbakonis.pl/privacy.html";
+  var MANUAL_URL = "https://tapedo.szymonbakonis.pl/instrukcja/";
 
   // Texts of the demo itself (not in the app).
   var DEMO = {
     pl: {
       mic: "To wersja demonstracyjna - mikrofon tu nie działa. W prawdziwej aplikacji tak: naciskasz i mówisz, a z nagrania powstaje karteczka.",
       off: "W wersji demonstracyjnej nie działa - w prawdziwej aplikacji tak.",
-      title: "Tapedo - wersja demonstracyjna"
+      title: "Tapedo - wersja demonstracyjna",
+      manual: "Instrukcja ze zrzutami"
     },
     en: {
       mic: "This is a demo version - the microphone does not work here. In the real app it does: press, speak, and the recording becomes a card.",
       off: "Doesn't work in the demo version - it does in the real app.",
-      title: "Tapedo - demo version"
+      title: "Tapedo - demo version",
+      manual: "User guide with screenshots (Polish)"
     }
   };
 
@@ -71,7 +76,7 @@
       noteTypeChoice: "TASK", theme: "SYSTEM", reduceMotion: false, aiProviders: {}, aiModels: {},
       aiDailyLimit: 200, textScale: 1, whisper: null, tiltedPaper: false, topUpCents: null, topUpDay: null
     },
-    screen: "home", onDone: false, query: "",
+    screen: "home", onDone: false, query: "", tour: 0,
     editing: null, openedDone: false,
     deleted: null, moved: null,
     setTab: "RECORDING", explain: {}, ai: {}
@@ -359,7 +364,7 @@
     return h("button", { class: "iconBtn", type: "button", "aria-label": label, title: label, onclick: onClick }, icon);
   }
   function textBtn(text, label, onClick, cls) {
-    return h("button", { class: "iconBtn titleLarge variant " + (cls || ""), type: "button", "aria-label": label, onclick: onClick }, h("span", { "aria-hidden": "true" }, text));
+    return h("button", { class: "iconBtn titleLarge variant " + (cls || ""), type: "button", "aria-label": label, title: label, onclick: onClick }, h("span", { "aria-hidden": "true" }, text));
   }
   // PaperButton; disabled ones stay focusable but do nothing, like Compose's disabled clickable.
   function pbtn(text, onClick, style, opts) {
@@ -571,6 +576,178 @@
   }, true);
   function demoOff(e, el) { bubble(el || e.currentTarget, D("off")); }
 
+  // ---------- First steps (ui/home/FirstSteps.kt) ----------
+
+  // The demo shows them on every start - it remembers nothing. "Back" (left arrow) goes one slip back,
+  // the right arrow one on, Escape skips, as on the phone.
+  var TOUR = [
+    { spot: "RECORD", key: "record" }, { spot: "TABS", key: "tabs" }, { spot: "BOX", key: "box" },
+    { spot: null, key: "priority" }, { spot: "SETTINGS", key: "settings" }
+  ];
+  var TOUR_DRAW_MS = 520, HOLE_PAD = 6, SMALL_SPOT = 140, MARKER_WIDTH = 4, ARROW_GAP = 56, SLIP_MAX_WIDTH = 380;
+
+  function touring() { return st.tour != null && st.screen === "home"; }
+  function tourNext() { if (st.tour === TOUR.length - 1) tourEnd(); else { st.tour++; render(); } }
+  function tourBack() { if (st.tour === 0) tourEnd(); else { st.tour--; render(); } }
+  function tourEnd() { st.tour = null; pendingFocus = '[data-tour="RECORD"]'; render(); }
+  function tourKey(e) {
+    var f = { ArrowRight: tourNext, ArrowLeft: tourBack, Escape: tourEnd }[e.key];
+    if (!f || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    if (!e.repeat) f();
+  }
+  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), Math.max(lo, hi)); }
+  function overlaps(a, b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
+
+  function tourOverlay(root) {
+    var step = TOUR[st.tour], last = st.tour === TOUR.length - 1;
+    var prev = was("tour", st.tour);
+    var shade = sv("svg", { class: "tourShade", "aria-hidden": "true" });
+    var slip = tipSlip(step, last);
+    var el = h("div", { class: "tour", role: "dialog", "aria-modal": "true", "aria-label": S("first_steps_pane"), tabindex: -1 }, shade, slip);
+    after(function () {
+      var o = el.getBoundingClientRect(), W = o.width, H = o.height;
+      var spotEl = step.spot && root.querySelector('[data-tour="' + step.spot + '"]');
+      var mark = null;
+      if (spotEl) {
+        var r = spotEl.getBoundingClientRect();
+        mark = markFor({ l: r.left - o.left, t: r.top - o.top, r: r.right - o.left, b: r.bottom - o.top }, W, H);
+      }
+      var sw = slip.offsetWidth, sh = slip.offsetHeight;
+      var at = placeSlip(mark && markBounds(mark), sw, sh, { l: 16, t: 16, r: W - 16, b: H - 16 }, ARROW_GAP);
+      slip.style.left = at.x + "px";
+      slip.style.top = at.y + "px";
+      var slipRect = { l: at.x, t: at.y, r: at.x + sw, b: at.y + sh };
+
+      shade.setAttribute("viewBox", "0 0 " + W + " " + H);
+      // The clear window has the marker's shape: an oval inside the loop, or the frame's rectangle.
+      var hole = !mark ? "" : mark.small ? ellipse(mark.cx, mark.cy, mark.rx * .97, mark.ry * .97) : roundRect(mark.frame, 12);
+      shade.appendChild(sv("path", { d: "M0 0H" + W + "V" + H + "H0Z" + hole, fill: "rgba(0,0,0,.62)", "fill-rule": "evenodd" }));
+      var animate = prev !== st.tour && !still();
+      if (mark) {
+        var loop = sv("path", { d: mark.small ? markerLoop(mark) : roundRect(mark.frame, 12), fill: "none", stroke: "var(--tapeMedium)",
+          "stroke-width": MARKER_WIDTH, "stroke-linecap": "round", "stroke-linejoin": "round" });
+        shade.appendChild(loop);
+        if (animate) {
+          var len = loop.getTotalLength();
+          loop.style.strokeDasharray = len;
+          loop.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: TOUR_DRAW_MS, fill: "backwards" });
+        }
+        if (!overlaps(slipRect, markBounds(mark))) {
+          var arrow = pencilArrow(slipRect, markBounds(mark));
+          if (arrow) {
+            shade.appendChild(arrow);
+            if (animate) arrow.animate([{ opacity: 0 }, { opacity: 1 }], { duration: TOUR_DRAW_MS * .45, delay: TOUR_DRAW_MS * .55, fill: "backwards" });
+          }
+        }
+      }
+      if (animate) slip.animate([{ opacity: 0 }, { opacity: 1 }], { duration: TOUR_DRAW_MS / 2.5 });
+      // The tips hold the keyboard at once, so the arrow keys work; Tab reaches the keys on the slip.
+      if (prev == null && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
+    });
+    return el;
+  }
+
+  // One slip: the step on a label tape, the title, the text typed on the card's lines, then the keys.
+  function tipSlip(step, last) {
+    var app = document.getElementById("app");
+    var slip = h("div", { class: "tipSlip", style: { width: Math.max(0, Math.min(app.clientWidth - 32, SLIP_MAX_WIDTH)) + "px", transform: rot(tilt(-0.8)) || "none" } },
+      labelTape(S("first_steps_count", st.tour + 1, TOUR.length)),
+      h("div", { class: "col", style: { gap: "6px" } },
+        h("h2", { class: "titleMedium", id: "tourTitle", style: { margin: 0 } }, S("first_steps_" + step.key + "_title")),
+        ruled(S(step.key === "record" && st.settings.recordingEnd === "STOP_BUTTON" ? "first_steps_record_body_stop" : "first_steps_" + step.key + "_body"),
+          "bodyMedium marginLine", "var(--onSurface)")));
+    slip.lastChild.lastChild.id = "tourBody";
+    if (step.key === "priority") {
+      var legend = h("div", { class: "col", style: { gap: "8px" } });
+      [["HIGH", "high"], ["MEDIUM", "medium"], ["LOW", "low"]].forEach(function (p) {
+        var tape = priorityTape(p[0], 44, 16, "", 0);
+        tape.setAttribute("aria-hidden", "true");
+        legend.appendChild(h("div", { class: "row", style: { gap: "12px" } }, tape,
+          h("span", { class: "bodyMedium grow", style: { margin: 0 } }, S("first_steps_priority_" + p[1]))));
+      });
+      slip.appendChild(legend);
+    }
+    var next = pbtn(S(last ? "first_steps_done" : "first_steps_next"), tourNext, "filled");
+    // Read with the slip's text when it gets the focus back after each step.
+    next.setAttribute("data-focus", "tourNext");
+    next.setAttribute("aria-describedby", "tourTitle tourBody");
+    var keys = last ? [next] : [pbtn(S("first_steps_skip"), tourEnd), next];
+    if (!last) keys[0].setAttribute("data-focus", "tourSkip");
+    var pair = pairOrStack(keys, 8);
+    pair.style.marginTop = "4px";
+    slip.appendChild(pair);
+    return slip;
+  }
+
+  // Below or above the spot (on the side with more room first), else beside it; a spot as big as the screen
+  // gets the slip over its lower part. Never out of the area. Same as placeSlip in FirstSteps.kt.
+  function placeSlip(t, w, hgt, area, gap) {
+    function cx(x) { return clamp(x, area.l, area.r - w); }
+    function cy(y) { return clamp(y, area.t, area.b - hgt); }
+    if (!t) return { x: cx((area.l + area.r - w) / 2), y: cy((area.t + area.b - hgt) / 2) };
+    var x = cx((t.l + t.r - w) / 2);
+    var below = t.b + gap, above = t.t - gap - hgt;
+    var fitsBelow = below + hgt <= area.b, fitsAbove = above >= area.t;
+    if ((t.t + t.b) / 2 < (area.t + area.b) / 2 && fitsBelow) return { x: x, y: below };
+    if (fitsAbove) return { x: x, y: above };
+    if (fitsBelow) return { x: x, y: below };
+    var y = cy((t.t + t.b - hgt) / 2);
+    if (t.l - gap - w >= area.l) return { x: t.l - gap - w, y: y };
+    if (t.r + gap + w <= area.r) return { x: t.r + gap, y: y };
+    return { x: x, y: cy(t.b - hgt - gap / 2) };
+  }
+
+  // A hand-drawn oval around a small spot (the key, the gear), a rounded frame around a wide one.
+  function markFor(t, W, H) {
+    var hole = { l: t.l - HOLE_PAD, t: t.t - HOLE_PAD, r: t.r + HOLE_PAD, b: t.b + HOLE_PAD };
+    if (Math.max(hole.r - hole.l, hole.b - hole.t) > SMALL_SPOT) {
+      var e = MARKER_WIDTH;
+      return { small: false, frame: { l: Math.max(hole.l - 3, e), t: Math.max(hole.t - 3, e), r: Math.min(hole.r + 3, W - e), b: Math.min(hole.b + 3, H - e) } };
+    }
+    var rx = (hole.r - hole.l) / 2 + 2, ry = (hole.b - hole.t) / 2 + 2, k = 1.12;
+    // The gear sits in the corner: the oval moves in a little rather than run off the screen.
+    return { small: true, rx: rx, ry: ry,
+      cx: clamp((hole.l + hole.r) / 2, rx * k, W - rx * k), cy: clamp((hole.t + hole.b) / 2, ry * k, H - ry * k) };
+  }
+  // Everything the marker covers, its wobble included - the slip and the arrow keep out of it.
+  function markBounds(m) {
+    return m.small ? { l: m.cx - m.rx * 1.12, t: m.cy - m.ry * 1.12, r: m.cx + m.rx * 1.12, b: m.cy + m.ry * 1.12 } : m.frame;
+  }
+  function ellipse(cx, cy, rx, ry) {
+    return "M" + (cx - rx) + " " + cy + "A" + rx + " " + ry + " 0 1 0 " + (cx + rx) + " " + cy + "A" + rx + " " + ry + " 0 1 0 " + (cx - rx) + " " + cy + "Z";
+  }
+  function roundRect(f, r) {
+    return "M" + (f.l + r) + " " + f.t + "H" + (f.r - r) + "A" + r + " " + r + " 0 0 1 " + f.r + " " + (f.t + r) +
+      "V" + (f.b - r) + "A" + r + " " + r + " 0 0 1 " + (f.r - r) + " " + f.b + "H" + (f.l + r) +
+      "A" + r + " " + r + " 0 0 1 " + f.l + " " + (f.b - r) + "V" + (f.t + r) + "A" + r + " " + r + " 0 0 1 " + (f.l + r) + " " + f.t + "Z";
+  }
+  // An oval that overshoots its start, as drawn by hand; wider at the end, so the overshoot does not lie on the start.
+  function markerLoop(m) {
+    var d = "", start = -Math.PI * .6, turn = 2 * Math.PI * 1.12, n = 72;
+    for (var i = 0; i <= n; i++) {
+      var t = i / n, a = start + turn * t, wob = 1 + .035 * Math.sin(a * 3) + .06 * t;
+      d += (i ? "L" : "M") + (m.cx + Math.cos(a) * m.rx * wob).toFixed(1) + " " + (m.cy + Math.sin(a) * m.ry * wob).toFixed(1);
+    }
+    return d;
+  }
+  // A slightly bent pencil arrow from the slip's edge to the marked spot, stopping a little short of the marker.
+  function pencilArrow(slip, spot) {
+    var ax = (spot.l + spot.r) / 2, ay = (spot.t + spot.b) / 2;
+    var fx = clamp(ax, slip.l, slip.r), fy = clamp(ay, slip.t, slip.b);
+    var tx = clamp(fx, spot.l, spot.r), ty = clamp(fy, spot.t, spot.b);
+    var len = Math.hypot(tx - fx, ty - fy);
+    if (len < 12) return null;
+    tx -= (tx - fx) * 6 / len; ty -= (ty - fy) * 6 / len;
+    var qx = (fx + tx) / 2 - (ty - fy) * .18, qy = (fy + ty) / 2 + (tx - fx) * .18;
+    var angle = Math.atan2(ty - qy, tx - qx), d = "M" + fx + " " + fy + "Q" + qx + " " + qy + " " + tx + " " + ty;
+    [-1, 1].forEach(function (side) {
+      var a = angle + Math.PI + side * .5;
+      d += "M" + tx + " " + ty + "L" + (tx + Math.cos(a) * 11) + " " + (ty + Math.sin(a) * 11);
+    });
+    return sv("path", { d: d, fill: "none", stroke: "var(--tapeMedium)", "stroke-width": 2.5, "stroke-linecap": "round", "stroke-linejoin": "round" });
+  }
+
   // ---------- Home (ui/home/HomeScreen.kt, CardStack.kt) ----------
 
   function nameplate() {
@@ -582,11 +759,17 @@
     var kind = st.settings.noteTypeChoice || "NOTE";
     var tab = st.onDone ? "DONE" : kind;
     var root = h("div", { class: "screen-home" });
-    root.appendChild(h("div", { class: "row topRow" }, nameplate(),
-      iconBtn(settingsIcon(), S("home_open_settings"), function () { go("settings"); })));
+    var gear = iconBtn(settingsIcon(), S("home_open_settings"), function () { go("settings"); });
+    gear.setAttribute("data-tour", "SETTINGS");
+    root.appendChild(h("div", { class: "row topRow" }, nameplate(), gear));
     var middle = h("div", { class: "middle grow" }, cardStack(tab), stripArea(tab));
     root.appendChild(middle);
     root.appendChild(controls(kind));
+    if (touring()) {
+      // The screen below takes no touches, no keyboard and no screen reader while the tips are open.
+      Array.prototype.forEach.call(root.children, function (c) { c.inert = true; });
+      root.appendChild(tourOverlay(root));
+    }
     return root;
   }
 
@@ -594,17 +777,17 @@
     var notes = sorted();
     var numbers = kindNumbers();
     var col = h("div", { class: "col grow" });
-    var tabs = h("div", { class: "row tabs", role: "tablist" });
+    var tabs = h("div", { class: "row tabs", role: "tablist", "data-tour": "TABS" });
     TABS.forEach(function (t) {
       var count = notes.filter(function (n) { return holds(t, n); }).length;
       var sel = t === tab;
       tabs.appendChild(h("button", { type: "button", class: "tab" + (sel ? " sel" : ""), role: "tab", "aria-selected": String(sel),
-        "aria-label": P("tab_desc", count, tabName(t), count),
+        "aria-label": P("tab_desc", count, tabName(t), count), title: tabName(t),
         onclick: function () { selectTab(t); } },
         h("span", { class: "face" }, typeMark(t, sel ? 20 : 17), h("span", { class: "labelMedium", style: { fontWeight: sel ? 700 : 500 }, "aria-hidden": "true" }, String(count)))));
     });
     col.appendChild(tabs);
-    var box = h("div", { class: "box grow" });
+    var box = h("div", { class: "box grow", "data-tour": "BOX" });
     if (notes.length) box.appendChild(searchLine());
     var list = h("div", { class: "list scroll grow", "data-scroll": "list" });
     fillList(list, tab, notes, numbers);
@@ -615,7 +798,11 @@
 
   function fillList(list, tab, notes, numbers) {
     list.textContent = "";
-    var shown = notes.filter(function (n) { return holds(tab, n) && matches(n, st.query); });
+    // The strip shows "Zadanie 2", not the title - so that name finds the card too (CardStack.kt).
+    var q = st.query.trim().toLowerCase();
+    var shown = notes.filter(function (n) {
+      return holds(tab, n) && (matches(n, st.query) || (n.type !== "EVENT" && numberedName(n.type, numbers[n.id]).toLowerCase().indexOf(q) >= 0));
+    });
     if (!shown.length && !st.query.trim() && tab !== "DONE") list.appendChild(emptyCard());
     else if (!shown.length) list.appendChild(h("p", { class: "bodyMedium variant", role: "status", style: { marginInline: 0, padding: "16px 8px" } },
       st.query.trim() ? S("search_none", st.query.trim()) : S("tab_empty")));
@@ -625,9 +812,9 @@
   }
 
   function searchLine() {
-    var input = h("input", { type: "search", class: "bodyMedium", placeholder: S("search_hint"), "aria-label": S("search_hint"), value: st.query, enterkeyhint: "search", autocomplete: "off" });
+    var input = h("input", { type: "search", class: "bodyMedium", placeholder: S("search_hint"), "aria-label": S("search_hint"), value: st.query, enterkeyhint: "search", autocomplete: "off", "data-focus": "search" });
     var row = h("div", { class: "row search" }, input);
-    var clear = textBtn("×", S("search_clear"), function () { st.query = ""; render(); });
+    var clear = textBtn("×", S("search_clear"), function () { st.query = ""; pendingFocus = '[data-focus="search"]'; render(); });
     var spacer = h("span", { style: { width: "14px", flex: "none" } });
     row.appendChild(st.query ? clear : spacer);
     input.addEventListener("input", function () {
@@ -635,7 +822,12 @@
       // Only the list follows the typing - the field keeps its focus and keyboard.
       var list = current.querySelector('[data-scroll="list"]');
       var tab = st.onDone ? "DONE" : (st.settings.noteTypeChoice || "NOTE");
+      // Outside render(), so the drawings made after layout (pencil strikes, the dashed frame) run here.
+      hooks = [];
       fillList(list, tab, sorted(), kindNumbers());
+      var run = hooks;
+      hooks = [];
+      run.forEach(function (f) { f(current, current); });
       var hasClear = row.lastChild === clear;
       if (st.query && !hasClear) row.replaceChild(clear, row.lastChild);
       if (!st.query && hasClear) row.replaceChild(spacer, row.lastChild);
@@ -723,10 +915,11 @@
   function controls(kind) {
     var el = h("div", { class: "controls" });
     var into = S("home_record_into", tabName(kind));
-    el.appendChild(h("div", { class: "row into", "aria-label": into }, typeMark(kind, 16), h("span", { class: "labelLarge", "aria-hidden": "true" }, into)));
+    el.appendChild(h("div", { class: "row into" }, typeMark(kind, 16), h("span", { class: "labelLarge" }, into)));
     var pause = st.settings.pauseSeconds;
     el.appendChild(h("div", { class: "bodySmall variant pauseRule" }, pause > 0 ? S("home_pause_rule", pause) : S("home_pause_off")));
     var key = recordKey(S("record_start"), function (b) { bubble(b, D("mic")); });
+    key.setAttribute("data-tour", "RECORD");
     el.appendChild(h("div", { class: "keyCol" }, key, h("span", { class: "labelLarge underKey", "aria-hidden": "true" }, S("record_start"))));
     return el;
   }
@@ -812,18 +1005,20 @@
     hideBubble();
     st.openedDone = isDone(note);
     st.editing = JSON.parse(JSON.stringify(note));
+    st.optionsOpen = false;
     go("card");
   }
   function toggleDone(note) {
     var after1 = Object.assign({}, note, { done: !note.done });
     replaceNote(after1);
-    if (isDone(note) !== isDone(after1)) showMovedStrip(after1);
+    if (isDone(note) !== isDone(after1)) { showMovedStrip(after1); pendingFocus = "[data-strip] .msg button"; }
     render();
   }
   function showMovedStrip(note) {
     st.moved = { note: note, to: isDone(note) ? "DONE" : note.type, start: Date.now() };
     clearTimeout(movedTimer);
-    movedTimer = setTimeout(function () { st.moved = null; render(); }, UNDO_MS);
+    // Only the home screen shows the tape - re-building another screen would move the caret while typing.
+    movedTimer = setTimeout(function () { st.moved = null; if (st.screen === "home") render(); }, UNDO_MS);
   }
   function dismissMoved() { clearTimeout(movedTimer); st.moved = null; render(); }
   function showMoved(to) {
@@ -834,16 +1029,18 @@
     render();
   }
   function deleteNote(note) {
+    pendingFocus = "[data-strip] .msg button";
     st.notes = st.notes.filter(function (n) { return n.id !== note.id; });
     st.deleted = { note: note, start: Date.now() };
     clearTimeout(undoTimer);
-    undoTimer = setTimeout(function () { st.deleted = null; render(); }, UNDO_MS);
+    undoTimer = setTimeout(function () { st.deleted = null; if (st.screen === "home") render(); }, UNDO_MS);
     render();
   }
   function dismissDeleted() { clearTimeout(undoTimer); st.deleted = null; render(); }
   function undoDelete() {
     if (!st.deleted) return;
     st.notes.push(st.deleted.note);
+    pendingFocus = '[data-flip="n' + st.deleted.note.id + '"] .paper';
     st.deleted = null;
     clearTimeout(undoTimer);
     render();
@@ -856,8 +1053,10 @@
     replaceNote(st.editing);
     if (rerender) render();
   }
+  var lastCardId = null;
   function closeCard() {
     var card = tidy(st.editing);
+    lastCardId = card.id;
     replaceNote(card);
     st.editing = null;
     if (isDone(card) !== st.openedDone) showMovedStrip(card);
@@ -1030,8 +1229,14 @@
         onclick: function () { edit({ done: !note.done }, true); } }, pencilBox(note.done), h("span", { class: "bodyLarge" }, S("editor_task_done"))));
     }
     if (note.byAi) content.appendChild(stamp());
-    var box = h("div", { class: "paperBox", style: { width: paperWidth(type) + "%" } }, cardPaper(note, content));
-    if (type !== "IDEA") box.appendChild(priorityTape(note.priority, 64, 20, "cardPrio"));
+    // As in the app: a crooked tape sticks out about 14px above the card, so the card keeps that room inside it.
+    var tapeRoom = type !== "IDEA" && st.settings.tiltedPaper ? 14 : 0;
+    var box = h("div", { class: "paperBox", style: { width: paperWidth(type) + "%", paddingTop: tapeRoom + "px" } }, cardPaper(note, content));
+    if (type !== "IDEA") {
+      var tp = priorityTape(note.priority, 64, 20, "cardPrio");
+      tp.style.top = (4 + tapeRoom) + "px";
+      box.appendChild(tp);
+    }
     return box;
   }
 
@@ -1043,10 +1248,10 @@
   function itemsEditor(note) {
     var items = note.items;
     var shopping = note.type === "SHOPPING";
-    var el = h("div", { class: "col" }, h("span", { class: "labelMedium variant" }, S("editor_field_items")));
+    var el = h("div", { class: "col" });
     groupedItems(note).forEach(function (g) {
       if (g.group) {
-        el.appendChild(h("div", { class: "receiptRule", "aria-hidden": "true" }));
+        el.appendChild(h("div", { style: { height: "14px" }, "aria-hidden": "true" }));
         el.appendChild(h("h3", { class: "bodySmall bold variant", style: { marginTop: "calc(2px - var(--trim))", marginInline: 0 } }, upper(groupName(g.group))));
       }
       g.items.forEach(function (x) {
@@ -1075,8 +1280,12 @@
     return el;
   }
 
+  // A wide "Show settings" key first; type, priority, Share and Delete only behind it (author 15.11.2026).
   function cardOptions(note) {
     var el = h("div", { class: "options" });
+    el.appendChild(pbtn(S(st.optionsOpen ? "editor_options_hide" : "editor_options_show"),
+      function () { st.optionsOpen = !st.optionsOpen; render(); }, null, { wide: true }));
+    if (!st.optionsOpen) return el;
     var bar = h("div", { class: "row typeBar hscroll", role: "radiogroup", "data-scroll": "typebar" });
     var selEl = null;
     TYPES.forEach(function (t, i) {
@@ -1116,6 +1325,17 @@
 
   var SET_TABS = [["RECORDING", "settings_tab_recording"], ["AI", "settings_tab_ai"], ["LOOK", "settings_tab_look"], ["ABOUT", "settings_tab_about"]];
   function set(changes) { Object.assign(st.settings, changes); render(); }
+  // A field left by clicking a key saves on "change" - between the key's press and release. Re-building the
+  // screen then would swap the key under the pointer and lose the click, so it waits for the release.
+  var pressing = false, renderOnRelease = false;
+  document.addEventListener("pointerdown", function () { pressing = true; }, true);
+  ["pointerup", "pointercancel"].forEach(function (t) {
+    document.addEventListener(t, function () {
+      pressing = false;
+      if (renderOnRelease) { renderOnRelease = false; setTimeout(render, 0); }
+    }, true);
+  });
+  function renderAfterPress() { if (pressing) renderOnRelease = true; else render(); }
 
   function buildSettings() {
     var root = h("div", { class: "screen-settings" });
@@ -1150,6 +1370,7 @@
     return root;
   }
 
+  function named(el, name) { el.setAttribute("aria-label", name); return el; }
   function section(children) {
     return h("div", { class: "section" }, children);
   }
@@ -1176,6 +1397,8 @@
       });
       if (f) el.appendChild(f);
     }
+    // A slider or a row of options is read with the setting's name.
+    if (/^(slider|radiogroup)$/.test(control.getAttribute("role") || "") && !control.hasAttribute("aria-label")) control.setAttribute("aria-label", title);
     el.appendChild(control);
     return el;
   }
@@ -1244,10 +1467,10 @@
         function (v) { st.lang = v; render(); })));
     c.push(rule());
     c.push(setting("motion", S("settings_reduce_motion"), S("settings_reduce_motion_hint"), null,
-      lever("motion", s.reduceMotion, function (v) { set({ reduceMotion: v }); }, s.reduceMotion ? S("settings_on") : S("settings_off"))));
+      lever("motion", s.reduceMotion, function (v) { set({ reduceMotion: v }); }, s.reduceMotion ? S("settings_on") : S("settings_off"), null, S("settings_reduce_motion"))));
     c.push(rule());
     c.push(setting("tilt", S("settings_tilted"), S("settings_tilted_hint"), null,
-      lever("tilt", s.tiltedPaper, function (v) { set({ tiltedPaper: v }); }, s.tiltedPaper ? S("settings_on") : S("settings_off"))));
+      lever("tilt", s.tiltedPaper, function (v) { set({ tiltedPaper: v }); }, s.tiltedPaper ? S("settings_on") : S("settings_off"), null, S("settings_tilted"))));
     page.appendChild(section(c));
   }
 
@@ -1255,6 +1478,8 @@
     var f = h("div", { class: "col", style: { padding: "0 4px" } },
       h("p", { class: "bodyMedium", style: { marginInline: 0 } }, S("settings_about_what")),
       h("p", { class: "bodySmall variant", style: { marginTop: "calc(8px - var(--trim))", marginInline: 0 } }, S("settings_footer")),
+      pbtn(S("settings_first_steps"), function () { st.tour = 0; go("home"); }, "", { style: { marginTop: "12px" } }),
+      pbtn(D("manual") + " ↗", function () { window.open(MANUAL_URL, "_blank", "noopener"); }, "", { style: { marginTop: "12px" } }),
       pbtn(S("settings_privacy_policy") + " ↗", function () { window.open(PRIVACY_URL, "_blank", "noopener"); }, "", { style: { marginTop: "12px" } }),
       h("p", { class: "labelMedium variant", style: { margin: "12px 0 0" } }, S("settings_version", VERSION)),
       pbtn(S("settings_licenses"), function () { go("licenses"); }, "", { style: { margin: "12px 0 4px" } }));
@@ -1269,7 +1494,7 @@
     c.push(h("div", { class: "col", style: { gap: "12px" } }, PROVIDERS.map(providerCard)));
     c.push(h("div", { class: "col", style: { padding: "16px 0 10px", gap: "8px" } },
       h("span", { class: "titleMedium" }, S("ai_limit")),
-      counter("ailimit", AI_LIMITS, s.aiDailyLimit, function (v) { return String(v); }, function (v) { set({ aiDailyLimit: v }); }),
+      named(counter("ailimit", AI_LIMITS, s.aiDailyLimit, function (v) { return String(v); }, function (v) { set({ aiDailyLimit: v }); }), S("ai_limit")),
       ruled(S("ai_limit_hint"), "bodySmall"),
       ruled(S("ai_privacy"), "bodySmall")));
     page.appendChild(section(c));
@@ -1363,9 +1588,10 @@
   var savedTimers = {};
   function flashSaved(a, key) {
     a.modelSaved = true;
-    render();
-    clearTimeout(savedTimers[key || "m"]);
-    savedTimers[key || "m"] = setTimeout(function () { a.modelSaved = false; render(); }, 3000);
+    renderAfterPress();
+    var k = (key || "m") + (PROVIDERS.filter(function (p) { return st.ai[p.id] === a; })[0] || {}).id;
+    clearTimeout(savedTimers[k]);
+    savedTimers[k] = setTimeout(function () { a.modelSaved = false; if (st.screen === "settings") render(); }, 3000);
   }
 
   // "Show free models": without the internet the app offers the list saved in it - the demo does the same.
@@ -1395,12 +1621,15 @@
     var wrong = h("div");
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") input.blur(); });
     input.addEventListener("change", function () {
-      var t = input.value.trim().replace(",", ".").replace(/\s|\$/g, "");
-      if (!t) { s.topUpCents = null; s.topUpDay = null; render(); return; }
-      var v = Number(t);
-      if (!isFinite(v) || v <= 0 || v > 100000) { wrong.textContent = ""; wrong.appendChild(warning(S("ai_topup_wrong"))); return; }
-      s.topUpCents = Math.round(v * 100); s.topUpDay = todayEpoch(); render();
+      // Same rules as ClaudeSpend.parse: dollars with at most two decimals, 0.01 to 10 000, "$" and "usd" allowed.
+      var t = input.value.replace(/\$|usd/gi, "").replace(/\s/g, "").replace(",", ".");
+      if (!t) { s.topUpCents = null; s.topUpDay = null; renderAfterPress(); return; }
+      var m = /^(\d{1,6})(?:\.(\d{1,2}))?$/.exec(t);
+      var cents = m ? Number(m[1]) * 100 + Number((m[2] || "").padEnd(2, "0")) : 0;
+      if (cents < 1 || cents > 1000000) { wrong.textContent = ""; wrong.appendChild(warning(S("ai_topup_wrong"))); return; }
+      s.topUpCents = cents; s.topUpDay = todayEpoch(); renderAfterPress();
     });
+    input.addEventListener("input", function () { wrong.textContent = ""; });
     var hint = s.topUpCents != null
       ? S("ai_topup_pln", dec(s.topUpCents / 100 * USD_PLN), new Intl.DateTimeFormat(locale(), { dateStyle: "medium", timeZone: "UTC" }).format(utcDate(s.topUpDay)))
       : S("ai_topup_hint");
@@ -1479,7 +1708,17 @@
     return buildHome();
   }
 
+  // Removing a field that holds unsaved typing fires its "change" in the middle of a render, and that change
+  // asks for a render of its own - it waits until this one is done instead of tearing it apart.
+  var rendering = false, renderAgain = false;
   function render() {
+    if (rendering) { renderAgain = true; return; }
+    rendering = true;
+    try { renderNow(); } finally { rendering = false; }
+    if (renderAgain) { renderAgain = false; render(); }
+  }
+
+  function renderNow() {
     applyTheme();
     nextMemo = new Map();
     hooks = [];
@@ -1487,13 +1726,21 @@
     var same = old && currentScreen === st.screen;
     // Where things were, so cards that moved glide to their new place (LazyColumn animateItem).
     var rects = {}, scrolls = {}, focus = null;
+    var a = document.activeElement;
+    // A keyboard user's place: focus was on the old screen, or nowhere after the focused key vanished.
+    var hadFocus = !!old && !!a && (old.contains(a) || a === document.body);
     if (same) {
       old.querySelectorAll("[data-flip]").forEach(function (n) { rects[n.getAttribute("data-flip")] = n.getBoundingClientRect().top; });
       old.querySelectorAll("[data-scroll]").forEach(function (n) { scrolls[n.getAttribute("data-scroll")] = [n.scrollTop, n.scrollLeft]; });
-      var a = document.activeElement;
       if (a && old.contains(a)) {
-        focus = { key: a.getAttribute("data-focus"), label: a.getAttribute("aria-label"), role: a.getAttribute("role"), cls: a.className };
+        focus = { key: a.getAttribute("data-focus"), label: a.getAttribute("aria-label"), role: a.getAttribute("role"), cls: a.className,
+          tag: a.tagName, text: a.textContent, idx: Array.prototype.indexOf.call(old.querySelectorAll(FOCUSABLE), a),
+          sel: "selectionStart" in a && a.type !== "number" ? [a.selectionStart, a.selectionEnd] : null };
       }
+    }
+    if (!same && old && currentScreen === "home") {
+      var ol = old.querySelector('[data-scroll="list"]');
+      homeScroll = ol ? ol.scrollTop : 0;
     }
     var el = buildScreen();
     el.classList.add("layer");
@@ -1503,12 +1750,20 @@
         var s = scrolls[n.getAttribute("data-scroll")];
         if (s) { n.scrollTop = s[0]; n.scrollLeft = s[1]; }
       });
-      if (focus) restoreFocus(el, focus);
+      var wanted = pendingFocus && hadFocus && el.querySelector(pendingFocus);
+      if (wanted) wanted.focus({ preventScroll: true });
+      else if (focus) restoreFocus(el, focus);
     } else {
       transition(old, el, currentScreen, st.screen);
+      // Back from a card the list stands where it was (CardStack.kt keeps its scroll state outside).
+      var nl = st.screen === "home" && el.querySelector('[data-scroll="list"]');
+      if (nl) nl.scrollTop = homeScroll;
+      if (hadFocus && !touring()) arrivalFocus(el, currentScreen);
     }
+    pendingFocus = null;
     current = el;
     currentScreen = st.screen;
+    syncHistory();
     memo = nextMemo;
     var run = hooks;
     run.forEach(function (f) { f(el, old); });
@@ -1525,13 +1780,61 @@
     }
   }
 
+  var FOCUSABLE = "button, [role=button], input, textarea, [tabindex]";
+  // Where the keyboard goes after the next render when the focused key goes away with it (a deleted card's x).
+  var pendingFocus = null;
+  // The same key after a re-render: by its focus key, its label, its words, and last by its place in the
+  // order - a picked option or a moved slider changes its class or words, and a removed key hands over to the next.
+  // The browser's Back (Alt+Left, the mouse's side key, the phone's back gesture) works like the app's "Back":
+  // one history entry stands for "away from the home screen", so Back closes the card or Settings first.
+  var homeScroll = 0, inHistory = false, skipPop = false;
+  function syncHistory() {
+    var away = st.screen !== "home";
+    try {
+      if (away && !inHistory) { history.pushState({ tapedo: 1 }, ""); inHistory = true; }
+      else if (!away && inHistory) { inHistory = false; skipPop = true; history.back(); }
+    } catch (e) { /* no history in this frame */ }
+  }
+  window.addEventListener("popstate", function () {
+    if (skipPop) { skipPop = false; return; }
+    inHistory = false;
+    hideBubble();
+    if (st.screen !== "home") back();
+  });
+
   function restoreFocus(el, f) {
     var t = null;
     if (f.key) t = el.querySelector('[data-focus="' + CSS.escape(f.key) + '"]');
-    if (!t && f.label) {
-      var all = el.querySelectorAll("button, [role=button], input, textarea, [tabindex]");
-      for (var i = 0; i < all.length; i++) if (all[i].getAttribute("aria-label") === f.label && all[i].className === f.cls) { t = all[i]; break; }
+    var all = Array.prototype.filter.call(el.querySelectorAll(FOCUSABLE), function (n) { return !n.closest("[inert]"); });
+    // Of several equal keys (the key field of each open provider) the one nearest to the old place.
+    function find(test) {
+      var best = null;
+      for (var i = 0; i < all.length; i++) if (test(all[i]) && (!best || Math.abs(i - f.idx) < Math.abs(best[1] - f.idx))) best = [all[i], i];
+      return best && best[0];
     }
+    function role(n) { return n.getAttribute("role") === f.role && n.tagName === f.tag; }
+    if (!t && f.label) t = find(function (n) { return n.getAttribute("aria-label") === f.label && n.className === f.cls; })
+      || find(function (n) { return n.getAttribute("aria-label") === f.label && role(n); });
+    if (!t && !f.label && f.text) t = find(function (n) { return role(n) && n.textContent === f.text; });
+    if (!t && f.idx >= 0 && all.length) t = all[Math.min(f.idx, all.length - 1)];
+    if (!t) return;
+    t.focus({ preventScroll: true });
+    // A field rebuilt while typing keeps the caret where it was.
+    if (f.sel && t.tagName === f.tag && "setSelectionRange" in t) { try { t.setSelectionRange(f.sel[0], f.sel[1]); } catch (e) { /* not a text field */ } }
+  }
+
+  // After a screen change the keyboard lands where the eye goes: back on the card or the gear it came from,
+  // otherwise on the new screen's back arrow.
+  function arrivalFocus(el, from) {
+    var t = null;
+    if (st.screen === "home") {
+      if (from === "card") t = (lastCardId != null && el.querySelector('[data-flip="n' + lastCardId + '"] .paper')) || el.querySelector("[data-strip] .msg button");
+      else t = el.querySelector('[data-tour="SETTINGS"]');
+      t = t || el.querySelector(".tab.sel");
+    } else if (st.screen === "settings" && from === "licenses") {
+      t = Array.prototype.find.call(el.querySelectorAll(".pbtn"), function (b) { return b.textContent === S("settings_licenses"); });
+    }
+    t = t || el.querySelector(".header button");
     if (t) t.focus({ preventScroll: true });
   }
 
@@ -1542,6 +1845,7 @@
     if (!old) { app.appendChild(el); return; }
     old.style.pointerEvents = "none";
     old.setAttribute("aria-hidden", "true");
+    old.inert = true; // no Tab into the screen that is fading out
     if (s) { app.appendChild(el); old.remove(); return; }
     if (up) {
       app.appendChild(el);
@@ -1570,16 +1874,44 @@
 
   function start() {
     app = document.getElementById("app");
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape") back(); });
+    document.addEventListener("keydown", function (e) {
+      if (touring()) tourKey(e);
+      else if (e.key === "Escape") back();
+    });
+    // A plain mouse wheel only turns up and down: over a row that scrolls sideways (the type row), it moves
+    // the row until its end, then the page scrolls on as usual.
+    app.addEventListener("wheel", function (e) {
+      if (e.ctrlKey || e.shiftKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+      var row = e.target.closest && e.target.closest(".hscroll");
+      if (!row) return;
+      var max = row.scrollWidth - row.clientWidth;
+      if (max <= 0 || (e.deltaY < 0 && row.scrollLeft <= 0) || (e.deltaY > 0 && row.scrollLeft >= max - 1)) return;
+      e.preventDefault();
+      row.scrollLeft += e.deltaY * (e.deltaMode === 1 ? 16 : 1);
+    }, { passive: false });
     window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
     window.matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", render);
+    // A double click is one press: the second click would land on whatever slid under the pointer (the next
+    // item's x, the hour row after the date was removed) - the app keeps a half-second guard the same way.
+    app.addEventListener("click", function (e) {
+      if (e.detail > 1 && e.target.closest("button, [role=button], [role=checkbox]") && !e.target.closest("input, textarea")) {
+        e.stopPropagation(); e.preventDefault();
+      }
+    }, true);
+    // The demo bubble points at its key - when the page scrolls it would point at something else.
+    document.addEventListener("scroll", function () { if (bubbleEl) hideBubble(); }, true);
     var resizeTimer = 0;
     window.addEventListener("resize", function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });
     render();
   }
 
+  // The fonts first, so the ruled lines fit the text - but a font load that never settles must not leave
+  // the page blank: after 3 s the demo starts with whatever is there and re-renders when the fonts arrive.
+  var started = false;
+  function startOnce() { if (!started) { started = true; start(); } else render(); }
   if (document.fonts && document.fonts.load) {
     Promise.all([document.fonts.load("16px Bricolage"), document.fonts.load("16px 'Courier Prime'"), document.fonts.load("bold 16px 'Courier Prime'")])
-      .then(start, start);
+      .then(startOnce, startOnce);
+    setTimeout(function () { if (!started) { started = true; start(); } }, 3000);
   } else start();
 })();

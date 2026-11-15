@@ -41,7 +41,6 @@ import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.ui.components.RubberStamp
 import io.github.bakeron.tapedo.ui.settings.priorityName
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
-import java.time.LocalDate
 
 /**
  * One index card: type and date in small capitals, the title, typed text or ticks on the paper of its kind
@@ -69,7 +68,7 @@ fun IndexCard(
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val locale = appLocale()
-    val today = remember { LocalDate.now().toEpochDay() }
+    val today = rememberToday()
     val type = note.type
 
     val kindNames = listOf(
@@ -92,8 +91,14 @@ fun IndexCard(
         note.body.ifBlank { if (type.hasItems) "" else note.title }.takeIf { it.isNotBlank() }
     }
 
+    // The priority tape sticks out over the card's corner: about 4 dp to the right, and a crooked one about 16 dp
+    // above (with the card's own tilt). The cards fade in after recording, and a fading layer is cut to its own
+    // bounds, so the tape lost its edge (author 14.11.2026) - the card keeps that room inside its bounds.
+    val hasTape = type != NoteType.IDEA
+    val tapeTop = if (hasTape && TapedoTheme.tilt(1f) != 0f) 16.dp else 0.dp
+    val tapeEnd = if (hasTape) 4.dp else 0.dp
     // Centred: the receipt and the idea slip are narrower than the row they lie in.
-    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+    Box(modifier.fillMaxWidth().padding(top = tapeTop, end = tapeEnd), contentAlignment = Alignment.TopCenter) {
         // An idea slip hangs on its pin a little more crooked than the other cards.
         Box(Modifier.fillMaxWidth(paperWidth(type)).rotate(TapedoTheme.tilt(tilt + if (type == NoteType.IDEA) -1.8f else 0f))) {
             CardPaper(
@@ -165,8 +170,8 @@ fun IndexCard(
                     for ((group, items) in groupedItems(note)) {
                         if (shown >= limit) break
                         if (group != null) {
-                            // Shop sections printed like a till receipt: a dashed cut and the section in caps.
-                            Spacer(Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).receiptRule(scheme.outline))
+                            // Shop sections in caps, with a gap above - no dashed cut (author 14.11.2026).
+                            Spacer(Modifier.height(14.dp))
                             Text(
                                 groupName(group).uppercase(locale),
                                 style = MaterialTheme.typography.bodySmall,

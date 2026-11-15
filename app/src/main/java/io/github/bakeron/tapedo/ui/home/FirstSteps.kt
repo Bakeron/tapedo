@@ -133,6 +133,8 @@ fun FirstStepsOverlay(
     onBack: () -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Recording ends only with the key (Settings) - the first slip must not promise "ends by itself". */
+    endsOnStop: Boolean = false,
 ) {
     val current = FirstStep.entries[step]
     val last = step == FirstStep.entries.lastIndex
@@ -213,6 +215,7 @@ fun FirstStepsOverlay(
                     last = last,
                     onNext = onNext,
                     onSkip = onSkip,
+                    endsOnStop = endsOnStop,
                     modifier = Modifier.graphicsLayer { alpha = (drawn.value * 2.5f).coerceAtMost(1f) },
                 )
             },
@@ -247,6 +250,7 @@ private fun TipSlip(
     last: Boolean,
     onNext: () -> Unit,
     onSkip: () -> Unit,
+    endsOnStop: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = TapedoTheme.colors
@@ -272,7 +276,7 @@ private fun TipSlip(
                 modifier = Modifier.semantics { heading() },
             )
             RuledText(
-                stringResource(step.body),
+                stringResource(if (step == FirstStep.RECORD && endsOnStop) R.string.first_steps_record_body_stop else step.body),
                 MaterialTheme.typography.bodyMedium,
                 scheme.onSurface,
                 colors.rule,

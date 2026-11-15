@@ -27,7 +27,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -159,7 +158,7 @@ private fun CalendarHead(note: Note) {
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val locale = appLocale()
-    val today = remember { LocalDate.now().toEpochDay() }
+    val today = rememberToday()
     // The desk colour on the red band: about 5:1 in both themes.
     val ink = scheme.background
     val time = note.timeMinutes?.let { clockTime(it) }
@@ -243,25 +242,13 @@ fun Modifier.headerRule(color: Color): Modifier = drawBehind {
     drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.5.dp.toPx())
 }
 
-/** A dashed line across a till receipt, between the shop sections. */
-fun Modifier.receiptRule(color: Color): Modifier = drawBehind {
-    val y = size.height / 2f
-    drawLine(
-        color,
-        Offset(0f, y),
-        Offset(size.width, y),
-        strokeWidth = 1.dp.toPx(),
-        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
-    )
-}
-
 /** "Due" field at the bottom of a task card: a label and a line, with the date written on it (or left blank). */
 @Composable
 fun DueField(note: Note, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val locale = appLocale()
-    val today = remember { LocalDate.now().toEpochDay() }
+    val today = rememberToday()
     val due = listOfNotNull(note.dueEpochDay?.let { dueText(context, it, today, locale) }, note.timeMinutes?.let { clockTime(it) })
         .joinToString(" · ")
     val label = stringResource(R.string.card_due_field)

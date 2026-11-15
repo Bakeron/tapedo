@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -32,7 +34,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,11 +76,12 @@ import io.github.bakeron.tapedo.ui.cards.marginLine
 import io.github.bakeron.tapedo.ui.cards.matches
 import io.github.bakeron.tapedo.ui.cards.metaLine
 import io.github.bakeron.tapedo.ui.cards.numberedName
+import io.github.bakeron.tapedo.ui.cards.numberedNameRes
+import io.github.bakeron.tapedo.ui.cards.rememberToday
 import io.github.bakeron.tapedo.ui.cards.typeNameRes
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.settings.priorityName
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
-import java.time.LocalDate
 
 /**
  * The dividers of the card box: one per kind of card, and the done pile. The open divider is also where
@@ -121,17 +123,32 @@ fun CardStack(
     modifier: Modifier = Modifier,
     onDelete: (Note) -> Unit = {},
     top: @Composable () -> Unit = {},
+    /** Kept by the caller: opening a card or recording swaps the box out, and both must survive that. */
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val colors = TapedoTheme.colors
     val reduceMotion = TapedoTheme.reduceMotion
-    var query by rememberSaveable { mutableStateOf("") }
     // "Back" first clears the search - it undoes the last move instead of closing the app.
-    BackHandler(enabled = query.isNotEmpty()) { query = "" }
+    BackHandler(enabled = query.isNotEmpty()) { onQueryChange("") }
 
     val notes = (stack as? StackState.Loaded)?.notes.orEmpty()
     val counts = remember(notes) { StackTab.entries.associateWith { t -> notes.count(t::holds) } }
     val numbers = remember(notes) { kindNumbers(notes) }
-    val shown = remember(notes, tab, query) { notes.filter { tab.holds(it) && it.matches(query) } }
+    // The strip shows "Zadanie 2", not the title - so that name finds the card too.
+    val context = LocalContext.current
+    val kindNames = NoteType.entries.associateWith { stringResource(numberedNameRes(it)) }
+    val shown = remember(notes, tab, query, kindNames) {
+        notes.filter { note ->
+            tab.holds(note) && (
+                note.matches(query) ||
+                    (note.type != NoteType.EVENT && numbers[note.id]?.let { n ->
+                        context.getString(R.string.card_numbered, kindNames.getValue(note.type), n).contains(query.trim(), ignoreCase = true)
+                    } == true)
+                )
+        }
+    }
 
     Column(modifier) {
         // Every divider is always there, also empty: it is where the next recording goes.
@@ -145,10 +162,11 @@ fun CardStack(
                 .background(colors.cardEdge),
         ) {
             if (notes.isNotEmpty()) {
-                SearchLine(query, onChange = { query = it }, Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp))
+                SearchLine(query, onChange = onQueryChange, Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp))
             }
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
+                state = listState,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -301,7 +319,7 @@ private fun NoteStrip(
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val locale = appLocale()
-    val today = remember { LocalDate.now().toEpochDay() }
+    val today = rememberToday()
     val shape = RoundedCornerShape(3.dp)
     val done = note.isDone()
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }

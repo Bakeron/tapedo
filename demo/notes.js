@@ -4,6 +4,8 @@ window.TAPEDO_SAMPLE = function (lang, today, now) {
   var H = 3600 * 1000;
   var pl = lang === "pl";
   function n(o) { return o; }
+  // Days to the next given weekday (0 = Sunday); epoch day 0 was a Thursday. The texts name the day.
+  function until(dow) { return ((dow - (today + 4) % 7) + 7) % 7 || 7; }
   function items(list, group) {
     return list.map(function (x) {
       return typeof x === "string" ? { text: x, checked: false, group: group || null } : { text: x[0], checked: !!x[1], group: x[2] || group || null };
@@ -25,7 +27,7 @@ window.TAPEDO_SAMPLE = function (lang, today, now) {
   ];
   var cards = [
     n({ type: "SHOPPING", title: pl ? "Zakupy" : "Shopping", priority: "MEDIUM", byAi: true, items: items(shop), ago: 2 }),
-    n({ type: "SHOPPING", title: pl ? "Zakupy na grilla w sobotę" : "Shopping for Saturday's barbecue", priority: "LOW", items: items(grill), due: 3, ago: 30 }),
+    n({ type: "SHOPPING", title: pl ? "Zakupy na grilla w sobotę" : "Shopping for Saturday's barbecue", priority: "LOW", items: items(grill), due: until(6), ago: 30 }),
     n({ type: "CHECKLIST", title: pl ? "Spakować na wyjazd" : "Pack for the trip", priority: "HIGH", due: 5, ago: 20,
       items: items(pl ? ["ładowarka", ["paszport", 1], "krem z filtrem", "książka na pociąg", "słuchawki"] : ["charger", ["passport", 1], "sunscreen", "a book for the train", "headphones"]) }),
     n({ type: "CHECKLIST", title: pl ? "Przed przeprowadzką" : "Before the move", priority: "MEDIUM", ago: 70,
@@ -35,7 +37,7 @@ window.TAPEDO_SAMPLE = function (lang, today, now) {
     n({ type: "TASK", title: pl ? "Wysłać CV do trzech firm" : "Send my CV to three companies", body: pl ? "Wysłać CV do trzech firm z listy i dopisać list motywacyjny." : "Send my CV to three companies on the list and add a cover letter.", priority: "MEDIUM", due: 2, byAi: true, ago: 5 }),
     n({ type: "TASK", title: pl ? "Oddać książki do biblioteki" : "Return the library books", priority: "LOW", due: 4, ago: 50 }),
     n({ type: "TASK", title: pl ? "Wymienić żarówkę w przedpokoju" : "Change the hall light bulb", priority: "LOW", done: true, ago: 80 }),
-    n({ type: "EVENT", title: pl ? "Kawa z Anią" : "Coffee with Anna", body: pl ? "Kawa z Anią w czwartek o 18:30 w kawiarni na rynku." : "Coffee with Anna on Thursday at 6:30 pm at the café on the square.", priority: "MEDIUM", due: 2, time: 18 * 60 + 30, place: pl ? "kawiarnia na rynku" : "the café on the square", ago: 8 }),
+    n({ type: "EVENT", title: pl ? "Kawa z Anią" : "Coffee with Anna", body: pl ? "Kawa z Anią w czwartek o 18:30 w kawiarni na rynku." : "Coffee with Anna on Thursday at 6:30 pm at the café on the square.", priority: "MEDIUM", due: until(4), time: 18 * 60 + 30, place: pl ? "kawiarnia na rynku" : "the café on the square", ago: 8 }),
     n({ type: "EVENT", title: pl ? "Weterynarz - szczepienie Burka" : "Vet - Rex's jab", body: pl ? "Szczepienie Burka, zabrać książeczkę zdrowia." : "Rex's vaccination, bring his health booklet.", priority: "HIGH", due: 6, time: 10 * 60 + 15, place: pl ? "lecznica przy Polnej" : "the clinic on Field Street", byAi: true, ago: 40 }),
     n({ type: "NOTE", title: pl ? "Rozmiar opon" : "Tyre size", body: pl ? "Opony zimowe 205/55 R16, ciśnienie 2,3 bara z przodu i z tyłu. Zmiana na zimowe przed pierwszym przymrozkiem." : "Winter tyres 205/55 R16, pressure 2.3 bar front and back. Switch to winter tyres before the first frost.", priority: "LOW", ago: 100 }),
     n({ type: "NOTE", title: pl ? "Naleśniki" : "Pancakes", body: pl ? "Szklanka mąki, szklanka mleka, pół szklanki wody, dwa jajka i szczypta soli. Odstawić na kwadrans." : "A cup of flour, a cup of milk, half a cup of water, two eggs and a pinch of salt. Let it rest for 15 minutes.", priority: "MEDIUM", ago: 120 }),

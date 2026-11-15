@@ -374,7 +374,20 @@ class HomeViewModel(
         }
     }
 
-    fun stopRecording() = speech.stop()
+    /**
+     * During the countdown "stop" cancels: nothing is kept and no "nothing heard" message - letting the
+     * recognizer finish would report an empty recording (or, on phones without our own microphone, keep
+     * words said during "3, 2, 1"). Afterwards it is a real stop that keeps what was said.
+     */
+    fun stopRecording() {
+        val active = _recording.value as? RecordingState.Active
+        if (active != null && active.countdown > 0) {
+            session?.cancel()
+            endRecording(null)
+        } else {
+            speech.stop()
+        }
+    }
 
     /** Whisper's text when it is on and worked; otherwise the phone's text, with Whisper's reason. */
     private suspend fun retyped(s: AppSettings, done: SpeechEvent.Done, showProgress: Boolean): Pair<String, AiProblem?> {
@@ -598,7 +611,16 @@ class HomeViewModel(
             }
             val cards = result?.notes?.takeIf { it.isNotEmpty() }
                 ?.map { card -> if (s.pauseMillis == null) card.copy(items = card.items.asOneItem(card.type.fallbackGroup())) else card }
-                ?: listOf(Note(title = firstWords(transcript), body = transcript, createdAtMillis = now))
+                ?: listOf(
+                    Note(
+                        title = firstWords(transcript),
+                        body = transcript,
+                        // Like any new card: the open divider's kind (a list without items stays a note), low priority.
+                        type = if (type.hasItems) NoteType.NOTE else type,
+                        priority = AppSettings.NEW_CARD_PRIORITY,
+                        createdAtMillis = now,
+                    ),
+                )
             val review = persist(
                 RecordingState.Review(
                     transcript, cards, result?.rulesProblems().orEmpty(),

@@ -487,8 +487,8 @@ private enum class SettingsTab(val title: Int) {
     ABOUT(R.string.settings_tab_about),
 }
 
-/** The privacy policy page, PL and EN on one page (GitHub Pages of the repository). */
-private const val PRIVACY_POLICY_URL = "https://bakeron.github.io/tapedo/privacy.html"
+/** The privacy policy page, PL and EN on one page (published with the browser demo). */
+private const val PRIVACY_POLICY_URL = "https://tapedo.szymonbakonis.pl/privacy.html"
 
 private const val TAB_OUT_MS = 100
 private const val TAB_IN_MS = 140

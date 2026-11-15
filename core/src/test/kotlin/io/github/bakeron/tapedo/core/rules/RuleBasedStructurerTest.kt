@@ -67,6 +67,9 @@ class RuleBasedStructurerTest {
     fun `hours in different spoken forms`() {
         assertEquals(10 * 60, rules.detectTime("o 10"))
         assertEquals(19 * 60, rules.detectTime("o 7 wieczorem"))
+        assertEquals(2 * 60, rules.detectTime("lot o 2 w nocy"))
+        assertEquals(23 * 60, rules.detectTime("o 11 w nocy"))
+        assertEquals(0, rules.detectTime("o 12 w nocy"))
         assertEquals(9 * 60 + 15, rules.detectTime("o godzinie 9.15"))
         assertEquals(21 * 60, rules.detectTime("dinner at 9pm"))
         assertEquals(0, rules.detectTime("12 am"))
@@ -202,6 +205,23 @@ class RuleBasedStructurerTest {
     fun `priority words inside longer words are ignored`() {
         // "ważne" must not match inside "nieważne"... which actually means "unimportant".
         assertEquals(Priority.MEDIUM, rules.detectPriority("nieważne co"))
+    }
+
+    @Test
+    fun `priority words set the priority but stay out of the title`() {
+        val urgent = rules.structure("Pilne zadzwonić do hydraulika jutro", saturday, now).single()
+        assertEquals("Zadzwonić do hydraulika jutro", urgent.title)
+        assertEquals(Priority.HIGH, urgent.priority)
+        assertEquals("Pilne zadzwonić do hydraulika jutro", urgent.body)
+
+        val someday = rules.structure("kiedyś umyć okna w piwnicy", saturday, now).single()
+        assertEquals("Umyć okna w piwnicy", someday.title)
+        assertEquals(Priority.LOW, someday.priority)
+
+        assertEquals("Oddać raport", rules.structure("oddać raport, nie pilne", saturday, now).single().title)
+        assertEquals("Call the bank", rules.structure("urgent: call the bank", saturday, now).single().title)
+        // Nothing but the priority word - keep what was said rather than an empty title.
+        assertEquals("Pilne", rules.structure("pilne", saturday, now).single().title)
     }
 
     @Test

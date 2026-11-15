@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +63,6 @@ import io.github.bakeron.tapedo.ui.home.TypeTapeBar
 import io.github.bakeron.tapedo.ui.home.tidy
 import io.github.bakeron.tapedo.ui.settings.priorityName
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
-import java.time.LocalDate
 
 /**
  * The card in the card view, written on directly (author 13.11.2026: reading in one place and writing in
@@ -81,10 +81,13 @@ fun EditableCard(
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val locale = appLocale()
-    val today = remember { LocalDate.now().toEpochDay() }
+    val today = rememberToday()
     val type = note.type
+    // A crooked priority tape sticks out about 14 dp above the card, and the scrolling screen cut its top off
+    // (author 14.11.2026) - the card keeps that room inside its own bounds. Straight tapes fit already.
+    val tapeRoom = if (type != NoteType.IDEA && TapedoTheme.tilt(1f) != 0f) 14.dp else 0.dp
     // Centred: the receipt and the idea slip are narrower than the screen.
-    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+    Box(modifier.fillMaxWidth().padding(top = tapeRoom), contentAlignment = Alignment.TopCenter) {
         Box(Modifier.fillMaxWidth(paperWidth(type))) {
             // Changing the type below changes the paper at once.
             CardPaper(
@@ -174,13 +177,23 @@ fun EditableCard(
     }
 }
 
-/** Under the card: its type, its priority (not for an idea), then "Share" and "Delete card" as the last keys. */
+/**
+ * Under the card: a wide "Show settings" key (author 15.11.2026: the card itself comes first), and behind it
+ * its type, its priority (not for an idea), then "Share" and "Delete card" as the last keys.
+ */
 @Composable
 fun CardOptions(note: Note, onChange: (Note) -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val locale = appLocale()
-    val today = remember { LocalDate.now().toEpochDay() }
+    val today = rememberToday()
+    var open by rememberSaveable { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        PaperButton(
+            stringResource(if (open) R.string.editor_options_hide else R.string.editor_options_show),
+            onClick = { open = !open },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (!open) return@Column
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             LabelTape(stringResource(R.string.editor_field_type))
             TypeTapeBar(
@@ -312,10 +325,9 @@ private fun ItemsEditor(note: Note, voiceKey: (@Composable () -> Unit)?, onChang
         }
     }
     Column {
-        Text(stringResource(R.string.editor_field_items), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
         for ((group, inGroup) in groupedItems(note)) {
             if (group != null) {
-                Spacer(Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).receiptRule(scheme.outline))
+                Spacer(Modifier.height(14.dp))
                 Text(
                     groupName(group).uppercase(locale),
                     style = MaterialTheme.typography.bodySmall,

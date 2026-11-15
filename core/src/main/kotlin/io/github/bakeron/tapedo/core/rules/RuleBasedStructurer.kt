@@ -151,8 +151,14 @@ class RuleBasedStructurer(
         }
         val m = TIME_SAID.findAll(text).firstOrNull { !isCountOfThings(text, it) } ?: TIME_COLON.find(text) ?: return null
         var hour = m.groups["h"]!!.value.toInt()
-        // "o 7 wieczorem" -> 19:00
-        if (hour < 12 && EVENING_AFTER.containsMatchIn(text.substring(m.range.last + 1))) hour += 12
+        val after = text.substring(m.range.last + 1)
+        // "o 7 wieczorem" -> 19:00. "W nocy" is late evening up to 11 and early morning after midnight:
+        // "o 11 w nocy" -> 23:00, "o 12 w nocy" -> 0:00, "o 2 w nocy" -> 2:00.
+        if (NIGHT_AFTER.containsMatchIn(after)) {
+            if (hour == 12) hour = 0 else if (hour in 6..11) hour += 12
+        } else if (hour < 12 && EVENING_AFTER.containsMatchIn(after)) {
+            hour += 12
+        }
         return minutesOf(hour, m.groups["m"]?.value)
     }
 
@@ -204,7 +210,9 @@ class RuleBasedStructurer(
     }
 
     private fun titleFor(phrase: String): String {
-        val clean = phrase.trim().trimEnd('.', '!', '?', ',', ':')
+        val said = phrase.trim().trimEnd('.', '!', '?', ',', ':')
+        // "Pilne zadzwonić do hydraulika" - the priority already shows on the card's tape.
+        val clean = PRIORITY_WORDS.replace(said, " ").replace(WHITESPACE, " ").trim(' ', ',', ':', '-').ifEmpty { said }
         val words = clean.split(' ')
         // Speech recognition often returns no punctuation at all - cap the title length.
         val short = if (clean.length <= MAX_TITLE || words.size <= 1) clean
@@ -264,6 +272,8 @@ class RuleBasedStructurer(
             "nie pilne", "niepilne", "kiedyś", "bez pośpiechu", "na spokojnie",
             "not urgent", "someday", "no rush", "low priority",
         )
+        // Low first, so "nie pilne" goes as a whole instead of leaving "nie".
+        val PRIORITY_WORDS = Regex(LOW_PRIORITY.pattern + "|" + HIGH_PRIORITY.pattern)
 
         val RELATIVE_DAYS = listOf(
             words("pojutrze", "day after tomorrow") to 2L,
@@ -296,7 +306,8 @@ class RuleBasedStructurer(
         // (?!\p{L}) at the end: "2 ampułki" is not 2 a.m.
         val TIME_AM_PM = Regex("(?iu)(?<![\\d:])(?<h>\\d{1,2})(?::(?<m>\\d{2}))?\\s*(?<pm>am|pm|a\\.m\\.|p\\.m\\.)(?!\\p{L})")
         val TIME_COLON = Regex("(?<![\\d:])(?<h>\\d{1,2}):(?<m>\\d{2})(?![\\d:])")
-        val EVENING_AFTER = Regex("(?iu)^\\s*(wieczorem|wieczór|po południu|w nocy|in the evening)")
+        val EVENING_AFTER = Regex("(?iu)^\\s*(wieczorem|wieczór|po południu|in the evening)")
+        val NIGHT_AFTER = Regex("(?iu)^\\s*w nocy")
 
         val ITEM_SEPARATOR = Regex("(?iu),|\\.\\s+|\\s+(i|oraz|a także|and|plus)\\s+")
         val FILLER = Regex(

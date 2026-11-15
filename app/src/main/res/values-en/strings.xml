@@ -125,7 +125,7 @@
     <string name="default_shopping_title">Shopping</string>
     <string name="default_checklist_title">List</string>
 
-    <string name="ai_intro">AI splits a note into separate cards and lists, spots dates and fixes misheard words. Without AI, simple rules structure your notes: a shopping list after “buy”, an event after “at 10”, priority after “urgent”, a due date after “tomorrow” - it works offline and the note text never leaves the phone.</string>
+    <string name="ai_intro">AI tidies the recording into a card behind the open divider: splits it into items, spots dates and times and fixes misheard words. Without AI, simple rules do it: a time after “at 10”, priority after “urgent”, a due date after “tomorrow” - it works offline and the note text never leaves the phone.</string>
     <string name="ai_queue">You can turn on several providers - Tapedo asks them in turn, in the order of this list. When one uses up its daily limit, the next notes go to the next one. When nobody answers, the no-AI rules structure the note.</string>
     <string name="ai_free">Free</string>
     <string name="ai_paid">Paid per use</string>
@@ -325,7 +325,6 @@
     <string name="editor_done">Done</string>
     <string name="editor_field_title">Title</string>
     <string name="editor_field_body">Text</string>
-    <string name="editor_field_items">Items</string>
     <string name="editor_field_place">Place</string>
     <string name="editor_field_type">Type</string>
     <string name="editor_field_priority">Priority</string>
@@ -338,6 +337,8 @@
     <string name="editor_remove_item">Remove item %d</string>
     <string name="editor_add_item">Add item</string>
     <string name="editor_delete">Delete card</string>
+    <string name="editor_options_show">Show settings</string>
+    <string name="editor_options_hide">Hide settings</string>
 
     <!-- Preview (one saved card on the whole screen) -->
     <string name="preview_add_voice">Add by voice</string>
@@ -353,10 +354,11 @@
     <string name="first_steps_done">Let’s start</string>
     <string name="first_steps_record_title">The red key records</string>
     <string name="first_steps_record_body">Press it and after “3, 2, 1” say what you want to remember. The recording stops by itself after a moment of silence, or when you press the key again - what you said becomes a card.</string>
+    <string name="first_steps_record_body_stop">Press it and after “3, 2, 1” say what you want to remember. The recording stops when you press the key again - what you said becomes a card.</string>
     <string name="first_steps_tabs_title">Dividers are kinds of cards</string>
     <string name="first_steps_tabs_body">Shopping, lists, tasks, events, notes and ideas each have a divider, and finished things go to “Done”. A recording lands behind the open divider - pick it before you press the key.</string>
     <string name="first_steps_box_title">The card box</string>
-    <string name="first_steps_box_body">The cards behind the open divider are here. Tap a card to read it, fix it or add to it by voice. Tick a task off right in its box; × throws a card out (you can undo it for a moment). Once there are more cards, a search line shows up above them.</string>
+    <string name="first_steps_box_body">The cards behind the open divider are here. Tap a card to read it, fix it or add to it by voice. Tick a task off right in its box; × throws a card out (you can undo it for a moment). When there are cards in the box, a search line sits above them.</string>
     <string name="first_steps_priority_title">The tape on the corner is the priority</string>
     <string name="first_steps_priority_body">Each tape has its own colour and pattern. Change the priority after opening the card. Ideas have no priority.</string>
     <string name="first_steps_priority_high">High - stripes. Say “urgent” or “important” in the recording.</string>

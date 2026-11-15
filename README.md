@@ -4,14 +4,16 @@
 
 **Mów w biegu - Tapedo rozpisze to na karteczki.** Dyktafon na Androida, który zamienia szybkie notatki głosowe w osobne karteczki: notatki, listy do odhaczania, zadania z terminem, wydarzenia, pomysły i listy zakupów pogrupowane na działy sklepu. Działa bez internetu na prostych regułach, a lepiej - z darmowym AI na własnym kluczu.
 
+**Wypróbuj w przeglądarce:** [wersja demonstracyjna](https://tapedo.szymonbakonis.pl) (bez mikrofonu, na wymyślonych karteczkach) · [instrukcja ze zrzutami](https://tapedo.szymonbakonis.pl/instrukcja/) · [moje projekty](https://szymonbakonis.pl)
+
 [English description below](#tapedo---in-english)
 
 <p>
-  <img src="docs/screenshots/home-paper.png" width="230" alt="Ekran główny w motywie Papier: przekładki rodzajów z liczbą karteczek, dwa zadania z kolorowymi taśmami priorytetu i czerwony klawisz nagrywania">
-  <img src="docs/screenshots/review-paper.png" width="230" alt="Okno po nagraniu: usłyszany tekst i karteczka wydarzenia z datą i godziną na czerwonym pasku">
-  <img src="docs/screenshots/stack-paper.png" width="230" alt="Podgląd listy zakupów pogrupowanej na działy sklepu, z kratkami do odhaczania">
-  <img src="docs/screenshots/editor-panel.png" width="230" alt="Edycja karteczki zadania w ciemnym motywie Panel: tytuł, treść, termin, typ i priorytet">
-  <img src="docs/screenshots/settings-panel.png" width="230" alt="Ustawienia w motywie Panel, zakładka AI: opis działania i fiszki dostawców z przełącznikami">
+  <img src="demo/instrukcja/img/glowny.webp" width="230" alt="Ekran główny w motywie Papier: przekładki rodzajów z liczbą karteczek, trzy zadania z terminami i kolorowymi taśmami priorytetu, czerwony klawisz nagrywania">
+  <img src="demo/instrukcja/img/po-nagraniu.webp" width="230" alt="Okno po nagraniu: usłyszany tekst i karteczka zakupów pogrupowana na działy sklepu">
+  <img src="demo/instrukcja/img/zakupy.webp" width="230" alt="Otwarta karteczka zakupów: punkty z kratkami do odhaczania, przyciski Dodaj punkt i Dopisz głosem, wybór typu i priorytetu">
+  <img src="demo/instrukcja/img/kroki-3-panel.webp" width="230" alt="Pierwsze kroki w ciemnym motywie Panel: dymek „3 z 5” objaśnia pudełko z karteczkami">
+  <img src="demo/instrukcja/img/ust-ai.webp" width="230" alt="Ustawienia, zakładka AI: opis działania i fiszki dostawców z przełącznikami">
 </p>
 
 ## Co umie
@@ -35,7 +37,7 @@
 - Klucze API zaszyfrowane, nigdy w logach. Kopie zapasowe aplikacji wyłączone.
 - Bez statystyk i bez raportów o awariach wysyłanych z telefonu.
 - Gdy Android zgubi klucz szyfrowania, Tapedo nic nie kasuje - odkłada stare pliki, zaczyna od pustego stosu i wyjaśnia, co się stało.
-- Pełna polityka prywatności (PL i EN): [docs/privacy.html](docs/privacy.html).
+- Pełna polityka prywatności (PL i EN): [tapedo.szymonbakonis.pl/privacy.html](https://tapedo.szymonbakonis.pl/privacy.html).
 
 ## Uruchomienie
 
@@ -78,7 +80,7 @@ Wygląd wynika z jednego pomysłu - **dyktafon kieszonkowy i papierowe fiszki**:
 Jestem programistą WordPress bez doświadczenia z Androidem. Tapedo powstaje z [Claude Code](https://claude.com/claude-code): ja decyduję, co aplikacja ma robić i co jest do przyjęcia, a Claude proponuje architekturę, pisze kod i go tłumaczy. Proces jest częścią projektu:
 
 - decyzje i otwarte pytania spisuję w notatkach, zanim powstanie kod (plan i dziennik budowy, punkty z audytów czekające na moją decyzję);
-- każdy krok sprawdzany na emulatorze zrzutami ekranu, 86 testów jednostkowych i 9 testów na emulatorze (Keystore, zaszyfrowana baza);
+- każdy krok sprawdzany na emulatorze zrzutami ekranu, 187 testów jednostkowych i 9 testów na emulatorze (Keystore, zaszyfrowana baza);
 - kod przechodzi audyty z Claude Code według moich list kontrolnych (poprawność, uproszczenia, wydajność, bezpieczeństwo, dostępność, wygląd, teksty, wydanie, zależności, testy, portfolio). Oczywiste poprawki z audytów wchodzą od razu, a to, co wymaga mojej decyzji, zostaje spisane z propozycją i czeka na mnie.
 
 Kod i komentarze są po angielsku, notatki i opisy commitów po polsku.
@@ -87,8 +89,8 @@ Kod i komentarze są po angielsku, notatki i opisy commitów po polsku.
 
 Etap 1a (rdzeń) - prawie gotowy:
 
-- zrobione: nagrywanie, rozpoznawanie mowy na telefonie i przez internet, reguły bez AI, 5 dostawców AI (Groq, OpenRouter, Claude, OpenAI, Gemini), okno po nagraniu, stos karteczek z edycją, odhaczaniem, udostępnianiem i cofaniem, zaszyfrowana baza, motywy, PL / EN, dostępność, ekran licencji;
-- do zrobienia: test mowy na prawdziwym telefonie, podpisany APK w GitHub Releases, GIF z działania.
+- zrobione: nagrywanie, rozpoznawanie mowy na telefonie i przez internet, reguły bez AI, 5 dostawców AI (Groq, OpenRouter, Claude, OpenAI, Gemini), okno po nagraniu, stos karteczek z edycją, odhaczaniem, udostępnianiem i cofaniem, zaszyfrowana baza, motywy, PL / EN, dostępność, ekran licencji, Whisper, pierwsze kroki, instrukcja i wersja demonstracyjna w przeglądarce;
+- do zrobienia: podpisany APK w GitHub Releases, GIF z działania.
 
 Dalej (1b): Whisper na telefonie (bez internetu), tryb prywatny, blokada aplikacji, widżet na ekran główny.
 
@@ -101,6 +103,8 @@ Dalej (1b): Whisper na telefonie (bez internetu), tryb prywatny, blokada aplikac
 # Tapedo - in English
 
 **Speak on the go - Tapedo turns it into index cards.** An Android voice recorder that cuts quick spoken notes into separate cards: notes, checklists, tasks with due dates, events, ideas and shopping lists grouped by shop section. It works offline with simple rules, or better with a free AI model using your own key. Screenshots are at the top of the page.
+
+**Try it in the browser:** [demo version](https://tapedo.szymonbakonis.pl/?lang=en) (no microphone, made-up cards) · [my projects](https://szymonbakonis.pl)
 
 ## What it does
 
@@ -125,7 +129,7 @@ Designed for notes that may contain sensitive data:
 - API keys are encrypted with the Keystore and never written to logs. App backups are turned off, so the database does not leave the phone in a cloud backup.
 - No analytics and no crash reports sent from the phone.
 - If Android ever loses the encryption key, Tapedo does not delete anything: it sets the old files aside, starts an empty stack and tells you why.
-- Full privacy policy (PL and EN): [docs/privacy.html](docs/privacy.html#en).
+- Full privacy policy (PL and EN): [tapedo.szymonbakonis.pl/privacy.html](https://tapedo.szymonbakonis.pl/privacy.html#en).
 
 ## Build and run
 
@@ -165,7 +169,7 @@ The look follows one idea - **a pocket recorder and paper index cards**: label-m
 I am a WordPress developer without Android experience. Tapedo is written with [Claude Code](https://claude.com/claude-code): I decide what the app should do, how it should behave and what is acceptable; Claude proposes the architecture, writes the code and explains it. The process is part of the project:
 
 - decisions and open questions are written down in notes before they are built (build plan and log, audit points waiting for my decision);
-- every step is checked on an emulator with screenshots, with 86 unit tests and 9 instrumented tests on the emulator (Keystore, encrypted database);
+- every step is checked on an emulator with screenshots, with 187 unit tests and 9 instrumented tests on the emulator (Keystore, encrypted database);
 - the code goes through audits with Claude Code, following my own checklists - code correctness, simplification, performance, security, plus shared audits of accessibility, look, texts, release readiness, dependencies, tests and portfolio. Clear-cut findings are fixed right away; anything that needs my decision is written down with a proposal and waits for me.
 
 Code and comments are in English; notes and commit messages are in Polish.
@@ -174,8 +178,8 @@ Code and comments are in English; notes and commit messages are in Polish.
 
 Stage 1a (the core) - almost ready:
 
-- done: recording, offline / online speech recognition, no-AI rules, 5 AI providers (Groq, OpenRouter, Claude, OpenAI, Gemini), review window, card stack with editing, ticking, sharing and undo, encrypted database, themes, PL / EN, accessibility pass, licences screen;
-- still to do: speech test on a real phone, a signed release APK on GitHub Releases, a demo GIF.
+- done: recording, offline / online speech recognition, no-AI rules, 5 AI providers (Groq, OpenRouter, Claude, OpenAI, Gemini), review window, card stack with editing, ticking, sharing and undo, encrypted database, themes, PL / EN, accessibility pass, licences screen, Whisper, first steps, a user guide and a browser demo;
+- still to do: a signed release APK on GitHub Releases, a demo GIF.
 
 Next (1b): on-device Whisper (offline), private mode, app lock, a home-screen widget.
 

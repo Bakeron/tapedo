@@ -52,6 +52,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -101,6 +103,7 @@ import io.github.bakeron.tapedo.core.report.Problem
 import io.github.bakeron.tapedo.core.rules.ListTitles
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
+import io.github.bakeron.tapedo.core.settings.RecordingEnd
 import io.github.bakeron.tapedo.core.speech.SpeechError
 import io.github.bakeron.tapedo.report.ReportMail
 import io.github.bakeron.tapedo.ui.cards.kindNumbers
@@ -185,6 +188,9 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
     // Closed at once on screen; the setting is written behind - its change also clears "closed" for next time.
     val tourSpots = remember { TourSpots() }
     var tourStep by rememberSaveable { mutableIntStateOf(0) }
+    // The search and the place in the box outlive opening a card and recording - both swap the box out.
+    var stackQuery by rememberSaveable { mutableStateOf("") }
+    val stackScroll = rememberLazyListState()
     var tourClosed by rememberSaveable(settings?.firstStepsSeen) { mutableStateOf(false) }
     val touring = settings?.firstStepsSeen == false && !tourClosed &&
         screen == HomeShown.BOX && recording !is RecordingState.Active
@@ -291,6 +297,9 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onDismissOwnAudioRefused = viewModel::dismissOwnAudioRefused,
             onReport = report,
             pauseSeconds = settings?.pauseSeconds ?: AppSettings().pauseSeconds,
+            query = stackQuery,
+            onQueryChange = { stackQuery = it },
+            listState = stackScroll,
         )
     }
     }
@@ -302,6 +311,7 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onNext = { if (tourStep == FirstStep.entries.lastIndex) finishTour() else tourStep++ },
             onBack = { if (tourStep == 0) finishTour() else tourStep-- },
             onSkip = finishTour,
+            endsOnStop = settings?.recordingEnd == RecordingEnd.STOP_BUTTON,
         )
     }
     }
@@ -355,6 +365,9 @@ fun HomeScreen(
     onReport: ((Problem) -> Unit)? = null,
     /** Seconds of silence that start a new list item (Settings); 0 = never. */
     pauseSeconds: Int = 2,
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val context = LocalContext.current
     val isRecording = recording is RecordingState.Active
@@ -369,6 +382,8 @@ fun HomeScreen(
     // "Back" never closes the app mid-recording (author 11.11.2026): during "3, 2, 1" it cancels (nothing is
     // recorded yet), afterwards it works like "Stop" - the card is made from what was said.
     BackHandler(enabled = isRecording, onBack = onStopRecording)
+    // An error note on the box is the last thing that happened - "Back" closes it before leaving the app.
+    BackHandler(enabled = recording is RecordingState.Failed, onBack = onDismissError)
 
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) onStartRecording() else onMicDenied()
@@ -417,6 +432,9 @@ fun HomeScreen(
                     onRetry = onRetryStack,
                     modifier = Modifier.fillMaxSize(),
                     onDelete = onDeleteCard,
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    listState = listState,
                     top = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             FoldValue(recording as? RecordingState.Failed) { failed ->

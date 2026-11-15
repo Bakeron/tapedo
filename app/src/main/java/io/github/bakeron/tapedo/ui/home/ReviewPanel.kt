@@ -2,6 +2,7 @@ package io.github.bakeron.tapedo.ui.home
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,7 +36,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -276,11 +279,21 @@ fun ReviewPanel(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Throwing away a whole dictation takes two taps.
+            // Throwing away a whole dictation takes two taps - two separate ones: a quick double tap
+            // (a shaky finger) would otherwise arm and confirm at once, and there is no undo here.
             var confirmDiscard by rememberSaveable(transcript) { mutableStateOf(false) }
+            var armedAt by remember { mutableLongStateOf(0L) }
             PaperButton(
                 stringResource(if (confirmDiscard) R.string.review_discard_confirm else R.string.review_discard),
-                onClick = { if (confirmDiscard) onDiscard() else confirmDiscard = true },
+                onClick = {
+                    val now = SystemClock.uptimeMillis()
+                    if (!confirmDiscard) {
+                        confirmDiscard = true
+                        armedAt = now
+                    } else if (now - armedAt >= DISCARD_CONFIRM_GAP_MS) {
+                        onDiscard()
+                    }
+                },
                 style = PaperButtonStyle.DANGER,
                 enabled = review != null,
             )
@@ -348,3 +361,6 @@ private fun RefineBlock(
         }
     }
 }
+
+/** Shortest time between the two taps of "Delete" - less is one shaky double tap, not a decision. */
+private const val DISCARD_CONFIRM_GAP_MS = 500L

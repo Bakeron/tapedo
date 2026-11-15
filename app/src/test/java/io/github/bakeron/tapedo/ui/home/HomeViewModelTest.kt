@@ -291,6 +291,28 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `stop during the countdown cancels quietly - no message, nothing saved`() = runTest(dispatcher) {
+        val events = Channel<SpeechEvent>(Channel.UNLIMITED)
+        val speech = FakeSpeech { events.receiveAsFlow() }
+        val notes = FakeNotes()
+        val vm = viewModel(FakeStore(AppSettings()), speech, notes = notes, countdownMillis = 3_000)
+
+        vm.startRecording()
+        advanceTimeBy(1_010)
+        runCurrent()
+        vm.stopRecording()
+        // What the phone's recognizer says when stopped this early: "nothing heard", or words from "3, 2, 1".
+        events.trySend(SpeechEvent.Failed(SpeechError.NO_SPEECH))
+        events.trySend(SpeechEvent.Done("trzy dwa"))
+        runCurrent()
+        assertEquals(RecordingState.Idle, vm.recording.value)
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(RecordingState.Idle, vm.recording.value)
+        assertTrue(notes.rows.value.isEmpty())
+    }
+
+    @Test
     fun `ask mode never goes online by itself, and a yes covers one recording`() = runTest(dispatcher) {
         val store = FakeStore(AppSettings(onlineSpeech = OnlineSpeech.ASK))
         val speech = FakeSpeech(noOfflinePack)

@@ -3,8 +3,13 @@ package io.github.bakeron.tapedo.ui.cards
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.ChecklistItem
 import io.github.bakeron.tapedo.core.model.Note
@@ -151,4 +156,18 @@ fun shareNote(context: Context, note: Note, today: Long, locale: Locale) {
         .putExtra(Intent.EXTRA_SUBJECT, note.title)
         .putExtra(Intent.EXTRA_TEXT, shareText(context, note, today, locale))
     context.startActivity(Intent.createChooser(send, context.getString(R.string.card_share)))
+}
+
+/**
+ * Today as an epoch day, for "today / tomorrow" on the cards. Read again each time the app comes back:
+ * left in the background overnight, yesterday's "tomorrow" must read "today" in the morning.
+ */
+@Composable
+fun rememberToday(): Long {
+    var today by remember { mutableLongStateOf(LocalDate.now().toEpochDay()) }
+    LifecycleResumeEffect(Unit) {
+        today = LocalDate.now().toEpochDay()
+        onPauseOrDispose { }
+    }
+    return today
 }

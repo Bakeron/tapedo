@@ -146,7 +146,7 @@
     <string name="ai_p_anthropic" translatable="false">Claude (Anthropic)</string>
     <string name="ai_p_openai" translatable="false">OpenAI</string>
     <string name="ai_p_gemini" translatable="false">Google Gemini</string>
-    <string name="ai_intro">AI rozpisuje notatkę na osobne karteczki i listy, rozpoznaje terminy i poprawia przekręcone słowa. Bez AI notatkę rozpisują proste reguły: zakupy po słowie „kup”, wydarzenie po „o 10”, priorytet po „pilne”, termin po „jutro” - działa bez internetu, a tekst notatki nie wychodzi z telefonu.</string>
+    <string name="ai_intro">AI porządkuje nagranie na karteczce z otwartej przekładki: dzieli je na punkty, rozpoznaje terminy i godziny i poprawia przekręcone słowa. Bez AI robią to proste reguły: godzina po „o 10”, priorytet po „pilne”, termin po „jutro” - działa bez internetu, a tekst notatki nie wychodzi z telefonu.</string>
     <string name="ai_queue">Możesz włączyć kilku dostawców - Tapedo pyta ich po kolei, w kolejności z tej listy. Gdy jeden wykorzysta dzienny limit, następne notatki idą do kolejnego. Gdy nikt nie odpowie, notatkę rozpisują reguły bez AI.</string>
     <string name="ai_free">Za darmo</string>
     <string name="ai_paid">Płatne za zużycie</string>
@@ -353,7 +353,6 @@
     <string name="editor_done">Gotowe</string>
     <string name="editor_field_title">Tytuł</string>
     <string name="editor_field_body">Treść</string>
-    <string name="editor_field_items">Punkty</string>
     <string name="editor_field_place">Miejsce</string>
     <string name="editor_field_type">Typ</string>
     <string name="editor_field_priority">Priorytet</string>
@@ -366,6 +365,8 @@
     <string name="editor_remove_item">Usuń punkt %d</string>
     <string name="editor_add_item">Dodaj punkt</string>
     <string name="editor_delete">Usuń karteczkę</string>
+    <string name="editor_options_show">Rozwiń ustawienia</string>
+    <string name="editor_options_hide">Zwiń ustawienia</string>
 
     <!-- Preview (one saved card on the whole screen) -->
     <string name="preview_add_voice">Dopisz głosem</string>
@@ -381,10 +382,11 @@
     <string name="first_steps_done">Zaczynam</string>
     <string name="first_steps_record_title">Czerwony klawisz nagrywa</string>
     <string name="first_steps_record_body">Naciśnij go i po „3, 2, 1” powiedz, co chcesz zapamiętać. Nagranie kończy się samo po chwili ciszy albo gdy naciśniesz klawisz jeszcze raz - z tego, co powiesz, powstaje karteczka.</string>
+    <string name="first_steps_record_body_stop">Naciśnij go i po „3, 2, 1” powiedz, co chcesz zapamiętać. Nagranie kończy się, gdy naciśniesz klawisz jeszcze raz - z tego, co powiesz, powstaje karteczka.</string>
     <string name="first_steps_tabs_title">Przekładki to rodzaje karteczek</string>
     <string name="first_steps_tabs_body">Zakupy, listy, zadania, wydarzenia, notatki i pomysły mają swoje przekładki, a skończone sprawy leżą w „Zrobione”. Nagranie trafia do otwartej przekładki - wybierz ją, zanim naciśniesz klawisz.</string>
     <string name="first_steps_box_title">Pudełko z karteczkami</string>
-    <string name="first_steps_box_body">Tu leżą karteczki z otwartej przekładki. Dotknij karteczki, żeby ją przeczytać, poprawić albo dopisać coś głosem. Zadanie odhaczysz od razu w kratce, a × wyrzuca karteczkę (przez chwilę można to cofnąć). Gdy karteczek przybędzie, nad nimi pojawi się wyszukiwanie.</string>
+    <string name="first_steps_box_body">Tu leżą karteczki z otwartej przekładki. Dotknij karteczki, żeby ją przeczytać, poprawić albo dopisać coś głosem. Zadanie odhaczysz od razu w kratce, a × wyrzuca karteczkę (przez chwilę można to cofnąć). Gdy w pudełku są karteczki, nad nimi jest wyszukiwanie.</string>
     <string name="first_steps_priority_title">Taśma w rogu to priorytet</string>
     <string name="first_steps_priority_body">Każda taśma ma swój kolor i wzór. Priorytet zmienisz po otwarciu karteczki. Pomysły nie mają priorytetu.</string>
     <string name="first_steps_priority_high">Wysoki - paski. Powiedz w nagraniu „pilne” albo „ważne”.</string>
