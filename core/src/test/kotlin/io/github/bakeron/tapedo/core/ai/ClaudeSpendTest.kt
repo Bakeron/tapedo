@@ -1,6 +1,6 @@
 package io.github.bakeron.tapedo.core.ai
 
-import io.github.bakeron.tapedo.core.rules.ListTitles
+import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import java.time.LocalDate
@@ -121,14 +121,14 @@ class ClaudeSpendTest {
     fun `an answer from Claude is counted and a low top-up is said after the recording`() = runTest {
         val today = 20_400L
         val u = MemoryAiUsage()
-        val settings = AppSettings(aiProviders = setOf(AiProvider.ANTHROPIC), claudeTopUpCents = 1, claudeTopUpDay = today)
+        val settings = AppSettings(aiMode = AiMode.CLAUDE, claudeTopUpCents = 1, claudeTopUpDay = today)
         val s = NoteStructurer(Keys(), u, ClaudeAnswers(Tokens(input = 1000, output = 400)), testScheduler.timeSource)
-        val result = s.structure("kup mleko", settings, null, ListTitles(), today, 0L)
+        val result = s.refine("kup mleko", settings, null, today, 0L) as Refined.Cards
         assertTrue(result.notes.single().byAi)
         assertEquals(6_000L, u.claudeCostMicros(today, today))
         // $0.006 of a $0.01 top-up: 40% left - no warning yet.
         assertNull(result.lowFunds)
-        val second = s.structure("kup mleko", settings, null, ListTitles(), today, 0L)
+        val second = s.refine("kup mleko", settings, null, today, 0L) as Refined.Cards
         assertEquals(LowFunds(0.0, 0.01), second.lowFunds)
     }
 
@@ -136,7 +136,7 @@ class ClaudeSpendTest {
     fun `an answer without token counts costs nothing and warns of nothing`() = runTest {
         val u = MemoryAiUsage()
         val s = NoteStructurer(Keys(), u, ClaudeAnswers(null), testScheduler.timeSource)
-        val result = s.structure("kup mleko", AppSettings(aiProviders = setOf(AiProvider.ANTHROPIC)), null, ListTitles(), 20_400L, 0L)
+        val result = s.refine("kup mleko", AppSettings(aiMode = AiMode.CLAUDE), null, 20_400L, 0L) as Refined.Cards
         assertTrue(result.notes.single().byAi)
         assertEquals(0L, u.claudeCostMicros(0, 30_000))
         assertNull(result.lowFunds)

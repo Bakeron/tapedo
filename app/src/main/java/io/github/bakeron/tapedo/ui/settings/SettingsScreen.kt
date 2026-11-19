@@ -75,6 +75,7 @@ import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.model.Priority
 import io.github.bakeron.tapedo.core.report.Problem
+import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
@@ -116,8 +117,11 @@ fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLicens
             fetchModels = viewModel::fetchModels,
             setDailyLimit = { v -> viewModel.update { it.copy(aiDailyLimit = v) } },
             setTopUp = viewModel::setTopUp,
+            setMode = viewModel::setMode,
+            setDayLimit = viewModel::setDayLimit,
         )
     }
+    val usdRate by viewModel.usdRate.collectAsStateWithLifecycle()
     settings?.let {
         SettingsScreen(
             settings = it,
@@ -127,7 +131,7 @@ fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLicens
             saveFailed = saveFailed,
             listeningMode = listeningMode,
             savedKeys = ai.filterValues { p -> p.keySuffix != null }.keys,
-            aiSection = { AiSection(it, ai, actions) },
+            aiSection = { AiSection(it, ai, actions, usdRate) },
         )
     }
 }
@@ -351,7 +355,16 @@ fun SettingsScreen(
 
                     SettingsTab.AI -> {
                         Section(null, content = aiSection)
-                        Section(null) {
+                        // Whisper needs the free Groq key, so with paid Claude it is only named, never both at once.
+                        if (settings.aiMode == AiMode.CLAUDE) Section(null) {
+                            RuledText(
+                                stringResource(R.string.settings_whisper_free_only),
+                                MaterialTheme.typography.bodySmall,
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                TapedoTheme.colors.rule,
+                                Modifier.padding(vertical = 10.dp),
+                            )
+                        } else Section(null) {
                             Setting(
                                 title = stringResource(R.string.settings_whisper),
                                 hint = stringResource(R.string.settings_whisper_hint),
@@ -542,7 +555,7 @@ private fun SettingsTabs(selected: SettingsTab, onSelect: (SettingsTab) -> Unit)
 }
 
 /** Whisper off first - it is the default, and the audio then never leaves the phone. */
-private val WHISPER_OPTIONS: List<WhisperProvider?> = listOf(null) + WhisperProvider.entries
+private val WHISPER_OPTIONS: List<WhisperProvider?> = listOf(null) + WhisperProvider.entries.filter { it.ai !in AiProvider.HIDDEN }
 
 /**
  * A section is one index card with a label-maker heading stuck across its top edge - or without one,

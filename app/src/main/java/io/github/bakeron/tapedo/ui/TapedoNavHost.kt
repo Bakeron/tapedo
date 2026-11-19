@@ -61,7 +61,7 @@ fun TapedoNavHost(container: AppContainer, debugTranscript: String? = null) {
             enterTransition = { cardIn(still) },
             popExitTransition = { cardOut(still) },
         ) { entry ->
-            val vm = viewModel { SettingsViewModel(container.settings, container.secrets, container.aiUsage, container.aiConnection, container.speech) }
+            val vm = viewModel { SettingsViewModel(container.settings, container.secrets, container.aiUsage, container.aiConnection, container.speech, container.usdRates) }
             SettingsRoute(
                 vm,
                 onBack = { if (entry.isOnTop) nav.popBackStack() },

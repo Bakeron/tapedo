@@ -106,7 +106,7 @@ class WhisperRetyper(private val secrets: SecretStore, private val stt: SpeechTo
 
     /** Null when Whisper is off. */
     suspend fun retype(settings: AppSettings, audio: RecordedAudio?): Outcome? {
-        val provider = settings.whisper ?: return null
+        val provider = settings.activeWhisper ?: return null
         fun failed(problem: Problem, message: String = "") = Outcome.Failed(AiProblem(provider.ai, provider.model, problem, message))
 
         if (audio == null) return failed(Problem.NO_AUDIO)

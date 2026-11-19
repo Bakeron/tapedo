@@ -227,17 +227,33 @@ fun CardOptions(note: Note, onChange: (Note) -> Unit, onDelete: () -> Unit, modi
     }
 }
 
-/** Switching to a list keeps what was said: the text becomes list items, one per line or comma. */
-private fun Note.changeType(type: NoteType): Note {
+/**
+ * Switching the type keeps what was said. To a list: the text becomes list items, one per line or comma.
+ * From a list to a kind without items: every item becomes a line of the text (a ticked one starts with "✓"),
+ * so nothing hides from view while search and "Share" still find it (author 15.11.2026).
+ */
+internal fun Note.changeType(type: NoteType): Note {
     if (type == this.type) return this
+    if (!type.hasItems && items.isNotEmpty()) {
+        val lines = items.map { if (it.checked) "$TICKED${it.text}" else it.text }
+        return copy(type = type, body = (listOf(body.trimEnd()).filter { it.isNotEmpty() } + lines).joinToString("\n"), items = emptyList())
+    }
     if (type.hasItems && items.isEmpty() && body.isNotBlank()) {
         val parts = body.split('\n', ',', ';').map { it.trim() }.filter { it.isNotEmpty() }
         if (parts.size > 1) {
-            return copy(type = type, items = parts.map { ChecklistItem(it, group = if (type == NoteType.SHOPPING) ShoppingGroup.OTHER else null) }, body = "")
+            val group = if (type == NoteType.SHOPPING) ShoppingGroup.OTHER else null
+            return copy(
+                type = type,
+                items = parts.map { ChecklistItem(it.removePrefix(TICKED).trim(), checked = it.startsWith(TICKED), group = group) },
+                body = "",
+            )
         }
     }
     return copy(type = type)
 }
+
+/** How a ticked list item is written in the text of a card that has no items. */
+private const val TICKED = "✓ "
 
 /** A label and a line to write on - no boxed Material field. The line thickens while typing. */
 @Composable
@@ -280,10 +296,17 @@ private fun PaperField(
                         if (ruled) {
                             Modifier.drawBehind {
                                 val text = layout ?: return@drawBehind
-                                val step = text.getLineBottom(0) - text.getLineTop(0)
-                                val lines = maxOf(text.lineCount, minLines)
+                                // Each rule under its own line: the first line is taller than the next ones,
+                                // so one step from it drifted into the words from the third line on.
+                                val n = text.lineCount
+                                val step = when {
+                                    n >= 2 -> text.getLineBottom(1) - text.getLineTop(1)
+                                    textStyle.lineHeight.isSp -> textStyle.lineHeight.toPx()
+                                    else -> text.getLineBottom(0) - text.getLineTop(0)
+                                }
+                                val lines = maxOf(n, minLines)
                                 for (i in 1 until lines) {
-                                    val y = step * i
+                                    val y = if (i < n) text.getLineBottom(i - 1) else text.getLineBottom(n - 1) + step * (i - n)
                                     drawLine(rule, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
                                 }
                             }

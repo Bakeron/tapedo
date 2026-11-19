@@ -7,9 +7,12 @@ import io.github.bakeron.tapedo.core.ai.AiProblem
 import io.github.bakeron.tapedo.core.ai.AiUsage
 import io.github.bakeron.tapedo.core.ai.SecretStore
 import io.github.bakeron.tapedo.core.ai.Spent
+import io.github.bakeron.tapedo.core.ai.UsdRate
+import io.github.bakeron.tapedo.core.ai.UsdRates
 import io.github.bakeron.tapedo.core.ai.claudeSpent
 import io.github.bakeron.tapedo.core.ai.UsedUp
 import io.github.bakeron.tapedo.core.ai.usedUp
+import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.SettingsStore
@@ -72,6 +75,7 @@ class SettingsViewModel(
     private val usage: AiUsage,
     private val connection: AiConnection,
     private val speech: SpeechInput,
+    private val usdRates: UsdRates = UsdRates { null },
     private val todayEpochDay: () -> Long = { LocalDate.now().toEpochDay() },
 ) : ViewModel() {
 
@@ -84,6 +88,10 @@ class SettingsViewModel(
     /** The last write (setting or key) failed - shown as one line on the screen. */
     private val _saveFailed = MutableStateFlow(false)
     val saveFailed: StateFlow<Boolean> = _saveFailed.asStateFlow()
+
+    /** The dollar from NBP for Claude's spending in złoty - asked only while Claude is chosen; null = the rough rate. */
+    private val _usdRate = MutableStateFlow<UsdRate?>(null)
+    val usdRate: StateFlow<UsdRate?> = _usdRate.asStateFlow()
 
     /** Continuous or restarted after pauses - learnt from the last recording. */
     private val _listeningMode = MutableStateFlow(ListeningMode.UNKNOWN)
@@ -132,6 +140,11 @@ class SettingsViewModel(
             refreshUsage()
         }
     }
+
+    fun setMode(mode: AiMode) = update { it.copy(aiMode = mode) }
+
+    /** Claude's daily spending limit in US cents; null = no limit. */
+    fun setDayLimit(cents: Int?) = update { it.copy(claudeDayCents = cents) }
 
     /** A new top-up of the Claude account: counted from today; null clears it. */
     fun setTopUp(cents: Int?) {
@@ -244,6 +257,16 @@ class SettingsViewModel(
         // Straight from the store: right after a change the shared state may still hold the old settings.
         val s = store.settings.first()
         val limit = s.aiDailyLimit
+        if (s.aiMode == AiMode.CLAUDE && _usdRate.value == null) {
+            // Only shown - without NBP the rough rate stays.
+            _usdRate.value = try {
+                usdRates.usdRate(today)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+        }
         try {
             val spent = usage.claudeSpent(today, s.claudeTopUpDay)
             edit(AiProvider.ANTHROPIC) { it.copy(spent = spent) }

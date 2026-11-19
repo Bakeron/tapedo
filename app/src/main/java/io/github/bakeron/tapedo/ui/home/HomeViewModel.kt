@@ -15,6 +15,7 @@ import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.model.ShoppingGroup
 import io.github.bakeron.tapedo.core.rules.ListTitles
+import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
@@ -97,7 +98,7 @@ sealed interface RecordingState {
         val by: AiProvider? = null,
         /** The type picked for the recording - "More exact" asks for the same. */
         val type: NoteType? = null,
-        /** A Claude key is saved - without it there is no "More exact". */
+        /** Paid Claude is chosen and its key saved - only then "More exact" is offered (the only way Claude is asked). */
         val claudeKey: Boolean = false,
         val refine: Refine? = null,
     ) : RecordingState
@@ -334,7 +335,7 @@ class HomeViewModel(
                 }
             }
             try {
-                val keepAudio = retyper != null && s.whisper != null
+                val keepAudio = retyper != null && s.activeWhisper != null
                 speech.listen(s.speechLanguage, allowOnline = allowOnline, skipFirstMs = countdownMillis, keepAudio = keepAudio, pauseMillis = s.pauseMillis).collect { e ->
                     when (e) {
                         is SpeechEvent.Level -> level = max(level, e.value)
@@ -392,7 +393,7 @@ class HomeViewModel(
     /** Whisper's text when it is on and worked; otherwise the phone's text, with Whisper's reason. */
     private suspend fun retyped(s: AppSettings, done: SpeechEvent.Done, showProgress: Boolean): Pair<String, AiProblem?> {
         val r = retyper ?: return done.text to null
-        if (s.whisper == null || done.text.isBlank()) return done.text to null
+        if (s.activeWhisper == null || done.text.isBlank()) return done.text to null
         if (showProgress) _recording.value = RecordingState.Structuring(done.text.trim(), retyping = true)
         return when (val outcome = r.retype(s, done.audio)) {
             null -> done.text to null
@@ -628,7 +629,7 @@ class HomeViewModel(
                     lowFunds = result?.lowFunds,
                     by = result?.by,
                     type = type,
-                    claudeKey = hasClaudeKey(),
+                    claudeKey = s.aiMode == AiMode.CLAUDE && hasClaudeKey(),
                 ),
             )
             _recording.value = review

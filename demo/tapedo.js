@@ -67,14 +67,26 @@
   }
 
   var lang = pickLang();
+  // The made-up cards are counted from this moment - in either language, so a card can be swapped for its translation.
+  var SAMPLE_TODAY = todayEpoch(), SAMPLE_NOW = Date.now();
+  // In the app the cards are the user's own words, but in the demo cards left in Polish after "English" look
+  // untranslated: every sample card nobody changed is swapped for the same card in the new language.
+  function translateSamples(notes, from, to) {
+    if (from === to) return notes;
+    var was = {}, now = {};
+    window.TAPEDO_SAMPLE(from, SAMPLE_TODAY, SAMPLE_NOW).forEach(function (n) { was[n.id] = JSON.stringify(n); });
+    window.TAPEDO_SAMPLE(to, SAMPLE_TODAY, SAMPLE_NOW).forEach(function (n) { now[n.id] = n; });
+    return notes.map(function (n) { return was[n.id] === JSON.stringify(n) && now[n.id] ? now[n.id] : n; });
+  }
   var st = {
     lang: lang,
-    notes: window.TAPEDO_SAMPLE(lang, todayEpoch(), Date.now()),
+    notes: window.TAPEDO_SAMPLE(lang, SAMPLE_TODAY, SAMPLE_NOW),
     settings: {
       recordingEnd: "SILENCE", maxRecordingSeconds: 60, silenceSeconds: 7, pauseSeconds: 2,
       speechLanguage: lang === "pl" ? "pl-PL" : "en-US", onlineSpeech: "ASK",
       noteTypeChoice: "TASK", theme: "SYSTEM", reduceMotion: false, aiProviders: {}, aiModels: {},
-      aiDailyLimit: 200, textScale: 1, whisper: null, tiltedPaper: false, topUpCents: null, topUpDay: null
+      aiDailyLimit: 200, textScale: 1, whisper: null, tiltedPaper: false, topUpCents: null, topUpDay: null,
+      aiMode: "FREE", claudeDayCents: 100
     },
     screen: "home", onDone: false, query: "", tour: 0,
     editing: null, openedDone: false,
@@ -193,10 +205,19 @@
   }
   function changeType(n, type) {
     if (type === n.type) return n;
+    // ui/cards/EditableCard.kt changeType: items become lines of the text, a ticked one starts with "✓ ".
+    if (!hasItems(type) && n.items.length > 0) {
+      var lines = n.items.map(function (it) { return (it.checked ? "✓ " : "") + it.text; });
+      var top = n.body.replace(/\s+$/, "");
+      return Object.assign({}, n, { type: type, body: (top ? [top] : []).concat(lines).join("\n"), items: [] });
+    }
     if (hasItems(type) && n.items.length === 0 && n.body.trim()) {
       var parts = n.body.split(/[\n,;]/).map(function (x) { return x.trim(); }).filter(Boolean);
       if (parts.length > 1) {
-        return Object.assign({}, n, { type: type, body: "", items: parts.map(function (t) { return { text: t, checked: false, group: type === "SHOPPING" ? "OTHER" : null }; }) });
+        return Object.assign({}, n, { type: type, body: "", items: parts.map(function (t) {
+          var ticked = t.indexOf("✓ ") === 0;
+          return { text: ticked ? t.slice(2).trim() : t, checked: ticked, group: type === "SHOPPING" ? "OTHER" : null };
+        }) });
       }
     }
     return Object.assign({}, n, { type: type });
@@ -1184,11 +1205,13 @@
         input.style.height = "auto";
         input.style.height = input.scrollHeight + "px";
         if (lines) {
-          // As in the app: a rule every first-line height (that line is trimmed), between the lines only.
+          // As in the app: the first rule under the trimmed first line, then one every line height, between
+          // the lines only - a step of the first line's height drifted into the words from the third line on.
           var b = bodyStep.bodyLarge, n = Math.max(opts.minLines || 1, Math.round(input.scrollHeight / b.lh));
-          lines.style.height = (b.first * (n - 1) + 0.5) + "px";
-          lines.style.backgroundSize = "100% " + b.first + "px";
-          lines.style.backgroundImage = "linear-gradient(to bottom, transparent " + (b.first - 1) + "px, var(--rule) " + (b.first - 1) + "px)";
+          lines.style.height = (n > 1 ? b.first + b.lh * (n - 2) + 0.5 : 0) + "px";
+          lines.style.backgroundSize = "100% " + b.lh + "px";
+          lines.style.backgroundPosition = "0 " + (b.first - b.lh) + "px";
+          lines.style.backgroundImage = "linear-gradient(to bottom, transparent " + (b.lh - 1) + "px, var(--rule) " + (b.lh - 1) + "px)";
         }
       };
       input.addEventListener("input", grow);
@@ -1464,7 +1487,7 @@
     c.push(rule());
     c.push(setting("lang", S("settings_app_language"), null, null,
       slide("lang", ["pl", "en"], st.lang, function (v) { return v === "pl" ? S("language_polish") : S("language_english"); },
-        function (v) { st.lang = v; render(); })));
+        function (v) { st.notes = translateSamples(st.notes, st.lang, v); st.lang = v; render(); })));
     c.push(rule());
     c.push(setting("motion", S("settings_reduce_motion"), S("settings_reduce_motion_hint"), null,
       lever("motion", s.reduceMotion, function (v) { set({ reduceMotion: v }); }, s.reduceMotion ? S("settings_on") : S("settings_off"), null, S("settings_reduce_motion"))));
@@ -1489,19 +1512,37 @@
   function aiPage(page) {
     var s = st.settings;
     var c = [];
-    c.push(h("div", { class: "col", style: { padding: "10px 0", gap: "8px" } },
-      ruled(S("ai_intro"), "bodySmall", "var(--onSurface)"), ruled(S("ai_queue"), "bodySmall")));
-    c.push(h("div", { class: "col", style: { gap: "12px" } }, PROVIDERS.map(providerCard)));
+    // ui/settings/AiSettings.kt AiSection: "Which AI" first - free or paid Claude, never both.
+    var paid = s.aiMode === "CLAUDE";
+    c.push(h("div", { class: "col", style: { padding: "10px 0", gap: "8px" } }, ruled(S("ai_intro"), "bodySmall", "var(--onSurface)")));
+    var mode = h("div", { class: "col", style: { paddingBottom: "12px", gap: "8px" } },
+      h("span", { class: "titleMedium" }, S("ai_mode")),
+      slide("aimode", ["FREE", "CLAUDE"], s.aiMode, function (v) { return S(v === "FREE" ? "ai_mode_free" : "ai_mode_claude"); }, function (v) { set({ aiMode: v }); }));
+    [["FREE", "ai_mode_free"], ["CLAUDE", "ai_mode_claude"]].forEach(function (m) {
+      mode.appendChild(h("p", { class: "bodySmall", style: { margin: 0, color: m[0] === s.aiMode ? "var(--onSurface)" : "var(--onSurfaceVariant)" } },
+        h("b", null, S(m[1])), " - " + S(m[1] + "_hint")));
+    });
+    mode.appendChild(ruled(S(paid ? "ai_claude_only_click" : "ai_queue"), "bodySmall", null, { marginTop: "4px" }));
+    c.push(mode);
+    var shown = PROVIDERS.filter(function (p) { return paid ? p.id === "ANTHROPIC" : p.free; });
+    c.push(h("div", { class: "col", style: { gap: "12px" } }, shown.map(function (p) {
+      // Paid Claude is on as long as it is chosen above; "off" goes back to the free ones.
+      return paid
+        ? providerCard(p, true, function (v) { if (!v) set({ aiMode: "FREE" }); })
+        : providerCard(p, !!s.aiProviders[p.id], function (v) { s.aiProviders[p.id] = v; render(); });
+    })));
     c.push(h("div", { class: "col", style: { padding: "16px 0 10px", gap: "8px" } },
-      h("span", { class: "titleMedium" }, S("ai_limit")),
-      named(counter("ailimit", AI_LIMITS, s.aiDailyLimit, function (v) { return String(v); }, function (v) { set({ aiDailyLimit: v }); }), S("ai_limit")),
-      ruled(S("ai_limit_hint"), "bodySmall"),
+      paid ? claudeDay() : h("span", { class: "titleMedium" }, S("ai_limit")),
+      paid ? null : named(counter("ailimit", AI_LIMITS, s.aiDailyLimit, function (v) { return String(v); }, function (v) { set({ aiDailyLimit: v }); }), S("ai_limit")),
+      paid ? null : ruled(S("ai_limit_hint"), "bodySmall"),
       ruled(S("ai_privacy"), "bodySmall")));
     page.appendChild(section(c));
 
+    // Whisper needs the free Groq key, so with paid Claude it is only named, never both at once.
+    if (paid) { page.appendChild(section([ruled(S("settings_whisper_free_only"), "bodySmall", null, { margin: "10px 0" })])); return; }
     var w = s.whisper;
     var wc = [setting("whisper", S("settings_whisper"), S("settings_whisper_hint"), S("settings_whisper_more"),
-      slide("whisper", [null, "GROQ", "OPENAI"], w, function (v) { return v == null ? S("settings_whisper_off") : providerName(v); }, function (v) { set({ whisper: v }); }))];
+      slide("whisper", [null, "GROQ"], w, function (v) { return v == null ? S("settings_whisper_off") : providerName(v); }, function (v) { set({ whisper: v }); }))];
     var lastW = was("whisperShown", w) || w;
     var wf = fold("whisper", w != null, function () {
       var name = providerName(w || lastW);
@@ -1513,16 +1554,15 @@
     page.appendChild(section(wc));
   }
 
-  function providerCard(p) {
+  function providerCard(p, on, onToggle) {
     var a = st.ai[p.id];
-    var on = !!st.settings.aiProviders[p.id];
     var name = providerName(p.id);
     var head = h("div", { class: "row" },
       h("button", { type: "button", class: "col grow", style: { minHeight: "48px", justifyContent: "center", alignItems: "flex-start" }, "aria-expanded": String(a.open),
         onclick: function () { a.open = !a.open; render(); } },
         h("h3", { class: "titleMedium", style: { margin: 0 } }, name),
         foldLabel(S(a.open ? "ai_fold" : "ai_unfold"), a.open, "prov" + p.id)),
-      lever("ai" + p.id, on, function (v) { st.settings.aiProviders[p.id] = v; render(); }, on ? S("ai_on") : S("ai_off"), [S("ai_on"), S("ai_off")], name));
+      lever("ai" + p.id, on, onToggle, on ? S("ai_on") : S("ai_off"), [S("ai_on"), S("ai_off")], name));
     var lead = p.free ? document.createTextNode(S("ai_free")) : h("b", null, S("ai_paid"));
     var c = [head, h("p", { class: "bodySmall variant", style: { marginInline: 0 } }, lead, " - " + S("ai_p_" + p.t + "_hint"))];
     var wf = fold("aiwarn" + p.id, on, function () { return warning(S("ai_no_key")); });
@@ -1580,7 +1620,7 @@
     c.appendChild(h("div", { class: "col", style: { gap: "6px" } },
       pbtn(S("ai_test"), demoOff, "", { disabled: true }),
       h("span", { class: "bodySmall variant" }, S("ai_test_hint"))));
-    c.appendChild(h("span", { class: "bodySmall variant" }, S("ai_usage", 0, s.aiDailyLimit, 0)));
+    c.appendChild(h("span", { class: "bodySmall variant" }, p.free ? S("ai_usage", 0, s.aiDailyLimit, 0) : S("ai_usage_claude", 0, 0)));
     if (p.id === "ANTHROPIC") c.appendChild(topUp());
     return c;
   }
@@ -1631,11 +1671,41 @@
     });
     input.addEventListener("input", function () { wrong.textContent = ""; });
     var hint = s.topUpCents != null
-      ? S("ai_topup_pln", dec(s.topUpCents / 100 * USD_PLN), new Intl.DateTimeFormat(locale(), { dateStyle: "medium", timeZone: "UTC" }).format(utcDate(s.topUpDay)))
+      ? S("ai_topup_pln", dec(s.topUpCents / 100 * USD_PLN), new Intl.DateTimeFormat(locale(), { dateStyle: "medium", timeZone: "UTC" }).format(utcDate(s.topUpDay)), rateText(USD_PLN))
       : S("ai_topup_hint");
     return h("div", { class: "col", style: { gap: "4px" } },
       h("span", { class: "labelLarge variant" }, S("ai_topup")), h("div", { class: "lineField" }, input), wrong,
       h("span", { class: "bodySmall variant" }, hint));
+  }
+
+  function rateText(v) { return v.toLocaleString(locale(), { maximumFractionDigits: 4 }); }
+
+  // ui/settings/AiSettings.kt ClaudeDay: the daily spending limit in $. The demo cannot reach NBP (no network
+  // at all), so it shows the rough rate - as the app does without a connection.
+  function claudeDay() {
+    var s = st.settings;
+    var dec = function (v) { return st.lang === "pl" ? v.toFixed(2).replace(".", ",") : v.toFixed(2); };
+    var usd = function (v) { return st.lang === "pl" ? dec(v) + " $" : "$" + dec(v); };
+    var input = h("input", { type: "text", inputmode: "decimal", class: "bodyLarge", "aria-label": S("ai_day_usd"), placeholder: dec(1),
+      value: s.claudeDayCents != null ? dec(s.claudeDayCents / 100) : "", autocomplete: "off" });
+    var wrong = h("div");
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") input.blur(); });
+    input.addEventListener("change", function () {
+      var t = input.value.replace(/\$|usd/gi, "").replace(/\s/g, "").replace(",", ".");
+      if (!t) { s.claudeDayCents = null; renderAfterPress(); return; }
+      var m = /^(\d{1,6})(?:\.(\d{1,2}))?$/.exec(t);
+      var cents = m ? Number(m[1]) * 100 + Number((m[2] || "").padEnd(2, "0")) : 0;
+      if (cents < 1 || cents > 1000000) { wrong.textContent = ""; wrong.appendChild(warning(S("ai_topup_wrong"))); return; }
+      s.claudeDayCents = cents; renderAfterPress();
+    });
+    input.addEventListener("input", function () { wrong.textContent = ""; });
+    var today = s.claudeDayCents != null
+      ? S("ai_spent_today_of", usd(0), usd(s.claudeDayCents / 100), dec(0))
+      : S("ai_spent_today_no_limit", usd(0), dec(0));
+    return h("div", { class: "col", style: { gap: "4px" } },
+      h("span", { class: "titleMedium" }, S("ai_day_usd")), h("div", { class: "lineField" }, input), wrong,
+      ruled(S(s.claudeDayCents != null ? "ai_day_usd_hint" : "ai_day_usd_none"), "bodySmall"),
+      h("span", { class: "bodySmall", style: { paddingTop: "6px" } }, today + " " + S("ai_rate_rough", rateText(USD_PLN))));
   }
 
   function buildLicenses() {
@@ -1787,8 +1857,11 @@
   // order - a picked option or a moved slider changes its class or words, and a removed key hands over to the next.
   // The browser's Back (Alt+Left, the mouse's side key, the phone's back gesture) works like the app's "Back":
   // one history entry stands for "away from the home screen", so Back closes the card or Settings first.
-  var homeScroll = 0, inHistory = false, skipPop = false;
+  // Not inside the demo window on the home page: that page shares the history and its "Close" is history.back(),
+  // so an entry from here would make it close only the card or Settings, not the window.
+  var homeScroll = 0, inHistory = false, skipPop = false, ownTab = window.top === window;
   function syncHistory() {
+    if (!ownTab) return;
     var away = st.screen !== "home";
     try {
       if (away && !inHistory) { history.pushState({ tapedo: 1 }, ""); inHistory = true; }

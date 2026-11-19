@@ -1,5 +1,6 @@
 package io.github.bakeron.tapedo.core.ai
 
+import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.WhisperProvider
@@ -76,5 +77,17 @@ class WhisperTest {
         assertEquals(0, calls)
 
         assertEquals(WhisperRetyper.Outcome.Text("x"), WhisperRetyper(secrets("k"), stt).retype(on, loud))
+    }
+
+    @Test
+    fun `with paid Claude Whisper counts as off, but the choice is kept for going back to free`() = runTest {
+        var calls = 0
+        val stt = SpeechToText { _, _, _, _, _ -> calls++; "x" }
+        val claude = AppSettings(whisper = WhisperProvider.GROQ, aiMode = AiMode.CLAUDE)
+
+        assertEquals(null, claude.activeWhisper)
+        assertEquals(null, WhisperRetyper(secrets("gsk_x"), stt).retype(claude, loud))
+        assertEquals(0, calls)
+        assertEquals(WhisperProvider.GROQ, claude.copy(aiMode = AiMode.FREE).activeWhisper)
     }
 }

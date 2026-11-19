@@ -40,6 +40,9 @@ enum class Problem {
     /** The daily limit from the settings is used. */
     CAP,
 
+    /** Claude's spending today reached the daily limit in $ from the settings. */
+    BUDGET,
+
     /** No key in the settings. */
     NO_KEY,
 

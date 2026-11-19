@@ -58,3 +58,6 @@ client_secret*.json
 # Kod aplikacji, który pasuje do wzorca *secret* - to nie sekret, tylko magazyn kluczy w Keystore
 !app/src/main/java/io/github/bakeron/tapedo/security/KeystoreSecretStore.kt
 !app/src/test/java/io/github/bakeron/tapedo/security/
+
+# Python bytecode from tools/
+__pycache__/

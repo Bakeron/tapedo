@@ -92,12 +92,13 @@
     <string name="settings_whisper">Whisper - dokładniejsze przepisywanie</string>
     <string name="settings_whisper_off">Wyłączony</string>
     <string name="settings_whisper_hint">Po „stop” Whisper przepisuje nagranie jeszcze raz, dokładniej niż telefon. Podczas mówienia napisy dalej pokazuje telefon.</string>
-    <string name="settings_whisper_more">Whisper to model rozpoznawania mowy firmy OpenAI. Groq daje go za darmo w dziennym limicie, OpenAI za ok. 0,006 USD za minutę nagrania (stan 11.2026). Działa na Androidzie 13 i nowszym. Nagranie jest tylko w pamięci telefonu, nigdy na dysku. Gdy Whisper nie zadziała, zostaje tekst z telefonu, a okno po nagraniu mówi dlaczego.</string>
+    <string name="settings_whisper_more">Whisper to model rozpoznawania mowy firmy OpenAI. Groq daje go za darmo w dziennym limicie (stan 11.2026). Działa na Androidzie 13 i nowszym. Nagranie jest tylko w pamięci telefonu, nigdy na dysku. Gdy Whisper nie zadziała, zostaje tekst z telefonu, a okno po nagraniu mówi dlaczego.</string>
     <string name="settings_whisper_data">Gdzie trafiają dane: po każdym nagraniu dźwięk (bez odliczania i bez ciszy na końcu) idzie do %1$s. Wybierając %1$s, zgadzasz się na to.</string>
     <string name="settings_whisper_key_ok">Klucz %1$s jest zapisany - to wystarczy, przełącznik w ramce %1$s wyżej nie jest potrzebny.</string>
     <string name="settings_whisper_key_missing">Brak klucza %1$s - wpisz go wyżej, w ramce %1$s. Do tego czasu zostaje tekst z telefonu.</string>
     <string name="settings_whisper_moved">Whisper - dokładniejsze przepisywanie nagrania przez AI - jest w zakładce „AI”.</string>
     <string name="settings_whisper_open_ai">Przejdź do zakładki AI</string>
+    <string name="settings_whisper_free_only">Whisper - dokładniejsze przepisywanie nagrania - działa tylko przy darmowym AI (Groq). Żeby go włączyć, wybierz wyżej „Darmowe”.</string>
     <string name="settings_reduce_motion">Ogranicz animacje</string>
     <string name="settings_reduce_motion_hint">Karteczki i przełączniki zmieniają się od razu, bez ruchu. Działa też samo, gdy animacje są wyłączone w systemie.</string>
     <string name="settings_explain">Wyjaśnij</string>
@@ -147,7 +148,21 @@
     <string name="ai_p_openai" translatable="false">OpenAI</string>
     <string name="ai_p_gemini" translatable="false">Google Gemini</string>
     <string name="ai_intro">AI porządkuje nagranie na karteczce z otwartej przekładki: dzieli je na punkty, rozpoznaje terminy i godziny i poprawia przekręcone słowa. Bez AI robią to proste reguły: godzina po „o 10”, priorytet po „pilne”, termin po „jutro” - działa bez internetu, a tekst notatki nie wychodzi z telefonu.</string>
-    <string name="ai_queue">Możesz włączyć kilku dostawców - Tapedo pyta ich po kolei, w kolejności z tej listy. Gdy jeden wykorzysta dzienny limit, następne notatki idą do kolejnego. Gdy nikt nie odpowie, notatkę rozpisują reguły bez AI.</string>
+    <string name="ai_queue">Możesz włączyć kilku darmowych dostawców - Tapedo pyta ich po kolei, w kolejności z tej listy. Gdy jeden wykorzysta dzienny limit albo odmówi (klucz, model, serwer), notatka idzie do kolejnego. Gdy nikt nie odpowie, notatkę rozpisują reguły bez AI.</string>
+    <string name="ai_mode">Jakie AI</string>
+    <string name="ai_mode_free">Darmowe</string>
+    <string name="ai_mode_free_hint">Groq, OpenRouter - słabsze od Claude. Same porządkują każde nagranie; gdy jeden dostawca odmówi, Tapedo pyta następnego.</string>
+    <string name="ai_mode_claude">Płatne - Claude</string>
+    <string name="ai_mode_claude_hint">Wyraźnie dokładniejsze. Pieniądze idą tylko po Twoim dotknięciu - samo nic nie porządkuje. Dzienny limit wydatków ustawiasz sam.</string>
+    <string name="ai_claude_only_click">Claude działa tylko po Twoim dotknięciu: „Dokładniej - Claude” w oknie po nagraniu. Samo, w tle, nic nie wysyła - nagranie najpierw rozpisują reguły bez AI.</string>
+    <string name="ai_day_usd">Dzienny limit wydatków na płatne AI (w $)</string>
+    <string name="ai_day_usd_hint">Po tej kwocie Claude nie dostaje dziś kolejnych zapytań - do jutra albo do podniesienia limitu. Sprawdzane przed każdym zapytaniem, więc ostatnie może go lekko przekroczyć.</string>
+    <string name="ai_day_usd_none">Puste = bez limitu. Wpisz kwotę, a po jej wydaniu Claude poczeka do jutra.</string>
+    <string name="ai_spent_today_of">Dziś wydane: %1$s z %2$s (ok. %3$s zł).</string>
+    <string name="ai_spent_today_no_limit">Dziś wydane: %1$s (ok. %2$s zł).</string>
+    <string name="ai_rate_nbp">Kurs NBP z %1$s: %2$s zł za $.</string>
+    <string name="ai_rate_rough">Kurs przybliżony: %1$s zł za $ (brak połączenia z NBP).</string>
+    <string name="ai_usage_claude">Zapytania dziś: %1$d, w ostatnich 30 dniach: %2$d.</string>
     <string name="ai_free">Za darmo</string>
     <string name="ai_paid">Płatne za zużycie</string>
     <string name="ai_on">Włączone</string>
@@ -219,7 +234,7 @@
     <string name="ai_usage">Zapytania dziś: %1$d z %2$d, w ostatnich 30 dniach: %3$d.</string>
     <string name="ai_topup">Doładowanie konta Claude (w $)</string>
     <string name="ai_topup_hint">Kwota ostatniego doładowania konta Claude - w dolarach, bo tak liczy Anthropic. Wpisz ją zaraz po doładowaniu: Tapedo liczy wydatki od dnia zapisu.</string>
-    <string name="ai_topup_pln">Ok. %1$s zł (kurs ok. 4 zł za $, 11.2026). Wydatki liczone od %2$s - po kolejnym doładowaniu wpisz nową kwotę.</string>
+    <string name="ai_topup_pln">Ok. %1$s zł (kurs %3$s zł za $). Wydatki liczone od %2$s - po kolejnym doładowaniu wpisz nową kwotę.</string>
     <string name="ai_topup_wrong">Wpisz kwotę w dolarach, np. 5 albo 20,50 (od 0,01 do 10 000).</string>
     <string name="ai_spent">Wydane od %1$s: ok. %2$s z %3$s, zostało ok. %4$s (ok. %5$s zł).</string>
     <string name="ai_spent_periods">Na Claude dziś: %1$s, w tym miesiącu: %2$s.</string>
@@ -244,6 +259,7 @@
     <string name="ai_problem_busy">model jest chwilowo zajęty u dostawcy (z darmowego modelu korzysta naraz wiele osób albo minął limit na minutę) - to nie dzienny limit. Tapedo zapyta go znowu przy następnej notatce; możesz też wybrać inny darmowy model - przy OpenRouterze „openrouter/free” sam wybiera wolny.</string>
     <string name="ai_problem_limit">limit u dostawcy wyczerpany - Tapedo zapyta znowu jutro albo od razu po zmianie modelu.</string>
     <string name="ai_problem_cap">dzienny limit z ustawień wykorzystany - Tapedo zapyta znowu jutro.</string>
+    <string name="ai_problem_budget">dzienny limit wydatków na Claude z ustawień wykorzystany - podnieś go w Ustawieniach, w zakładce „AI”, albo zapytaj jutro.</string>
     <string name="ai_problem_no_key">brakuje klucza.</string>
     <string name="ai_problem_key_unreadable">nie udało się odczytać zapisanego klucza - spróbuj jeszcze raz. Klucz nie zginął; jeśli to się powtarza, wklej go ponownie.</string>
     <string name="ai_problem_offline">brak połączenia albo dostawca nie odpowiada - sprawdź internet.</string>

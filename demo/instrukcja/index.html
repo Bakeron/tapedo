@@ -310,7 +310,7 @@
       <li><b>Gotowe</b> - wraca do pudełka. Przycisk Wstecz robi to samo.</li>
     </ol>
   </div>
-  <p class="note">Gdy w ustawieniach masz klucz do Claude, w tym oknie jest też <span class="key">Dokładniej - Claude (ok. 2-3 gr)</span>: te same słowa idą jeszcze raz do Claude Sonnet 5.5, który trafniej dzieli je na karteczki. Obecne karteczki zostają, dopóki nie wybierzesz <span class="key">Zamień na te</span>.</p>
+  <p class="note">Gdy w ustawieniach wybierzesz „Płatne - Claude” i wkleisz klucz, w tym oknie jest <span class="key">Dokładniej - Claude (ok. 2-3 gr)</span>: te same słowa idą jeszcze raz do Claude Sonnet 5.5, który trafniej dzieli je na karteczki. Obecne karteczki zostają, dopóki nie wybierzesz <span class="key">Zamień na te</span>.</p>
   <p class="back"><a href="#spis">↑ Spis treści</a></p>
 </section>
 
@@ -474,22 +474,23 @@
   <div class="shot">
     <figure>
       <div class="phone">
-        <img src="img/ust-ai.webp" width="540" height="1110" loading="lazy" alt="Ustawienia, przekładka AI: opis działania AI i reguł, fiszki dostawców Groq, OpenRouter i Claude z przełącznikami Wyłączone i opisem dokładności.">
+        <img src="img/ust-ai.webp" width="540" height="1110" loading="lazy" alt="Ustawienia, przekładka AI: opis działania AI i reguł, wybór „Jakie AI” - Darmowe albo Płatne - Claude, fiszki dostawców Groq i OpenRouter z przełącznikami Wyłączone i opisem dokładności.">
         <span class="pin" style="--x:8%;--y:20%" aria-hidden="true">1</span>
-        <span class="pin" style="--x:58.6%;--y:44%" aria-hidden="true">2</span>
-        <span class="pin" style="--x:30%;--y:50.5%" aria-hidden="true">3</span>
-        <span class="pin" style="--x:50%;--y:87.8%" aria-hidden="true">4</span>
+        <span class="pin" style="--x:8%;--y:41.3%" aria-hidden="true">2</span>
+        <span class="pin" style="--x:58.6%;--y:75%" aria-hidden="true">3</span>
+        <span class="pin" style="--x:30%;--y:80.8%" aria-hidden="true">4</span>
       </div>
     </figure>
     <ol class="legend">
       <li><b>Opis</b> - co robi AI, a co proste reguły bez AI.</li>
-      <li><b>Przełącznik dostawcy</b> - włącza dostawcę AI. Można włączyć kilku - Tapedo pyta ich po kolei.</li>
+      <li><b>Jakie AI</b> - „Darmowe” (Groq, OpenRouter: same porządkują każde nagranie) albo „Płatne - Claude” (tylko po Twoim dotknięciu). Nigdy oba naraz.</li>
+      <li><b>Przełącznik dostawcy</b> - przy darmowych włącza dostawcę AI. Można włączyć kilku - Tapedo pyta ich po kolei.</li>
       <li><b>Pokaż</b> - rozwija instrukcję zdobycia klucza API, pole na klucz, wybór modelu i liczbę dzisiejszych zapytań (sam dzienny limit ustawiasz pod listą dostawców).</li>
-      <li><b>Claude</b> - płatny, najdokładniejszy. Możesz wpisać kwotę doładowania konta, a Tapedo policzy szacunkowe wydatki.</li>
+      <li><b>Claude</b> - płatny, najdokładniejszy, pyta go tylko przycisk „Dokładniej - Claude” w oknie po nagraniu. Ustawiasz dzienny limit wydatków w $ (domyślnie 1 $); Tapedo pokazuje, ile dziś wydano, też w złotych po kursie NBP. Możesz wpisać kwotę doładowania konta, a Tapedo policzy szacunkowe wydatki.</li>
     </ol>
   </div>
-  <p><b>AI nie jest potrzebne.</b> Bez niego karteczki rozpisują proste reguły w telefonie. Darmowi dostawcy to Groq i OpenRouter, płatni - Claude, OpenAI i Gemini. Przy każdym jest uczciwy opis, jak dokładnie działa. Klucz API wklejasz sam; zostaje zaszyfrowany w telefonie. Do dostawcy trafia tylko tekst notatki.</p>
-  <p>Na dole tej przekładki jest <b>Whisper</b> (domyślnie wyłączony): po „stop” nagranie idzie do Groq albo OpenAI i wraca przepisane dokładniej niż przez telefon. Wybór dostawcy Whisper to zgoda na wysłanie nagrania.</p>
+  <p><b>AI nie jest potrzebne.</b> Bez niego karteczki rozpisują proste reguły w telefonie. Darmowi dostawcy to Groq i OpenRouter, płatny - Claude. Przy każdym jest uczciwy opis, jak dokładnie działa. Klucz API wklejasz sam; zostaje zaszyfrowany w telefonie. Do dostawcy trafia tylko tekst notatki.</p>
+  <p>Na dole tej przekładki jest <b>Whisper</b> (domyślnie wyłączony): po „stop” nagranie idzie do Groq i wraca przepisane dokładniej niż przez telefon. Wybór dostawcy Whisper to zgoda na wysłanie nagrania.</p>
 
   <h3>Wygląd</h3>
   <div class="shot">
@@ -527,7 +528,7 @@
   <ul>
     <li>Karteczki są zaszyfrowane i zapisane tylko w tym telefonie. Nie ma konta ani serwera autora.</li>
     <li>Tapedo nie zapisuje dźwięku - zostaje sam tekst.</li>
-    <li>Głos wychodzi z telefonu tylko za Twoją zgodą: przy rozpoznawaniu przez internet (do Google) albo przy włączonym Whisper (do Groq lub OpenAI).</li>
+    <li>Głos wychodzi z telefonu tylko za Twoją zgodą: przy rozpoznawaniu przez internet (do Google) albo przy włączonym Whisper (do Groq).</li>
     <li>Przy włączonym AI do wybranego dostawcy trafia tylko tekst notatki.</li>
     <li>Bez reklam, statystyk i raportów o awariach wysyłanych w tle.</li>
   </ul>

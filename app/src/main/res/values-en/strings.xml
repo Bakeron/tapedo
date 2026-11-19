@@ -83,12 +83,13 @@
     <string name="settings_whisper">Whisper - more exact typing</string>
     <string name="settings_whisper_off">Off</string>
     <string name="settings_whisper_hint">After “stop” Whisper types the recording once more, more exactly than the phone. While you speak, the phone still shows the words.</string>
-    <string name="settings_whisper_more">Whisper is a speech recognition model by OpenAI. Groq offers it free within a daily limit, OpenAI for about 0.006 USD per minute of recording (as of Nov 2026). Works on Android 13 and newer. The recording stays in the phone’s memory only, never on disk. When Whisper fails, the phone’s text stays and the window after the recording says why.</string>
+    <string name="settings_whisper_more">Whisper is a speech recognition model by OpenAI. Groq offers it free within a daily limit (as of Nov 2026). Works on Android 13 and newer. The recording stays in the phone’s memory only, never on disk. When Whisper fails, the phone’s text stays and the window after the recording says why.</string>
     <string name="settings_whisper_data">Where the data goes: after every recording the audio (without the countdown and the silence at the end) goes to %1$s. By picking %1$s you agree to that.</string>
     <string name="settings_whisper_key_ok">The %1$s key is saved - that is enough, the switch in the %1$s frame above is not needed.</string>
     <string name="settings_whisper_key_missing">No %1$s key - enter it above, in the %1$s frame. Until then the phone’s text stays.</string>
     <string name="settings_whisper_moved">Whisper - more exact typing of the recording by AI - is on the “AI” tab.</string>
     <string name="settings_whisper_open_ai">Go to the AI tab</string>
+    <string name="settings_whisper_free_only">Whisper - more exact typing of the recording - works only with free AI (Groq). To turn it on, pick “Free” above.</string>
     <string name="settings_reduce_motion">Reduce motion</string>
     <string name="settings_reduce_motion_hint">Cards and switches change instantly, without movement. Also on automatically when animations are off system-wide.</string>
     <string name="settings_explain">Explain</string>
@@ -126,7 +127,21 @@
     <string name="default_checklist_title">List</string>
 
     <string name="ai_intro">AI tidies the recording into a card behind the open divider: splits it into items, spots dates and times and fixes misheard words. Without AI, simple rules do it: a time after “at 10”, priority after “urgent”, a due date after “tomorrow” - it works offline and the note text never leaves the phone.</string>
-    <string name="ai_queue">You can turn on several providers - Tapedo asks them in turn, in the order of this list. When one uses up its daily limit, the next notes go to the next one. When nobody answers, the no-AI rules structure the note.</string>
+    <string name="ai_queue">You can turn on several free providers - Tapedo asks them in turn, in the order of this list. When one uses up its daily limit or refuses (key, model, server), the note goes to the next one. When nobody answers, the no-AI rules structure the note.</string>
+    <string name="ai_mode">Which AI</string>
+    <string name="ai_mode_free">Free</string>
+    <string name="ai_mode_free_hint">Groq, OpenRouter - weaker than Claude. They tidy every recording by themselves; when one provider refuses, Tapedo asks the next one.</string>
+    <string name="ai_mode_claude">Paid - Claude</string>
+    <string name="ai_mode_claude_hint">Clearly more accurate. Money is spent only when you tap - nothing is tidied by itself. You set the daily spending limit yourself.</string>
+    <string name="ai_claude_only_click">Claude works only when you tap: “More exact - Claude” in the window after a recording. Nothing is sent by itself in the background - the no-AI rules write the cards first.</string>
+    <string name="ai_day_usd">Daily spending limit for paid AI (in $)</string>
+    <string name="ai_day_usd_hint">After this amount Claude gets no more requests today - until tomorrow or until you raise the limit. Checked before every request, so the last one may go slightly over.</string>
+    <string name="ai_day_usd_none">Empty = no limit. Enter an amount and once it is spent Claude waits until tomorrow.</string>
+    <string name="ai_spent_today_of">Spent today: %1$s of %2$s (about %3$s PLN).</string>
+    <string name="ai_spent_today_no_limit">Spent today: %1$s (about %2$s PLN).</string>
+    <string name="ai_rate_nbp">NBP rate of %1$s: %2$s PLN per $.</string>
+    <string name="ai_rate_rough">Rough rate: %1$s PLN per $ (no connection to NBP).</string>
+    <string name="ai_usage_claude">Requests today: %1$d, in the last 30 days: %2$d.</string>
     <string name="ai_free">Free</string>
     <string name="ai_paid">Paid per use</string>
     <string name="ai_on">On</string>
@@ -198,7 +213,7 @@
     <string name="ai_usage">Requests today: %1$d of %2$d, in the last 30 days: %3$d.</string>
     <string name="ai_topup">Claude account top-up (in $)</string>
     <string name="ai_topup_hint">The amount of the last top-up of the Claude account, in dollars, as Anthropic counts. Type it in right after topping up: Tapedo counts spending from the day it is saved.</string>
-    <string name="ai_topup_pln">About %1$s PLN (about 4 PLN per $, Nov 2026). Spending counted from %2$s - after the next top-up, type in the new amount.</string>
+    <string name="ai_topup_pln">About %1$s PLN (rate %3$s PLN per $). Spending counted from %2$s - after the next top-up, type in the new amount.</string>
     <string name="ai_topup_wrong">Type an amount in dollars, e.g. 5 or 20.50 (0.01 to 10000).</string>
     <string name="ai_spent">Spent since %1$s: about %2$s of %3$s, about %4$s left (about %5$s PLN).</string>
     <string name="ai_spent_periods">On Claude today: %1$s, this month: %2$s.</string>
@@ -223,6 +238,7 @@
     <string name="ai_problem_busy">the model is busy at the provider for a moment (many people use the same free model, or a per-minute limit was hit) - not the daily limit. Tapedo asks it again with the next note; you can also pick another free model - on OpenRouter “openrouter/free” picks a free one itself.</string>
     <string name="ai_problem_limit">the provider’s limit is used up - Tapedo asks again tomorrow, or right away after a model change.</string>
     <string name="ai_problem_cap">the daily limit from the settings is used up - Tapedo asks again tomorrow.</string>
+    <string name="ai_problem_budget">Claude’s daily spending limit from the settings is used - raise it in Settings, on the “AI” divider, or ask tomorrow.</string>
     <string name="ai_problem_no_key">the key is missing.</string>
     <string name="ai_problem_key_unreadable">the saved key could not be read - try again. The key is not lost; if this keeps happening, paste it again.</string>
     <string name="ai_problem_offline">no connection, or the provider does not answer - check the connection.</string>

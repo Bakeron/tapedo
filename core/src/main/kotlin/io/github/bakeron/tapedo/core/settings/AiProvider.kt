@@ -38,5 +38,14 @@ enum class AiProvider(
 
     companion object {
         fun ofId(id: String): AiProvider? = entries.firstOrNull { it.id == id.trim() }
+
+        /**
+         * Hidden for now (as in the job-offers board, 11.11.2026): Claude won the test, the light paid ones are
+         * not needed. The code stays; never shown and never asked, even when an older setting has them on.
+         */
+        val HIDDEN = setOf(OPENAI, GEMINI)
+
+        /** The "Free" choice in Settings, in the order they are asked. */
+        val FREE = entries.filter { it.free && it !in HIDDEN }
     }
 }

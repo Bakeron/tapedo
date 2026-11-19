@@ -66,7 +66,8 @@ class NoteStructurer(
     ): StructureResult {
         val problems = mutableListOf<AiProblem>()
         val rules = { StructureResult(RuleBasedStructurer(AppSettings.NEW_CARD_PRIORITY, listTitles).structure(transcript, todayEpochDay, nowMillis, chosenType), problems.toList()) }
-        val providers = AiProvider.entries.filter { it in settings.aiProviders }
+        // Paid Claude never runs on its own: in Claude mode the rules write the cards, "More exact" asks Claude.
+        val providers = settings.autoProviders
         if (providers.isEmpty() || transcript.isBlank()) return rules()
 
         val request = StructureRequest(transcript, todayEpochDay, nowMillis, AppSettings.NEW_CARD_PRIORITY, chosenType)
@@ -124,8 +125,8 @@ class NoteStructurer(
     /**
      * "More exact" after a recording that a free model or the rules wrote: the same words once more to
      * Claude Sonnet (paid, about 2-3 grosze), whatever Claude model the settings name - a cheaper model
-     * would not be more exact. Asked even when Claude is off in the chain (the key is the consent); the
-     * daily limits still count. No rules here - on any failure the old cards simply stay.
+     * would not be more exact. Offered only in Claude mode, and this tap is the only way Claude is asked;
+     * the daily spending limit is checked first. No rules here - on any failure the old cards simply stay.
      */
     suspend fun refine(
         transcript: String,
@@ -139,11 +140,9 @@ class NoteStructurer(
         fun failed(problem: Problem, message: String = "", low: LowFunds? = null) =
             Refined.Failed(AiProblem(provider, model, problem, message), low)
 
-        when (usage.usedUp(provider, todayEpochDay, settings.aiDailyLimit)) {
-            UsedUp.APP -> return failed(Problem.CAP)
-            UsedUp.PROVIDER -> return failed(Problem.LIMIT)
-            null -> Unit
-        }
+        // Claude counts money, not calls: the daily limit of calls is for the free providers only.
+        if (usage.limitHit(provider, todayEpochDay)) return failed(Problem.LIMIT)
+        if (overBudget(settings, todayEpochDay)) return failed(Problem.BUDGET)
         val key = when (val k = readKey(provider)) {
             Key.Unreadable -> return failed(Problem.KEY_UNREADABLE)
             is Key.Found -> k.value ?: return failed(Problem.NO_KEY)
@@ -168,6 +167,21 @@ class NoteStructurer(
             Refined.Cards(AiContract.parse(answer.text, request), low)
         } catch (e: AiException) {
             failed(e.problem, e.providerMessage, low)
+        }
+    }
+
+    /**
+     * Claude's spending today reached the daily limit in $ from the settings. Checked before each call, so the
+     * last one may go a little over it. A counter that cannot be read does not block Claude.
+     */
+    private suspend fun overBudget(settings: AppSettings, today: Long): Boolean {
+        val limit = settings.claudeDayCents ?: return false
+        return try {
+            usage.claudeCostMicros(today, today) >= limit * 10_000L
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
         }
     }
 

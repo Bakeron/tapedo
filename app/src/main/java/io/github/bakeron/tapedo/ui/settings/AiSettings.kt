@@ -74,9 +74,11 @@ import io.github.bakeron.tapedo.core.ai.LowFunds
 import io.github.bakeron.tapedo.core.ai.Spent
 import io.github.bakeron.tapedo.core.ai.TopUpInput
 import io.github.bakeron.tapedo.core.ai.USD_PLN
+import io.github.bakeron.tapedo.core.ai.UsdRate
 import io.github.bakeron.tapedo.core.ai.lowFunds
 import io.github.bakeron.tapedo.core.ai.Problem
 import io.github.bakeron.tapedo.core.ai.UsedUp
+import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.ui.cards.RuledText
@@ -86,6 +88,7 @@ import io.github.bakeron.tapedo.ui.components.FoldLabel
 import io.github.bakeron.tapedo.ui.components.FoldValue
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
+import io.github.bakeron.tapedo.ui.components.SlideSelector
 import io.github.bakeron.tapedo.ui.components.ToggleLever
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 import java.time.LocalDate
@@ -108,6 +111,9 @@ class AiActions(
     val setDailyLimit: (Int) -> Unit = {},
     /** Claude's top-up in US cents; null clears it. */
     val setTopUp: (Int?) -> Unit = {},
+    val setMode: (AiMode) -> Unit = {},
+    /** Claude's daily spending limit in US cents; null = no limit. */
+    val setDayLimit: (Int?) -> Unit = {},
 )
 
 private class ProviderTexts(
@@ -164,6 +170,7 @@ fun problemText(p: Problem): String = stringResource(
         Problem.LIMIT -> R.string.ai_problem_limit
         Problem.BUSY -> R.string.ai_problem_busy
         Problem.CAP -> R.string.ai_problem_cap
+        Problem.BUDGET -> R.string.ai_problem_budget
         Problem.NO_KEY -> R.string.ai_problem_no_key
         Problem.KEY_UNREADABLE -> R.string.ai_problem_key_unreadable
         Problem.OFFLINE -> R.string.ai_problem_offline
@@ -229,32 +236,76 @@ private fun Unfold(label: String, open: Boolean, modifier: Modifier = Modifier, 
     )
 }
 
-/** Settings - AI: every provider on its own index card (on / off, key, model, check), asked in turn. */
+/**
+ * Settings - AI, as in the job-offers board (author 15.11.2026): first "Which AI" - free or paid Claude, never
+ * both. Free: every free provider on its own index card (on / off, key, model, check), asked in turn, with the
+ * daily limit of calls. Claude: its card and the daily spending limit in $, Claude asked only on a tap.
+ */
 @Composable
-fun ColumnScope.AiSection(settings: AppSettings, ai: Map<AiProvider, ProviderState>, actions: AiActions) {
+fun ColumnScope.AiSection(settings: AppSettings, ai: Map<AiProvider, ProviderState>, actions: AiActions, usdRate: UsdRate? = null) {
     val scheme = MaterialTheme.colorScheme
     val rule = TapedoTheme.colors.rule
+    val paid = settings.aiMode == AiMode.CLAUDE
     Column(Modifier.padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         RuledText(stringResource(R.string.ai_intro), MaterialTheme.typography.bodySmall, scheme.onSurface, rule)
-        RuledText(stringResource(R.string.ai_queue), MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
+    }
+    Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.ai_mode), style = MaterialTheme.typography.titleMedium)
+        SlideSelector(
+            options = AiMode.entries,
+            selected = settings.aiMode,
+            label = { stringResource(if (it == AiMode.FREE) R.string.ai_mode_free else R.string.ai_mode_claude) },
+            onSelect = actions.setMode,
+        )
+        for (m in AiMode.entries) {
+            val (name, hint) = if (m == AiMode.FREE) R.string.ai_mode_free to R.string.ai_mode_free_hint else R.string.ai_mode_claude to R.string.ai_mode_claude_hint
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(stringResource(name)) }
+                    append(" - ")
+                    append(stringResource(hint))
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (m == settings.aiMode) scheme.onSurface else scheme.onSurfaceVariant,
+            )
+        }
+        RuledText(
+            stringResource(if (paid) R.string.ai_claude_only_click else R.string.ai_queue),
+            MaterialTheme.typography.bodySmall,
+            scheme.onSurfaceVariant,
+            rule,
+            Modifier.padding(top = 4.dp),
+        )
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        for (p in AiProvider.entries) {
-            ProviderCard(p, p in settings.aiProviders, settings, ai.getValue(p), actions)
+        if (paid) {
+            // Paid Claude is on as long as it is chosen above; "off" goes back to the free ones.
+            ProviderCard(AiProvider.ANTHROPIC, true, settings, ai.getValue(AiProvider.ANTHROPIC), actions, usdRate) { on ->
+                if (!on) actions.setMode(AiMode.FREE)
+            }
+        } else {
+            for (p in AiProvider.FREE) {
+                ProviderCard(p, p in settings.aiProviders, settings, ai.getValue(p), actions, usdRate) { actions.toggle(p, it) }
+            }
         }
     }
 
     Column(Modifier.padding(top = 16.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.ai_limit), style = MaterialTheme.typography.titleMedium)
-        CounterSlider(
-            options = AppSettings.AI_DAILY_LIMITS,
-            selected = settings.aiDailyLimit,
-            label = { "$it" },
-            onSelect = actions.setDailyLimit,
-        )
-        RuledText(stringResource(R.string.ai_limit_hint), MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
+        // Calls per day - free providers only; Claude counts money and waits for a tap.
+        if (paid) {
+            ClaudeDay(settings, ai.getValue(AiProvider.ANTHROPIC).spent, usdRate, actions)
+        } else {
+            Text(stringResource(R.string.ai_limit), style = MaterialTheme.typography.titleMedium)
+            CounterSlider(
+                options = AppSettings.AI_DAILY_LIMITS,
+                selected = settings.aiDailyLimit,
+                label = { "$it" },
+                onSelect = actions.setDailyLimit,
+            )
+            RuledText(stringResource(R.string.ai_limit_hint), MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
+        }
 
-        val enabled = AiProvider.entries.filter { it in settings.aiProviders }
+        val enabled = settings.autoProviders
         val usedUp = enabled.filter { ai.getValue(it).usedUp != null }
         if (usedUp.isNotEmpty()) {
             val list = usedUp.map { p ->
@@ -272,7 +323,15 @@ fun ColumnScope.AiSection(settings: AppSettings, ai: Map<AiProvider, ProviderSta
 }
 
 @Composable
-private fun ProviderCard(p: AiProvider, on: Boolean, settings: AppSettings, st: ProviderState, actions: AiActions) {
+private fun ProviderCard(
+    p: AiProvider,
+    on: Boolean,
+    settings: AppSettings,
+    st: ProviderState,
+    actions: AiActions,
+    usdRate: UsdRate?,
+    onToggle: (Boolean) -> Unit,
+) {
     val colors = TapedoTheme.colors
     val scheme = MaterialTheme.colorScheme
     val texts = textsOf(p)
@@ -302,7 +361,7 @@ private fun ProviderCard(p: AiProvider, on: Boolean, settings: AppSettings, st: 
             }
             ToggleLever(
                 checked = on,
-                onChange = { actions.toggle(p, it) },
+                onChange = onToggle,
                 stateLabel = stringResource(if (on) R.string.ai_on else R.string.ai_off),
                 modifier = Modifier.semantics { contentDescription = name },
                 allLabels = listOf(stringResource(R.string.ai_on), stringResource(R.string.ai_off)),
@@ -324,20 +383,21 @@ private fun ProviderCard(p: AiProvider, on: Boolean, settings: AppSettings, st: 
         val low = if (p == AiProvider.ANTHROPIC) lowFunds(settings.claudeTopUpUsd, st.spent?.sinceTopUp) else null
         val warning = if (!on) null else when {
             st.keySuffix == null -> stringResource(R.string.ai_no_key)
-            st.usedUp == UsedUp.APP -> stringResource(R.string.ai_used_up_app, settings.aiDailyLimit)
+            // Claude counts money, not calls - the limit of calls is for the free providers only.
+            st.usedUp == UsedUp.APP && p.free -> stringResource(R.string.ai_used_up_app, settings.aiDailyLimit)
             st.usedUp == UsedUp.PROVIDER -> stringResource(R.string.ai_used_up_provider, name)
             low != null -> lowFundsText(low)
             else -> null
         }
         FoldValue(warning) { Warning(it) }
         Fold(open) {
-            ProviderBody(p, texts, settings, st, actions)
+            ProviderBody(p, texts, settings, st, actions, usdRate)
         }
     }
 }
 
 @Composable
-private fun ProviderBody(p: AiProvider, texts: ProviderTexts, settings: AppSettings, st: ProviderState, actions: AiActions) {
+private fun ProviderBody(p: AiProvider, texts: ProviderTexts, settings: AppSettings, st: ProviderState, actions: AiActions, usdRate: UsdRate?) {
     val scheme = MaterialTheme.colorScheme
     Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Block(stringResource(R.string.ai_what_title), stringResource(texts.what))
@@ -348,11 +408,15 @@ private fun ProviderBody(p: AiProvider, texts: ProviderTexts, settings: AppSetti
         if (p.free) ModelPicker(p, settings.modelFor(p), st, actions)
         ConnectionCheck(p, st, actions)
         Text(
-            stringResource(R.string.ai_usage, st.callsToday, settings.aiDailyLimit, st.callsMonth),
+            if (p.free) {
+                stringResource(R.string.ai_usage, st.callsToday, settings.aiDailyLimit, st.callsMonth)
+            } else {
+                stringResource(R.string.ai_usage_claude, st.callsToday, st.callsMonth)
+            },
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
         )
-        if (p == AiProvider.ANTHROPIC) TopUp(settings, st.spent, actions)
+        if (p == AiProvider.ANTHROPIC) TopUp(settings, st.spent, usdRate, actions)
     }
 }
 
@@ -368,8 +432,110 @@ private fun usdText(usd: Double, locale: Locale): String {
     return if (small) "< $text" else text
 }
 
-/** Dollars in złoty at the rough rate - always shown as "about". */
-private fun plnText(usd: Double, locale: Locale) = String.format(locale, "%.2f", usd.coerceAtLeast(0.0) * USD_PLN)
+/** Dollars in złoty at NBP's rate, or the rough one - always shown as "about". */
+private fun plnText(usd: Double, locale: Locale, rate: Double = USD_PLN) = String.format(locale, "%.2f", usd.coerceAtLeast(0.0) * rate)
+
+/** "3,6512" - the rate as NBP gives it, without trailing zeros. */
+private fun rateText(rate: Double, locale: Locale): String =
+    java.text.NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 4 }.format(rate)
+
+/**
+ * The daily spending limit for paid AI (in $), by the tap that spends it - as in the job-offers board. Under it
+ * what Claude cost today, in $ and about in złoty (NBP's rate of the day, or the rough one without a connection).
+ */
+@Composable
+private fun ClaudeDay(settings: AppSettings, spent: Spent?, usdRate: UsdRate?, actions: AiActions) {
+    val scheme = MaterialTheme.colorScheme
+    val rule = TapedoTheme.colors.rule
+    val locale = appLocale()
+    val cents = settings.claudeDayCents
+    val saved = cents?.let { String.format(locale, "%.2f", it / 100.0) }.orEmpty()
+    var draft by rememberSaveable(saved) { mutableStateOf(saved) }
+    var wrong by rememberSaveable { mutableStateOf(false) }
+    var justSaved by remember { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
+    val label = stringResource(R.string.ai_day_usd)
+    fun save() {
+        when (val v = TopUpInput.parse(draft)) {
+            TopUpInput.Wrong -> wrong = true
+            TopUpInput.Cleared -> {
+                wrong = false
+                if (cents != null) {
+                    actions.setDayLimit(null)
+                    justSaved = true
+                }
+            }
+            is TopUpInput.Cents -> {
+                wrong = false
+                if (v.cents != cents) {
+                    actions.setDayLimit(v.cents)
+                    justSaved = true
+                }
+            }
+        }
+    }
+    LaunchedEffect(justSaved) {
+        if (justSaved) {
+            delay(3_000)
+            justSaved = false
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.titleMedium)
+        LineField(
+            value = draft,
+            onValueChange = {
+                draft = it.take(16)
+                wrong = false
+            },
+            label = label,
+            placeholder = String.format(locale, "%.2f", 1.0),
+            secret = false,
+            onDone = { focus.clearFocus() },
+            onLeave = ::save,
+            number = true,
+        )
+        FoldValue(if (wrong) stringResource(R.string.ai_topup_wrong) else null) { Warning(it) }
+        Fold(justSaved) {
+            Text(
+                stringResource(R.string.ai_model_saved),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
+        RuledText(
+            stringResource(if (cents != null) R.string.ai_day_usd_hint else R.string.ai_day_usd_none),
+            MaterialTheme.typography.bodySmall,
+            scheme.onSurfaceVariant,
+            rule,
+        )
+        if (spent != null) {
+            val pln = usdRate?.pln ?: USD_PLN
+            val today = if (cents != null) {
+                stringResource(R.string.ai_spent_today_of, usdText(spent.today, locale), usdText(cents / 100.0, locale), plnText(spent.today, locale, pln))
+            } else {
+                stringResource(R.string.ai_spent_today_no_limit, usdText(spent.today, locale), plnText(spent.today, locale, pln))
+            }
+            val rate = if (usdRate != null) {
+                stringResource(R.string.ai_rate_nbp, nbpDay(usdRate.day, locale), rateText(usdRate.pln, locale))
+            } else {
+                stringResource(R.string.ai_rate_rough, rateText(USD_PLN, locale))
+            }
+            Text(
+                "$today $rate",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 6.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
+    }
+}
+
+/** NBP's "2026-11-13" as a date in the app's language; as written when it does not read as one. */
+private fun nbpDay(day: String, locale: Locale): String = try {
+    LocalDate.parse(day).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
+} catch (e: Exception) {
+    day
+}
 
 private fun dayText(epochDay: Long, locale: Locale): String =
     LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
@@ -391,9 +557,10 @@ fun LowFundsWarning(low: LowFunds, modifier: Modifier = Modifier) {
  * counted from the day it is typed in. Below: spent of it and what is left, today and this month.
  */
 @Composable
-private fun TopUp(settings: AppSettings, spent: Spent?, actions: AiActions) {
+private fun TopUp(settings: AppSettings, spent: Spent?, usdRate: UsdRate?, actions: AiActions) {
     val scheme = MaterialTheme.colorScheme
     val locale = appLocale()
+    val pln = usdRate?.pln ?: USD_PLN
     val cents = settings.claudeTopUpCents
     val saved = cents?.let { String.format(locale, "%.2f", it / 100.0) }.orEmpty()
     var draft by rememberSaveable(saved) { mutableStateOf(saved) }
@@ -453,7 +620,7 @@ private fun TopUp(settings: AppSettings, spent: Spent?, actions: AiActions) {
         val day = settings.claudeTopUpDay
         Text(
             if (usd != null && day != null) {
-                stringResource(R.string.ai_topup_pln, plnText(usd, locale), dayText(day, locale))
+                stringResource(R.string.ai_topup_pln, plnText(usd, locale, pln), dayText(day, locale), rateText(pln, locale))
             } else {
                 stringResource(R.string.ai_topup_hint)
             },
@@ -471,7 +638,7 @@ private fun TopUp(settings: AppSettings, spent: Spent?, actions: AiActions) {
                     Text(
                         stringResource(
                             R.string.ai_spent,
-                            dayText(day, locale), usdText(since, locale), usdText(usd, locale), usdText(left, locale), plnText(left, locale),
+                            dayText(day, locale), usdText(since, locale), usdText(usd, locale), usdText(left, locale), plnText(left, locale, pln),
                         ),
                         style = MaterialTheme.typography.bodySmall,
                     )

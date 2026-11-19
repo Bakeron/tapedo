@@ -14,6 +14,7 @@ import io.github.bakeron.tapedo.core.data.NoteRepository
 import io.github.bakeron.tapedo.core.model.ChecklistItem
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
+import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
@@ -821,10 +822,18 @@ class HomeViewModelTest {
         override suspend fun freeModels(provider: AiProvider, key: String?) = emptyList<String>()
     }
 
-    private fun TestScope.claudeViewModel(notes: FakeNotes) = viewModel(
-        FakeStore(AppSettings()), notes = notes,
+    private fun TestScope.claudeViewModel(notes: FakeNotes, mode: AiMode = AiMode.CLAUDE) = viewModel(
+        FakeStore(AppSettings(aiMode = mode)), notes = notes,
         structurer = NoteStructurer(ClaudeKey(), MemoryAiUsage(), ClaudeCards, testScheduler.timeSource),
     )
+
+    @Test
+    fun `free AI chosen - no more exact, even with a Claude key`() = runTest(dispatcher) {
+        val vm = claudeViewModel(FakeNotes(), AiMode.FREE)
+        vm.onTranscript("kupić mleko")
+        runCurrent()
+        assertFalse((vm.recording.value as RecordingState.Review).claudeKey)
+    }
 
     @Test
     fun `more exact offers Claude's cards and swaps them in only when taken`() = runTest(dispatcher) {

@@ -21,6 +21,13 @@ enum class WhisperProvider(val ai: AiProvider, val model: String) {
     OPENAI(AiProvider.OPENAI, "whisper-1"),
 }
 
+/**
+ * Free or paid AI - never both at once (author's shared AI rules, 13.11.2026, as in the job-offers board).
+ * Free: Groq and OpenRouter write the cards after each recording on their own. Claude: paid, so it is asked
+ * only on a tap ("More exact" after a recording) - the rules write the cards first.
+ */
+enum class AiMode { FREE, CLAUDE }
+
 /** Everything the user can tune. Defaults follow docs/zalozenia.md. */
 data class AppSettings(
     val recordingEnd: RecordingEnd = RecordingEnd.SILENCE,
@@ -40,7 +47,8 @@ data class AppSettings(
     val noteTypeChoice: NoteType? = null,
     val theme: ThemeMode = ThemeMode.SYSTEM,
     val reduceMotion: Boolean = false,
-    /** AI providers turned on, asked in the order of [AiProvider.entries]; empty = no AI, the rules write the cards. */
+    val aiMode: AiMode = AiMode.FREE,
+    /** Free AI providers turned on, asked in the order of [AiProvider.entries]; empty = no AI, the rules write the cards. */
     val aiProviders: Set<AiProvider> = emptySet(),
     /** Model per provider; missing or blank = the provider's default model. */
     val aiModels: Map<AiProvider, String> = emptyMap(),
@@ -56,6 +64,8 @@ data class AppSettings(
     val claudeTopUpCents: Int? = null,
     /** Epoch day the top-up was typed in - Claude's spending is counted from it. */
     val claudeTopUpDay: Long? = null,
+    /** Daily limit of Claude's spending in US cents, checked before each call; null = no limit. */
+    val claudeDayCents: Int? = 100,
     /** "First steps" (the tips on the home screen) were gone through or skipped; Settings can show them again. */
     val firstStepsSeen: Boolean = false,
 ) {
@@ -86,6 +96,16 @@ data class AppSettings(
     val pauseMillis: Long? get() = pauseSeconds.takeIf { it > 0 }?.let { it * 1000L }
 
     fun modelFor(provider: AiProvider): String = aiModels[provider]?.trim()?.ifEmpty { null } ?: provider.defaultModel
+
+    /**
+     * Whisper as really used: only in free mode - never free and paid AI at once (author 15.11.2026). In Claude
+     * mode the Groq frame is hidden, so its key could not even be typed. The choice itself is kept for going back.
+     */
+    val activeWhisper: WhisperProvider? get() = whisper.takeIf { aiMode == AiMode.FREE }
+
+    /** Providers that write the cards after a recording on their own: the free ones turned on, and only in free mode. */
+    val autoProviders: List<AiProvider>
+        get() = if (aiMode == AiMode.FREE) AiProvider.FREE.filter { it in aiProviders } else emptyList()
 }
 
 interface SettingsStore {

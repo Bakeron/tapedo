@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -29,6 +30,7 @@ fun Seismograph(levels: List<Float>, sampleCount: Long, capacity: Int, modifier:
     val colors = TapedoTheme.colors
     // Paper: graphite on graph paper. Panel: an amber trace on a dark oscilloscope screen.
     val ink = colors.traceInk
+    val reduceMotion = TapedoTheme.reduceMotion
     Canvas(
         modifier
             .fillMaxWidth()
@@ -55,6 +57,17 @@ fun Seismograph(levels: List<Float>, sampleCount: Long, capacity: Int, modifier:
 
         if (levels.isEmpty()) return@Canvas
         val pad = 10.dp.toPx()
+        if (reduceMotion) {
+            // "Reduce motion": nothing scrolls - a level bar on the middle line grows and shrinks in place,
+            // still saying "I hear you" (author 15.11.2026).
+            val barHeight = 24.dp.toPx()
+            val length = levels.last().coerceIn(0f, 1f) * (size.width - pad * 2)
+            drawRect(ink, Offset(pad, mid - barHeight / 2), Size(length, barHeight))
+            if (penUp) {
+                drawCircle(colors.record, radius = 5.dp.toPx(), center = Offset(size.width - pad, pad + 5.dp.toPx()), style = Stroke(2.dp.toPx()))
+            }
+            return@Canvas
+        }
         val dx = (size.width - pad * 2) / capacity
         val amp = size.height / 2 - pad
         val firstIndex = sampleCount - levels.size
