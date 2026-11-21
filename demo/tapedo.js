@@ -10,7 +10,7 @@
   var NS = "http://www.w3.org/2000/svg";
   var UNDO_MS = 10000;
   var USD_PLN = 4.0;
-  var VERSION = "2.2";
+  var VERSION = "2.6";
   var PRIVACY_URL = "https://tapedo.szymonbakonis.pl/privacy.html";
   var MANUAL_URL = "https://tapedo.szymonbakonis.pl/instrukcja/";
 
@@ -89,7 +89,7 @@
     screen: "home", onDone: false, query: "", tour: 0,
     editing: null, openedDone: false,
     deleted: null, moved: null,
-    setTab: "RECORDING", explain: {}, ai: {}
+    setTab: "RECORDING", explain: {}, ai: {}, wrong: {}, drafts: {}, flash: {}
   };
   PROVIDERS.forEach(function (p) {
     st.ai[p.id] = { open: false, stepsOpen: true, draft: "", models: false, modelSaved: false };
@@ -431,14 +431,29 @@
   }
 
   // Fold: unfolds downward and fades in; folds back the same way (ui/components/Fold.kt).
+  // The flex gap next to a folding part: it goes with the part (as a negative margin), not at the end.
+  function foldGap(el) {
+    var p = el.parentNode;
+    if (!p || p.nodeType !== 1) return null;
+    var cs = getComputedStyle(p);
+    if (cs.display.indexOf("flex") < 0 || cs.flexDirection.indexOf("column") < 0) return null;
+    var g = parseFloat(cs.rowGap) || 0;
+    if (!g) return null;
+    if (el.previousElementSibling) return { prop: "marginTop", gap: g };
+    if (el.nextElementSibling) return { prop: "marginBottom", gap: g };
+    return null;
+  }
   function fold(key, open, build) {
     var prev = was("fold:" + key, open);
     if (open) {
       var el = h("div", { "data-fold": key }, build());
       if (prev === false && !still()) after(function () {
         var hgt = el.scrollHeight;
+        var from = { height: "0px", opacity: 0 }, to = { height: hgt + "px", opacity: 1 };
+        var g = foldGap(el);
+        if (g) { from[g.prop] = -g.gap + "px"; to[g.prop] = "0px"; }
         el.style.overflow = "hidden";
-        el.animate([{ height: "0px", opacity: 0 }, { height: hgt + "px", opacity: 1 }], { duration: 220, easing: "ease-in-out" })
+        el.animate([from, to], { duration: 220, easing: "ease-in-out" })
           .onfinish = function () { el.style.overflow = ""; };
       });
       return el;
@@ -450,8 +465,11 @@
         if (!o) { ghost.remove(); return; }
         Array.prototype.forEach.call(o.childNodes, function (c) { ghost.appendChild(c.cloneNode(true)); });
         var hgt = ghost.scrollHeight;
+        var from = { height: hgt + "px", opacity: 1 }, to = { height: "0px", opacity: 0 };
+        var g = foldGap(ghost);
+        if (g) { from[g.prop] = "0px"; to[g.prop] = -g.gap + "px"; }
         ghost.style.overflow = "hidden";
-        ghost.animate([{ height: hgt + "px", opacity: 1 }, { height: "0px", opacity: 0, offset: 1 }], { duration: 220, easing: "ease-in-out", fill: "forwards" })
+        ghost.animate([from, to], { duration: 220, easing: "ease-in-out", fill: "forwards" })
           .onfinish = function () { ghost.remove(); };
       });
       return ghost;
@@ -465,7 +483,7 @@
     var arrow = h("span", { class: "arrow", "aria-hidden": "true", style: { transform: start ? "rotate(90deg)" : "none" } },
       sv("svg", { width: 4, height: 5.4, viewBox: "0 0 4 5.4", style: "display:block" }, sv("path", { d: "M0 0L4 2.7L0 5.4Z", fill: "currentColor" })));
     if (start !== open) after(function () { nextFrame(function () { arrow.style.transform = open ? "rotate(90deg)" : "none"; }); });
-    return h("span", { class: "row foldLabel labelLarge" }, arrow, h("span", { class: "underline" }, text));
+    return h("span", { class: "row foldLabel labelLarge" }, arrow, swap("foldWord:" + key, text, h("span", { class: "underline" }), function (t) { return t; }));
   }
   // A text or small group that changes: the old look fades out, then the new one fades in - never both at once
   // (Fold.kt fadeSwap, 0.1 s + 0.1 s). [build] makes the look for a value; [wrap] holds it.
@@ -477,7 +495,13 @@
       var out = wrap.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: "forwards" });
       out.onfinish = function () {
         wrap.textContent = "";
+        // Built after the render: what it asks to do after layout runs right here.
+        var outer = hooks;
+        hooks = [];
         add(wrap, build(value));
+        var run = hooks;
+        hooks = outer;
+        run.forEach(function (f) { f(current, current); });
         wrap.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 100 });
         out.cancel();
       };
@@ -495,13 +519,21 @@
     var opts = options.map(function (o, i) {
       var b = h("button", { type: "button", class: "opt labelLarge" + (i === idx ? " sel" : ""), role: "radio", "aria-checked": String(i === idx),
         onclick: function () { if (i !== idx) onSelect(o, i); } },
-        h("span", { class: "led", style: { background: i === from ? "var(--record)" : "var(--ledOff)" } }), h("span", null, labelFn(o)));
+        h("span", { class: "led", style: { background: i === from ? "var(--record)" : "var(--ledOff)" } }),
+        h("span", { class: "dual" }, h("span", { class: "plain" }, labelFn(o)), h("span", { class: "bold", "aria-hidden": "true" }, labelFn(o))));
       return b;
     });
     if (from !== idx) after(function () {
       nextFrame(function () {
         knob.style.transform = "translateX(" + (idx * 100) + "%)";
         opts.forEach(function (b, i) { b.firstChild.style.background = i === idx ? "var(--record)" : "var(--ledOff)"; });
+      });
+      var o = { duration: 350, easing: "ease-in-out" };
+      [from, idx].forEach(function (i) {
+        var on = i === idx, b = opts[i];
+        b.animate([{ color: on ? "var(--onSurfaceVariant)" : "var(--onSurface)" }, {}], o);
+        b.querySelector(".plain").animate([{ opacity: on ? 1 : 0 }, { opacity: on ? 0 : 1 }], o);
+        b.querySelector(".bold").animate([{ opacity: on ? 0 : 1 }, { opacity: on ? 1 : 0 }], o);
       });
     });
     return h("div", { class: "slide", role: "radiogroup" }, h("div", { class: "knobArea" }, knob), h("div", { class: "opts" }, opts));
@@ -527,9 +559,11 @@
     if (from !== checked) after(function () { nextFrame(function () { arm.style.transform = armT(checked); tip.style.transform = tipT(checked); }); });
     var words = h("span", { class: "words labelLarge bold" });
     (allLabels || []).forEach(function (w) { words.appendChild(h("span", { style: { visibility: "hidden" }, "aria-hidden": "true" }, w)); });
-    words.appendChild(h("span", null, label));
+    words.appendChild(swap("leverWord:" + key, label, h("span"), function (w) { return w; }));
+    var led = h("span", { class: "ledDot" });
+    if (from !== checked) after(function () { led.animate([{ backgroundColor: from ? "var(--record)" : "var(--ledOff)" }, {}], { duration: 200 }); });
     return h("button", { type: "button", class: "row lever" + (checked ? " on" : ""), role: "switch", "aria-checked": String(checked), "aria-label": ariaLabel || null,
-      onclick: function () { onChange(!checked); } }, svg, h("span", { class: "ledDot" }), words);
+      onclick: function () { onChange(!checked); } }, svg, led, words);
   }
 
   // CounterSlider: a groove with a scale and the red dot; the value is typed above the dot.
@@ -641,9 +675,28 @@
   var TOUR_DRAW_MS = 520, HOLE_PAD = 6, SMALL_SPOT = 140, MARKER_WIDTH = 4, ARROW_GAP = 56, SLIP_MAX_WIDTH = 380;
 
   function touring() { return st.tour != null && st.screen === "home"; }
-  function tourNext() { if (st.tour === TOUR.length - 1) tourEnd(); else { st.tour++; render(); } }
-  function tourBack() { if (st.tour === 0) tourEnd(); else { st.tour--; render(); } }
-  function tourEnd() { st.tour = null; pendingFocus = '[data-tour="RECORD"]'; render(); }
+  function tourNext() { if (st.tour === TOUR.length - 1) tourEnd(); else tourLeave(false, function () { st.tour++; render(); }); }
+  function tourBack() { if (st.tour === 0) tourEnd(); else tourLeave(false, function () { st.tour--; render(); }); }
+  function tourEnd() { tourLeave(true, function () { st.tour = null; pendingFocus = '[data-tour="RECORD"]'; render(); }); }
+  // FirstSteps.kt: the slip fades and its marker winds back while the window in the shade closes (0.2 s), and
+  // only then the next slip comes; the end fades the whole shade out (HomeScreen.kt, 0.22 s).
+  var tourGoing = false;
+  function tourLeave(all, then) {
+    var ov = current && current.querySelector(".tour");
+    if (tourGoing) return;
+    if (!ov || still()) { then(); return; }
+    tourGoing = true;
+    function done() { tourGoing = false; then(); }
+    if (all) { ov.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, fill: "forwards" }).onfinish = done; return; }
+    var o = { duration: 200, fill: "forwards" };
+    var slip = ov.querySelector(".tipSlip"), shade = ov.querySelector(".tourShade"), loop = ov.querySelector(".tourLoop"), arrow = ov.querySelector(".tourArrow");
+    if (slip) slip.animate([{ opacity: 1 }, { opacity: 0 }], o);
+    if (arrow) arrow.animate([{ opacity: 1 }, { opacity: 0 }], o);
+    if (loop) { var len = loop.getTotalLength(); loop.style.strokeDasharray = len; loop.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: len }], o); }
+    var lid = shade && shade.querySelector(".tourLid");
+    var a = lid ? lid.animate([{ opacity: 0 }, { opacity: 1 }], o) : null;
+    if (a) a.onfinish = done; else setTimeout(done, 200);
+  }
   function tourKey(e) {
     var f = { ArrowRight: tourNext, ArrowLeft: tourBack, Escape: tourEnd }[e.key];
     if (!f || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -678,8 +731,14 @@
       var hole = !mark ? "" : mark.small ? ellipse(mark.cx, mark.cy, mark.rx * .97, mark.ry * .97) : roundRect(mark.frame, 12);
       shade.appendChild(sv("path", { d: "M0 0H" + W + "V" + H + "H0Z" + hole, fill: "rgba(0,0,0,.62)", "fill-rule": "evenodd" }));
       var animate = prev !== st.tour && !still();
+      // The window opens with the marker and closes before the next slip - it never jumps.
+      if (hole) {
+        var lid = sv("path", { class: "tourLid", d: hole.replace(/^M/, "M"), fill: "rgba(0,0,0,.62)", opacity: 0 });
+        shade.appendChild(lid);
+        if (animate && prev != null) lid.animate([{ opacity: 1 }, { opacity: 0 }], { duration: TOUR_DRAW_MS / 2.5, fill: "backwards" });
+      }
       if (mark) {
-        var loop = sv("path", { d: mark.small ? markerLoop(mark) : roundRect(mark.frame, 12), fill: "none", stroke: "var(--tapeMedium)",
+        var loop = sv("path", { class: "tourLoop", d: mark.small ? markerLoop(mark) : roundRect(mark.frame, 12), fill: "none", stroke: "var(--tapeMedium)",
           "stroke-width": MARKER_WIDTH, "stroke-linecap": "round", "stroke-linejoin": "round" });
         shade.appendChild(loop);
         if (animate) {
@@ -690,6 +749,7 @@
         if (!overlaps(slipRect, markBounds(mark))) {
           var arrow = pencilArrow(slipRect, markBounds(mark));
           if (arrow) {
+            arrow.setAttribute("class", "tourArrow");
             shade.appendChild(arrow);
             if (animate) arrow.animate([{ opacity: 0 }, { opacity: 1 }], { duration: TOUR_DRAW_MS * .45, delay: TOUR_DRAW_MS * .55, fill: "backwards" });
           }
@@ -813,17 +873,24 @@
     var kind = st.settings.noteTypeChoice || "NOTE";
     var tab = st.onDone ? "DONE" : kind;
     var root = h("div", { class: "screen-home" });
-    var gear = iconBtn(settingsIcon(), S("home_open_settings"), function () { go("settings"); });
+    var gear = iconBtn(settingsIcon(), S("home_open_settings"), function () { resetSettingsUi(); go("settings"); });
     gear.setAttribute("data-tour", "SETTINGS");
     // The magnifier slides the search line out of the box and back in (HomeScreen.kt, author 21.11.2026).
     var lens = iconBtn(searchIcon(), S(st.searchOpen ? "search_close" : "search_open"), toggleSearch);
     lens.classList.add("lens");
     if (st.searchOpen) lens.classList.add("open");
+    var socket = h("span", { class: "socket", "aria-hidden": "true", style: { opacity: st.searchOpen ? 1 : 0 } });
+    lens.insertBefore(socket, lens.firstChild);
+    var lensWas = was("lens", !!st.searchOpen);
+    if (lensWas != null && lensWas !== !!st.searchOpen && !still()) after(function () {
+      socket.animate([{ opacity: st.searchOpen ? 0 : 1 }, { opacity: st.searchOpen ? 1 : 0 }], { duration: 220 });
+    });
     lens.setAttribute("aria-pressed", String(!!st.searchOpen));
     root.appendChild(h("div", { class: "row topRow" }, nameplate(), h("div", { class: "row" }, lens, gear)));
     var middle = h("div", { class: "middle grow" }, cardStack(tab), stripArea(tab));
     root.appendChild(middle);
-    root.appendChild(controls(kind));
+    var keys = fold("controls", !st.typing, function () { return controls(kind); });
+    if (keys) { keys.style.flex = "none"; root.appendChild(keys); }
     if (touring()) {
       // The screen below takes no touches, no keyboard and no screen reader while the tips are open.
       Array.prototype.forEach.call(root.children, function (c) { c.inert = true; });
@@ -867,8 +934,29 @@
     } else {
       was("searchOpen", false);
     }
-    var list = h("div", { class: "list scroll grow", "data-scroll": "list" });
+    var list = h("div", { class: "list scroll grow", "data-scroll": "list:" + tab });
     fillList(list, tab, notes, numbers);
+    // Another divider is another pile: the old one fades out as a whole, then the new one fades in (CardStack.kt).
+    if (prevTab != null && prevTab !== tab && !still()) {
+      noFlip = true;
+      after(function (r, old) {
+        var o = old && old.querySelector(".list");
+        if (!o) return;
+        var ghost = o.cloneNode(true);
+        ghost.removeAttribute("data-scroll");
+        ghost.setAttribute("aria-hidden", "true");
+        ghost.inert = true;
+        Object.assign(ghost.style, { position: "absolute", inset: "0", pointerEvents: "none", background: "transparent" });
+        ghost.querySelectorAll("[data-flip]").forEach(function (n) { n.removeAttribute("data-flip"); });
+        box.style.position = "relative";
+        list.parentNode.appendChild(ghost);
+        var was = lastScrolls["list:" + prevTab];
+        ghost.scrollTop = was ? was[0] : 0;
+        Object.assign(ghost.style, { top: list.offsetTop + "px", height: list.offsetHeight + "px", bottom: "auto" });
+        ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 110, fill: "forwards" }).onfinish = function () { ghost.remove(); };
+        list.animate([{ opacity: 0 }, { opacity: 0, offset: 110 / 280 }, { opacity: 1 }], { duration: 280 });
+      });
+    }
     box.appendChild(list);
     col.appendChild(box);
     return col;
@@ -881,12 +969,11 @@
     var shown = notes.filter(function (n) {
       return holds(tab, n) && (matches(n, st.query) || (n.type !== "EVENT" && numberedName(n.type, numbers[n.id]).toLowerCase().indexOf(q) >= 0));
     });
-    if (!shown.length && !st.query.trim() && tab !== "DONE") list.appendChild(emptyCard());
-    else if (!shown.length) list.appendChild(h("p", { class: "bodyMedium variant", role: "status", style: { marginInline: 0, padding: "16px 8px" } },
+    // The dashed card and "nothing found" come and go like the strips (CardStack.kt "empty" / "none").
+    if (!shown.length && !st.query.trim() && tab !== "DONE") { var e = emptyCard(); e.setAttribute("data-flip", "empty"); list.appendChild(e); }
+    else if (!shown.length) list.appendChild(h("p", { class: "bodyMedium variant", role: "status", "data-flip": "none", style: { marginInline: 0, padding: "16px 8px" } },
       st.query.trim() ? S("search_none", st.query.trim()) : S("tab_empty")));
     else shown.forEach(function (n) { list.appendChild(noteStrip(n, numbers[n.id])); });
-    // Space under the last card for the undo tape, so it never hides the last card for good.
-    list.appendChild(h("div", { style: { flex: "none", height: (st.deleted || st.moved) ? "80px" : "0px" } }));
   }
 
   function toggleSearch() {
@@ -904,25 +991,41 @@
   }
 
   function searchLine() {
-    var input = h("input", { type: "search", class: "bodyMedium", placeholder: S("search_hint"), "aria-label": S("search_hint"), value: st.query, enterkeyhint: "search", autocomplete: "off", "data-focus": "search" });
-    var row = h("div", { class: "row search" }, input);
+    var input = h("input", { type: "search", class: "bodyMedium", "aria-label": S("search_hint"), value: st.query, enterkeyhint: "search", autocomplete: "off", "data-focus": "search" });
+    // The hint fades as the first letter comes and back when the line is emptied (CardStack.kt, 0.15 s).
+    var hint = h("span", { class: "bodyMedium variant searchHint", "aria-hidden": "true", style: { opacity: st.query ? 0 : 1 } }, S("search_hint"));
+    var row = h("div", { class: "row search" }, h("div", { class: "grow searchField" }, hint, input));
     var clear = textBtn("×", S("search_clear"), function () { st.query = ""; pendingFocus = '[data-focus="search"]'; render(); });
     var spacer = h("span", { style: { width: "14px", flex: "none" } });
-    row.appendChild(st.query ? clear : spacer);
+    var end = h("span", { class: "row", style: { flex: "none" } }, st.query ? clear : spacer);
+    row.appendChild(end);
+    // The clear key: the old look fades out, then the new one in (fadeSwap).
+    function swapEnd(to) {
+      if (end.firstChild === to) return;
+      if (still()) { end.replaceChild(to, end.firstChild); return; }
+      var out = end.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: "forwards" });
+      out.onfinish = function () { end.textContent = ""; end.appendChild(st.query ? clear : spacer); out.cancel(); end.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 100 }); };
+    }
     input.addEventListener("input", function () {
       st.query = input.value;
       // Only the list follows the typing - the field keeps its focus and keyboard.
-      var list = current.querySelector('[data-scroll="list"]');
+      var list = current.querySelector(".list");
       var tab = st.onDone ? "DONE" : (st.settings.noteTypeChoice || "NOTE");
+      var before = snapFlips(list);
       // Outside render(), so the drawings made after layout (pencil strikes, the dashed frame) run here.
       hooks = [];
       fillList(list, tab, sorted(), kindNumbers());
       var run = hooks;
       hooks = [];
       run.forEach(function (f) { f(current, current); });
-      var hasClear = row.lastChild === clear;
-      if (st.query && !hasClear) row.replaceChild(clear, row.lastChild);
-      if (!st.query && hasClear) row.replaceChild(spacer, row.lastChild);
+      playFlips(current, before);
+      var target = st.query ? 0 : 1;
+      if (+hint.style.opacity !== target) {
+        if (still()) hint.style.opacity = target;
+        else hint.animate([{ opacity: 1 - target }, { opacity: target }], { duration: 150 }).onfinish = function () { hint.style.opacity = target; };
+        hint.style.opacity = target;
+      }
+      swapEnd(st.query ? clear : spacer);
     });
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") input.blur(); });
     return row;
@@ -957,7 +1060,7 @@
     }
     var title = h("span", { class: "titleMedium ellipsis", style: { display: "block", color: done ? "var(--onSurfaceVariant)" : "var(--onSurface)" } }, label);
     var titleBox = h("div", { class: "titleWrap" }, title);
-    if (done) strike(titleBox, title, "strike:" + note.id);
+    strike(titleBox, title, "strike:" + note.id, done);
     var texts = h("div", { class: "texts" }, titleBox);
     if (second) texts.appendChild(h("div", { class: "labelSmall variant ellipsis meta" }, upper(second)));
     paper.appendChild(texts);
@@ -971,7 +1074,7 @@
       sv("path", { d: "M0.875 0.875L5.125 5.5L0.875 10.125" })));
     paper.appendChild(textBtn("×", S("strip_delete_desc", label), function (e) { e.stopPropagation(); deleteNote(note); }));
     var wrap = h("div", { class: "strip", "data-flip": "n" + note.id, style: { paddingTop: tapeRoom + "px" } }, paper,
-      h("div", { class: "typeTape", "aria-hidden": "true" }, h("div", { class: "typeTapeMark", style: { color: "var(--onPrimary)", transform: rot(tilt(-3)) || "none" } }, typeMark(note.type, 18))));
+      h("div", { class: "typeTape", "aria-hidden": "true", style: { top: "calc(50% + " + (tapeRoom / 2) + "px)" } }, h("div", { class: "typeTapeMark", style: { color: "var(--onPrimary)", transform: rot(tilt(-3)) || "none" } }, typeMark(note.type, 18))));
     if (note.type !== "IDEA") {
       var tp = priorityTape(note.priority, 34, 12, "prio");
       tp.style.top = tapeRoom + "px";
@@ -981,29 +1084,35 @@
   }
 
   // A hand-drawn pencil line through the title, drawn left to right when it turns on (Paper.kt handStrike).
-  function strike(box, text, key) {
-    var prev = was(key, true);
-    var svg = sv("svg", { class: "strike", "aria-hidden": "true" });
+  function strike(box, text, key, struck) {
+    if (struck == null) struck = true;
+    var prev = was(key, struck);
+    var moving = prev != null && prev !== struck && !still();
+    if (!struck && !moving) return;
+    var svg = sv("svg", { class: "strike", "aria-hidden": "true", style: "width:100%;height:100%" });
     box.appendChild(svg);
     after(function () {
-      var w = text.scrollWidth > text.offsetWidth ? text.offsetWidth : text.scrollWidth;
-      var hh = text.offsetHeight;
-      var left = -2, right = w + 2, mid = hh / 2;
-      var d = "M" + left + " " + (mid + 1.5);
-      for (var i = 1; i <= 6; i++) {
-        var x = left + (right - left) * i / 6;
-        var wave = i % 2 === 0 ? 0.8 : -0.8;
-        d += "L" + x.toFixed(1) + " " + (mid + 1.5 - 3 * i / 6 + wave).toFixed(1);
-      }
-      svg.setAttribute("width", right + 2);
-      svg.setAttribute("height", hh);
-      var path = sv("path", { d: d, fill: "none", stroke: "var(--onSurface)", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round" });
-      svg.appendChild(path);
-      if (prev === false && !still()) {
+      var base = box.getBoundingClientRect(), shown = text.getBoundingClientRect();
+      var range = document.createRange();
+      range.selectNodeContents(text);
+      Array.prototype.forEach.call(range.getClientRects(), function (r) {
+        if (r.width < 1) return;
+        // A line cut with "…" is struck as far as it shows.
+        var left = r.left - base.left - 2, right = Math.min(r.right, shown.right) - base.left + 2, mid = (r.top + r.bottom) / 2 - base.top;
+        var d = "M" + left.toFixed(1) + " " + (mid + 1.5).toFixed(1);
+        for (var i = 1; i <= 6; i++) {
+          var x = left + (right - left) * i / 6;
+          d += "L" + x.toFixed(1) + " " + (mid + 1.5 - 3 * i / 6 + (i % 2 === 0 ? 0.8 : -0.8)).toFixed(1);
+        }
+        var path = sv("path", { d: d, fill: "none", stroke: "var(--onSurface)", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round" });
+        svg.appendChild(path);
+        if (!moving) return;
         var len = path.getTotalLength();
         path.style.strokeDasharray = len;
-        path.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }], { duration: 260 });
-      }
+        var a = path.animate(struck ? [{ strokeDashoffset: len }, { strokeDashoffset: 0 }] : [{ strokeDashoffset: 0 }, { strokeDashoffset: len }],
+          { duration: 260, fill: "forwards" });
+        if (!struck) a.onfinish = function () { svg.remove(); };
+      });
     });
   }
 
@@ -1055,8 +1164,22 @@
     } else if (st.moved) {
       key = "moved-" + st.moved.note.id + "-" + st.moved.to + "-" + st.moved.start;
       var to = st.moved.to;
-      s = tapeStrip(key, st.moved.start, S("stack_moved", tabName(to)),
-        to !== tab ? pbtn(S("stack_moved_show"), function () { showMoved(to); }, "onInk") : null, dismissMoved);
+      // "Show" goes smoothly once its divider is open (BottomStrip.kt Fold).
+      var showKey = "show:" + key, showWas = was(showKey, to !== tab), show = null;
+      if (to !== tab) show = pbtn(S("stack_moved_show"), function () { showMoved(to); }, "onInk");
+      else if (showWas === true && !still()) {
+        show = pbtn(S("stack_moved_show"), function () {}, "onInk");
+        show.setAttribute("aria-hidden", "true");
+        show.tabIndex = -1;
+        show.style.pointerEvents = "none";
+        after(function () {
+          var hh = show.offsetHeight;
+          show.style.overflow = "hidden";
+          show.animate([{ opacity: 1, maxHeight: hh + "px" }, { opacity: 0, maxHeight: "0px", minHeight: "0px", paddingTop: "0px", paddingBottom: "0px" }],
+            { duration: 220, easing: "ease-in-out", fill: "forwards" }).onfinish = function () { show.remove(); };
+        });
+      }
+      s = tapeStrip(key, st.moved.start, S("stack_moved", tabName(to)), show, dismissMoved);
     }
     var prev = was("strip", key);
     if (s) area.appendChild(s);
@@ -1071,7 +1194,9 @@
           area.appendChild(ghost);
           ghost.animate([{ transform: "none", opacity: 1 }, { transform: "translateY(50%)", opacity: 0 }], { duration: 200, fill: "forwards" }).onfinish = function () { ghost.remove(); };
         }
-        if (s) s.animate([{ transform: "translateY(50%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 240, easing: "ease-out" });
+        // One strip after another: the old one leaves first, so the two never show at once (BottomStrip.kt).
+        if (s) s.animate([{ transform: "translateY(50%)", opacity: 0 }, { transform: "none", opacity: 1 }],
+          { duration: 240, delay: prev !== "none" ? 200 : 0, easing: "ease-out", fill: "backwards" });
       });
     }
     return area;
@@ -1092,7 +1217,7 @@
         sv("path", { d: "M6.96 6.96L17.04 17.04M6.96 17.04L17.04 6.96", stroke: "var(--onSurface)", "stroke-width": 2, "stroke-linecap": "round" })));
     return h("div", { class: "tapeStrip", "data-strip": key },
       h("div", { class: "body" },
-        h("div", { class: "row msg", role: "status", "aria-live": "polite" }, h("span", { class: "bodyMedium grow", style: { color: "var(--onPrimary)" } }, text), action),
+        h("div", { class: "row msg", role: "status", "aria-live": "polite" }, h("span", { class: "bodyMedium grow twoLines", style: { color: "var(--onPrimary)" } }, text), action),
         line),
       rivet);
   }
@@ -1157,7 +1282,7 @@
     replaceNote(st.editing);
     if (rerender) render();
   }
-  var lastCardId = null;
+  var lastCardId = null, lastSheetHeight = 0;
   function closeCard() {
     var card = tidy(st.editing);
     lastCardId = card.id;
@@ -1187,7 +1312,25 @@
     head.appendChild(iconBtn(previewIcon(), S("card_preview_open"), openPreview));
     root.appendChild(head);
     var col = h("div", { class: "cardCol" });
-    col.appendChild(editableCard(note, number));
+    var sheet = editableCard(note, number);
+    var slot = h("div", { class: "col", "data-snap": "sheet", style: { position: "relative" } }, sheet);
+    col.appendChild(slot);
+    var typeWas = was("sheetType:" + note.id, note.type);
+    if (typeWas != null && typeWas !== note.type && !still()) after(function (r, old) {
+      var o = old && old.querySelector('[data-snap="sheet"]');
+      var from = o ? lastSheetHeight : slot.offsetHeight, to = slot.offsetHeight;
+      if (o) {
+        var ghost = o.firstChild.cloneNode(true);
+        ghost.setAttribute("aria-hidden", "true");
+        ghost.inert = true;
+        Object.assign(ghost.style, { position: "absolute", top: "0", left: "50%", transform: "translateX(-50%)", pointerEvents: "none" });
+        slot.appendChild(ghost);
+        ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: "forwards" }).onfinish = function () { ghost.remove(); };
+      }
+      sheet.animate([{ opacity: 0 }, { opacity: 0, offset: .5 }, { opacity: 1 }], { duration: 200 });
+      slot.animate([{ height: from + "px" }, { height: to + "px" }], { duration: 220, easing: "ease-in-out" });
+    });
+    after(function () { lastSheetHeight = slot.offsetHeight; });
     // A list has "Add by voice" inside the card, next to "Add item"; a text card keeps the wide key and the hint.
     if (!hasItems(note.type)) {
       col.appendChild(h("div", { class: "voice" },
@@ -1260,7 +1403,11 @@
       if (type === "TASK" && note.done) strike(box, text, "preview:" + note.id);
       var line = h("div", { class: "row", style: { gap: "10px", marginTop: "6px", paddingRight: "40px" } });
       // A lined note: the title sits on the red header line, like on an index card.
-      if (type === "NOTE") line.style.borderBottom = "1px solid color-mix(in srgb, var(--record) 60%, transparent)";
+      if (type === "NOTE") {
+        line.style.position = "relative";
+        line.appendChild(h("span", { "aria-hidden": "true", style: { position: "absolute", left: 0, right: 0, bottom: "-4.5px", height: "1.5px",
+          background: "color-mix(in srgb, var(--record) 60%, transparent)" } }));
+      }
       if (type === "TASK") line.appendChild(pencilBox(note.done));
       line.appendChild(box);
       content.appendChild(line);
@@ -1299,14 +1446,15 @@
     }
     if (note.byAi) { var stp = stamp(); stp.style.marginTop = "8px"; content.appendChild(stp); }
 
-    var tapeRoom = type !== "IDEA" && st.settings.tiltedPaper ? 14 : 0;
-    var paperBox = h("div", { class: "paperBox", style: { width: paperWidth(type) + "%", paddingTop: tapeRoom + "px" } }, cardPaper(note, content));
-    if (type !== "IDEA") {
+    // IndexCard.kt: a crooked tape takes 16 px above the card, and every tape 4 px on its right.
+    var hasTape = type !== "IDEA";
+    var tapeRoom = hasTape && st.settings.tiltedPaper ? 16 : 0;
+    var paperBox = h("div", { class: "paperBox", style: { width: paperWidth(type) + "%", transform: rot(tilt(type === "IDEA" ? -1.8 : 0)) || "none" } }, cardPaper(note, content));
+    if (hasTape) {
       var tp = priorityTape(note.priority, 64, 20, "cardPrio");
-      tp.style.top = (4 + tapeRoom) + "px";
       paperBox.appendChild(tp);
     }
-    return paperBox;
+    return h("div", { class: "col", style: { paddingTop: tapeRoom + "px", paddingRight: hasTape ? "4px" : "0" } }, paperBox);
   }
 
   function previewIcon() {
@@ -1351,7 +1499,13 @@
         sv("circle", { cx: 11, cy: 11, r: 9, fill: "none", stroke: "var(--rule)", "stroke-width": 2 }),
         sv("circle", { cx: 11, cy: 11, r: 5, fill: "var(--desk)" })));
     }
-    if (type === "EVENT") paper.appendChild(calendarHead(note));
+    if (type === "EVENT") {
+      var day = JSON.stringify([note.dueEpochDay, note.timeMinutes]);
+      paper.appendChild(swap("cal:" + note.id, day, h("div"), function (v) {
+        var p = JSON.parse(v);
+        return calendarHead(Object.assign({}, note, { dueEpochDay: p[0], timeMinutes: p[1] }));
+      }));
+    }
     paper.appendChild(content);
     if (type === "IDEA") {
       paper.appendChild(sv("svg", { class: "pin", viewBox: "0 0 26 26", "aria-hidden": "true" },
@@ -1455,26 +1609,42 @@
     var kind = number != null && type !== "EVENT" ? numberedName(type, number) : typeName(type);
     content.appendChild(h("h2", { class: "labelSmall variant", style: { margin: 0, paddingRight: "52px" } }, upper(kind)));
     content.appendChild(paperField(S("editor_field_title"), note.title, "titleLarge", function (v) { edit({ title: v }); }, { singleLine: true }));
-    if (!hasItems(type) || note.body.trim()) {
-      content.appendChild(paperField(S("editor_field_body"), note.body, "bodyLarge", function (v) { edit({ body: v }); },
-        { minLines: hasItems(type) ? 1 : 3, ruled: type === "NOTE" }));
-    }
+    // A list's text field folds away as soon as it is emptied (EditableCard.kt Fold).
+    var bodyF = fold("body", !hasItems(type) || !!note.body.trim(), function () {
+      return paperField(S("editor_field_body"), note.body, "bodyLarge", function (v) {
+        var gone = hasItems(st.editing.type) && !v.trim();
+        edit({ body: v }, gone);
+      }, { minLines: hasItems(type) ? 1 : 3, ruled: type === "NOTE", key: "body" });
+    });
+    if (bodyF) content.appendChild(bodyF);
     if (hasItems(type)) content.appendChild(itemsEditor(note));
     if (type === "EVENT") content.appendChild(paperField(S("editor_field_place"), note.place || "", "bodyLarge", function (v) { edit({ place: v }); }, { singleLine: true }));
-    if (note.dueEpochDay != null) content.appendChild(removable(S("editor_due", dueText(note.dueEpochDay)), S("editor_remove_due"), function () { edit({ dueEpochDay: null }, true); }));
-    if (note.timeMinutes != null) content.appendChild(removable(S("editor_time", clockTime(note.timeMinutes)), S("editor_remove_time"), function () { edit({ timeMinutes: null }, true); }));
+    var dueF = fold("due", note.dueEpochDay != null, function () { return removable(S("editor_due", dueText(note.dueEpochDay)), S("editor_remove_due"), function () { edit({ dueEpochDay: null }, true); }); });
+    if (dueF) content.appendChild(dueF);
+    var timeF = fold("time", note.timeMinutes != null, function () { return removable(S("editor_time", clockTime(note.timeMinutes)), S("editor_remove_time"), function () { edit({ timeMinutes: null }, true); }); });
+    if (timeF) content.appendChild(timeF);
     if (type === "TASK") {
       content.appendChild(h("button", { type: "button", class: "row toggleRow", role: "checkbox", "aria-checked": String(note.done),
-        onclick: function () { edit({ done: !note.done }, true); } }, pencilBox(note.done), h("span", { class: "bodyLarge" }, S("editor_task_done"))));
+        onclick: function () { edit({ done: !note.done }, true); } }, pencilBox(note.done, "done:" + note.id), h("span", { class: "bodyLarge" }, S("editor_task_done"))));
     }
     if (note.byAi) content.appendChild(stamp());
     // As in the app: a crooked tape sticks out about 14px above the card, so the card keeps that room inside it.
     var tapeRoom = type !== "IDEA" && st.settings.tiltedPaper ? 14 : 0;
     var box = h("div", { class: "paperBox", style: { width: paperWidth(type) + "%", paddingTop: tapeRoom + "px" } }, cardPaper(note, content));
     if (type !== "IDEA") {
+      var prevPrio = was("cardPrio:" + note.id, note.priority);
       var tp = priorityTape(note.priority, 64, 20, "cardPrio");
       tp.style.top = (4 + tapeRoom) + "px";
       box.appendChild(tp);
+      if (prevPrio != null && prevPrio !== note.priority && !still()) {
+        var oldTp = priorityTape(prevPrio, 64, 20, "cardPrio");
+        oldTp.style.top = tp.style.top;
+        box.appendChild(oldTp);
+        after(function () {
+          oldTp.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: "forwards" }).onfinish = function () { oldTp.remove(); };
+          tp.animate([{ opacity: 0 }, { opacity: 0, offset: .5 }, { opacity: 1 }], { duration: 200 });
+        });
+      }
     }
     return box;
   }
@@ -1497,19 +1667,26 @@
     var items = note.items;
     var shopping = note.type === "SHOPPING";
     var el = h("div", { class: "col" });
-    groupedItems(note).forEach(function (g) {
+    var groups = groupedItems(note);
+    var groupsWas = was("groups:" + note.id, groups.map(function (g) { return g.group; }).join());
+    groups.forEach(function (g) {
+      var head = null;
       if (g.group) {
-        el.appendChild(h("div", { style: { height: "14px" }, "aria-hidden": "true" }));
-        el.appendChild(h("h3", { class: "bodySmall bold variant", style: { marginTop: "calc(2px - var(--trim))", marginInline: 0 } }, upper(groupName(g.group))));
+        head = h("div", { class: "col" }, h("div", { style: { height: "14px" }, "aria-hidden": "true" }),
+          h("h3", { class: "bodySmall bold variant", style: { marginTop: "calc(2px - var(--trim))", marginInline: 0 } }, upper(groupName(g.group))));
+        el.appendChild(head);
+        if (groupsWas != null && groupsWas.split(",").indexOf(g.group) < 0 && !still()) after(function () { foldRow(head, true); });
       }
       g.items.forEach(function (x) {
         var i = x.i, item = x.item;
         var itemLabel = S("editor_item_label", i + 1);
         // A long item wraps onto more lines instead of scrolling sideways; a line break would split it, so it is a space.
-        var input = h("textarea", { class: "bodyLarge grow", rows: 1, value: item.text, "aria-label": itemLabel, autocapitalize: "sentences", "data-focus": "item" + i,
+        var input = h("textarea", { class: "bodyLarge", rows: 1, value: item.text, "aria-label": itemLabel, autocapitalize: "sentences", "data-focus": "item" + i,
           style: { paddingBlock: "10px" } });
         oneLine(input);
         autoGrow(input);
+        var cell = h("div", { class: "grow", style: { position: "relative", minWidth: 0 } }, input);
+        fieldStrike(cell, input, item.checked, note.id + ":" + i + ":" + item.text);
         input.addEventListener("input", function () {
           edit({ items: st.editing.items.map(function (it, j) { return j === i ? Object.assign({}, it, { text: input.value }) : it; }) });
         });
@@ -1520,7 +1697,7 @@
             onclick: function () { edit({ items: st.editing.items.map(function (it, j) { return j === i ? Object.assign({}, it, { checked: !it.checked }) : it; }) }, true); } },
             // Keyed by the text too: after a line goes, the next one takes its place without re-drawing its mark.
             pencilBox(item.checked, "item" + note.id + ":" + i + ":" + item.text)),
-          input,
+          cell,
           h("button", { type: "button", class: "box44 titleLarge variant", "aria-label": S("editor_remove_item", i + 1),
             onclick: function () {
               if (removingItem) return;
@@ -1528,6 +1705,7 @@
               if (still()) { drop(); return; }
               removingItem = true;
               foldRow(row, false, drop);
+              if (head && g.items.length === 1) foldRow(head, false);
             } }, h("span", { "aria-hidden": "true" }, "×")));
         if (fresh && !still()) after(function () { foldRow(row, true); });
         el.appendChild(row);
@@ -1552,6 +1730,52 @@
       if (!still() && now - start < 450) requestAnimationFrame(step);
     }
     step(start);
+  }
+
+  // A ticked item in the card view is struck through with the pencil line, drawn on and wiped off (Paper.kt
+  // handStrike, EditableCard.kt) - line by line, measured on a hidden copy of the field's text.
+  function fieldStrike(cell, input, checked, key) {
+    var prev = was("fieldStrike:" + key, checked);
+    var moving = prev != null && prev !== checked && !still();
+    if (!checked && !moving) return;
+    var svg = sv("svg", { class: "strike", "aria-hidden": "true", style: "width:100%;height:100%" });
+    cell.appendChild(svg);
+    function draw(animate) {
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      var cs = getComputedStyle(input);
+      var mirror = h("div", { "aria-hidden": "true" });
+      ["fontFamily", "fontSize", "fontWeight", "letterSpacing", "lineHeight", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "boxSizing"]
+        .forEach(function (p) { mirror.style[p] = cs[p]; });
+      // Laid exactly over the field: the field's trimmed leading pulls it a few px above the cell's top.
+      var at = input.getBoundingClientRect(), cellAt = cell.getBoundingClientRect();
+      Object.assign(mirror.style, { position: "absolute", left: (at.left - cellAt.left) + "px", top: (at.top - cellAt.top) + "px", visibility: "hidden", width: input.offsetWidth + "px",
+        whiteSpace: "pre-wrap", overflowWrap: "break-word" });
+      var span = h("span", null, input.value);
+      mirror.appendChild(span);
+      cell.appendChild(mirror);
+      var base = cell.getBoundingClientRect();
+      Array.prototype.forEach.call(span.getClientRects(), function (r) {
+        if (r.width < 1) return;
+        var left = r.left - base.left - 2, right = r.right - base.left + 2, mid = (r.top + r.bottom) / 2 - base.top;
+        var d = "M" + left.toFixed(1) + " " + (mid + 1.5).toFixed(1);
+        for (var k = 1; k <= 6; k++) {
+          var x = left + (right - left) * k / 6;
+          d += "L" + x.toFixed(1) + " " + (mid + 1.5 - 3 * k / 6 + (k % 2 === 0 ? 0.8 : -0.8)).toFixed(1);
+        }
+        var path = sv("path", { d: d, fill: "none", stroke: "var(--onSurface)", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round" });
+        svg.appendChild(path);
+        if (!animate) return;
+        var len = path.getTotalLength();
+        path.style.strokeDasharray = len;
+        var a = path.animate(checked ? [{ strokeDashoffset: len }, { strokeDashoffset: 0 }] : [{ strokeDashoffset: 0 }, { strokeDashoffset: len }],
+          { duration: 260, easing: "ease-in-out", fill: "forwards" });
+        if (!checked) a.onfinish = function () { svg.remove(); };
+      });
+      mirror.remove();
+    }
+    after(function () { draw(moving); });
+    // Typing in a ticked item moves the line with the words.
+    if (checked) input.addEventListener("input", function () { draw(false); });
   }
 
   // A wide "Show settings" key first; type, priority, Share and Delete only behind it (author 15.11.2026).
@@ -1580,12 +1804,26 @@
     var el = h("div", { class: "col", style: { gap: "18px", padding: "18px 16px 0" } });
     var bar = h("div", { class: "row typeBar hscroll", role: "radiogroup", "data-scroll": "typebar", style: { margin: "0 -16px" } });
     var selEl = null;
+    var prevTypeTape = was("typeTapes", note.type);
     TYPES.forEach(function (t, i) {
       var sel = t === note.type;
+      var name = upper(typeName(t));
+      var face = h("span", { class: "row face labelLarge", style: { transform: sel ? "none" : (rot(tilt(i % 2 === 0 ? -1.6 : 1.2)) || "none") } },
+        h("span", { class: "led" }, h("i")), typeMark(t, 15),
+        h("span", { class: "dual" }, h("span", { class: "plain" }, name), h("span", { class: "bold", "aria-hidden": "true" }, name)));
       var tape = h("button", { type: "button", class: "typeTape" + (sel ? " sel" : ""), role: "radio", "aria-checked": String(sel),
-        onclick: function () { if (!sel) edit(changeType(st.editing, t), true); } },
-        h("span", { class: "row face labelLarge", style: { transform: sel ? "none" : (rot(tilt(i % 2 === 0 ? -1.6 : 1.2)) || "none") } },
-          h("span", { class: "led" }, h("i")), typeMark(t, 15), h("span", null, upper(typeName(t)))));
+        onclick: function () { if (!sel) edit(changeType(st.editing, t), true); } }, face);
+      if (prevTypeTape != null && prevTypeTape !== note.type && (sel || t === prevTypeTape) && !still()) (function (f, on, angle) {
+        after(function () {
+          var o = { duration: 200, easing: "ease-in-out" };
+          var off = { transform: angle || "none", backgroundColor: "var(--card)", borderColor: "var(--outline)", color: "var(--onSurfaceVariant)", boxShadow: "none" };
+          f.animate([on ? off : { transform: "none", backgroundColor: "var(--primary)", borderColor: "var(--primary)", color: "var(--onPrimary)", boxShadow: "0 1px 2px rgba(0,0,0,.3)" }, {}], o);
+          f.querySelector(".plain").animate([{ opacity: on ? 1 : 0 }, { opacity: on ? 0 : 1 }], o);
+          f.querySelector(".bold").animate([{ opacity: on ? 0 : 1 }, { opacity: on ? 1 : 0 }], o);
+          f.querySelector(".led").animate([{ borderColor: on ? "var(--controlEdge)" : "var(--onPrimary)" }, {}], o);
+          f.querySelector(".led i").animate([{ backgroundColor: on ? "var(--rule)" : "var(--record)" }, {}], o);
+        });
+      })(face, sel, rot(tilt(i % 2 === 0 ? -1.6 : 1.2)));
       if (sel) selEl = tape;
       bar.appendChild(tape);
     });
@@ -1600,10 +1838,11 @@
       bar.scrollTo({ left: x, behavior: prevType != null && prevType !== note.type && !still() ? "smooth" : "auto" });
     });
     el.appendChild(h("div", { class: "col", style: { gap: "8px" } }, labelTape(S("editor_field_type")), bar));
-    if (note.type !== "IDEA") {
-      el.appendChild(h("div", { class: "col", style: { gap: "10px" } }, labelTape(S("editor_field_priority")),
-        slide("priority", PRIORITIES, note.priority, priorityName, function (p) { edit({ priority: p }, true); })));
-    }
+    var prioF = fold("prioritySel", note.type !== "IDEA", function () {
+      return h("div", { class: "col", style: { gap: "10px" } }, labelTape(S("editor_field_priority")),
+        slide("priority", PRIORITIES, note.priority, priorityName, function (p) { edit({ priority: p }, true); }));
+    });
+    if (prioF) el.appendChild(prioF);
     el.appendChild(pairOrStack([pbtn(S("card_share"), function (e, b) {
       var n = tidy(st.editing);
       if (navigator.share) {
@@ -1632,44 +1871,99 @@
   function buildSettings() {
     var root = h("div", { class: "screen-settings" });
     root.appendChild(header(S("settings_title"), function () { go("home"); }));
-    var tabs = h("div", { class: "row setTabs hscroll", role: "tablist" });
+    var tabs = h("div", { class: "row setTabs hscroll", role: "tablist", "data-scroll": "setTabs" });
     var prevTab = was("setTab", st.setTab);
-    SET_TABS.forEach(function (t) {
+    var changed = prevTab != null && prevTab !== st.setTab && !still();
+    // The old screen as it stands right now - also half-way through the last switch - read before it goes.
+    var shot = changed && currentScreen === "settings" ? current : null;
+    var oldFaces = shot ? shot.querySelectorAll(".setTab .face") : [];
+    SET_TABS.forEach(function (t, i) {
       var sel = t[0] === st.setTab;
-      var face = h("span", { class: "labelLarge" }, S(t[1]));
-      // The chosen tab rises and turns bold smoothly, the left one sinks back (SettingsScreen.kt).
-      if (prevTab != null && prevTab !== st.setTab && !still() && (sel || t[0] === prevTab)) after(function () {
-        face.animate([sel ? { paddingTop: "10px", paddingBottom: "10px", backgroundColor: "var(--card)", borderColor: "var(--controlEdge)", color: "var(--onSurfaceVariant)", fontWeight: 500 }
-          : { paddingTop: "14px", paddingBottom: "14px", backgroundColor: "var(--cardEdge)", borderColor: "transparent", color: "var(--onSurface)", fontWeight: 700 }, {}],
-          { duration: 200, easing: "ease-in-out" });
-      });
+      // Plain and bold names laid over each other: the tab is always as wide as the bold one (SettingsScreen.kt).
+      var plain = h("span", { class: "plain" }, S(t[1])), bold = h("span", { class: "bold", "aria-hidden": "true" }, S(t[1]));
+      var face = h("span", { class: "labelLarge face" }, h("span", { class: "dual" }, plain, bold));
+      // The chosen tab rises and turns bold smoothly, the left one sinks back - from wherever they are now.
+      if (changed && (sel || t[0] === prevTab)) {
+        var of = oldFaces[i], from, pf;
+        if (of) {
+          var cs = getComputedStyle(of);
+          from = { paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, backgroundColor: cs.backgroundColor, borderColor: cs.borderTopColor, color: cs.color };
+          pf = +getComputedStyle(of.querySelector(".plain")).opacity;
+        } else {
+          from = sel ? { paddingTop: "9px", paddingBottom: "9px", backgroundColor: "var(--card)", borderColor: "var(--controlEdge)", color: "var(--onSurfaceVariant)" }
+            : { paddingTop: "13px", paddingBottom: "13px", backgroundColor: "var(--cardEdge)", borderColor: "transparent", color: "var(--onSurface)" };
+          pf = sel ? 1 : 0;
+        }
+        (function (face, plain, bold, sel, from, pf) {
+          after(function () {
+            var o = { duration: 200, easing: "ease-in-out" };
+            face.animate([from, {}], o);
+            plain.animate([{ opacity: pf }, { opacity: sel ? 0 : 1 }], o);
+            bold.animate([{ opacity: 1 - pf }, { opacity: sel ? 1 : 0 }], o);
+          });
+        })(face, plain, bold, sel, from, pf);
+      }
       tabs.appendChild(h("button", { type: "button", class: "setTab" + (sel ? " sel" : ""), role: "tab", "aria-selected": String(sel),
-        onclick: function () { if (!sel) { st.setTab = t[0]; render(); } } }, face));
+        onclick: function () { if (!sel) { st.setTab = t[0]; resetSettingsUi(); render(); } } }, face));
     });
     root.appendChild(tabs);
     var page = h("div", { class: "setPage" });
     ({ RECORDING: recordingPage, AI: aiPage, LOOK: lookPage, ABOUT: aboutPage })[st.setTab](page);
     var body = h("div", { class: "setBody scroll grow", "data-scroll": "set-" + st.setTab }, page);
-    // One page at a time: the old one fades out first, only then the new one fades in.
-    if (prevTab != null && prevTab !== st.setTab && !still()) {
-      after(function (r, old) {
-        var o = old && old.querySelector(".setBody");
-        if (o) {
-          var ghost = o.firstChild.cloneNode(true);
-          ghost.style.position = "absolute"; ghost.style.left = "0"; ghost.style.right = "0";
-          ghost.style.top = (-o.scrollTop) + "px"; ghost.style.pointerEvents = "none";
+    // One page at a time: the old one fades out first, where it was scrolled to and from how much it showed,
+    // only then the new one fades in (SettingsScreen.kt).
+    if (changed) {
+      var oldBody = shot && shot.querySelector(".setBody"), oldPage = oldBody && oldBody.querySelector(".setPage");
+      var oldTop = oldBody ? oldBody.scrollTop : 0, oldOp = oldPage ? +getComputedStyle(oldPage).opacity : 1;
+      after(function () {
+        if (oldPage && oldOp > 0.01) {
+          var ghost = oldPage.cloneNode(true);
+          ghost.setAttribute("aria-hidden", "true");
+          ghost.inert = true;
+          Object.assign(ghost.style, { position: "absolute", left: "0", right: "0", top: (-oldTop) + "px", pointerEvents: "none", opacity: oldOp });
           body.style.position = "relative";
           body.appendChild(ghost);
-          ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: "forwards" }).onfinish = function () { ghost.remove(); };
+          ghost.animate([{ opacity: oldOp }, { opacity: 0 }], { duration: 100 * oldOp, fill: "forwards" }).onfinish = function () { ghost.remove(); };
         }
-        page.animate([{ opacity: 0 }, { opacity: 0, offset: 100 / 240 }, { opacity: 1 }], { duration: 240 });
+        var wait = oldPage ? 100 * oldOp : 0;
+        page.animate([{ opacity: 0 }, { opacity: 0, offset: wait / (wait + 140) }, { opacity: 1 }], { duration: wait + 140 });
       });
     }
     root.appendChild(body);
     return root;
   }
 
+  // Settings keep their unfolded parts only while their page is open, as rememberSaveable in AnimatedContent:
+  // another page or coming back means everything folded and the key steps unfolded.
+  function resetSettingsUi() {
+    st.explain = {};
+    st.wrong = {};
+    st.drafts = {};
+    PROVIDERS.forEach(function (p) { var a = st.ai[p.id]; a.open = false; a.stepsOpen = true; a.draft = ""; a.models = false; });
+  }
+  // A control whose change resizes the page above it stays under the finger (Fold.kt holdInPlace).
+  function holdInPlace(key, change) {
+    var el = current && current.querySelector('[data-hold="' + key + '"]');
+    var top = el ? el.getBoundingClientRect().top : null;
+    change();
+    var now = current && current.querySelector('[data-hold="' + key + '"]');
+    var sc = now && now.closest(".scroll");
+    if (top != null && sc) sc.scrollTop += now.getBoundingClientRect().top - top;
+  }
+  var flashTimers = {};
+  // "Saved" for 3 s under a field that saves itself when left (AiSettings.kt justSaved).
+  function flash(key) {
+    st.flash[key] = true;
+    renderAfterPress();
+    clearTimeout(flashTimers[key]);
+    flashTimers[key] = setTimeout(function () { st.flash[key] = false; if (st.screen === "settings") render(); }, 3000);
+  }
+  function savedNote(key) {
+    return fold("saved:" + key, !!st.flash[key], function () { return h("span", { class: "bodySmall", role: "status" }, S("ai_model_saved")); });
+  }
+
   function named(el, name) { el.setAttribute("aria-label", name); return el; }
+  function held(key, el) { el.setAttribute("data-hold", key); return el; }
   function section(children) {
     return h("div", { class: "section" }, children);
   }
@@ -1685,6 +1979,15 @@
         onclick: function () { st.explain[key] = !open; render(); } },
         h("span", { class: "underline", style: { opacity: open ? 0 : 1 } }, S("settings_explain")),
         h("span", { class: "underline", style: { opacity: open ? 1 : 0 } }, S("settings_explain_hide"))));
+      // One word out, then the other in - never both half-visible (SettingsScreen.kt, 0.22 s).
+      var wordWas = was("explainWord:" + key, open);
+      if (wordWas != null && wordWas !== open && !still()) {
+        var btn = row.lastChild;
+        after(function () {
+          btn.children[open ? 0 : 1].animate([{ opacity: 1 }, { opacity: 0 }], { duration: 110, fill: "backwards" });
+          btn.children[open ? 1 : 0].animate([{ opacity: 0 }, { opacity: 0, offset: .5 }, { opacity: 1 }], { duration: 220 });
+        });
+      }
     }
     el.appendChild(row);
     if (explains) {
@@ -1753,14 +2056,14 @@
     var s = st.settings;
     var c = [];
     c.push(setting("size", S("settings_text_size"), S("settings_text_size_hint"), null,
-      slide("size", TEXT_SCALES, s.textScale, function (v) { return S("settings_percent", Math.round(v * 100)); }, function (v) { set({ textScale: v }); })));
+      held("size", slide("size", TEXT_SCALES, s.textScale, function (v) { return S("settings_percent", Math.round(v * 100)); }, function (v) { holdInPlace("size", function () { set({ textScale: v }); }); }))));
     c.push(rule());
     c.push(setting("theme", S("settings_theme"), S("settings_theme_hint"), null,
       slide("theme", ["SYSTEM", "LIGHT", "DARK"], s.theme, function (v) { return S("settings_theme_" + v.toLowerCase()); }, function (v) { set({ theme: v }); })));
     c.push(rule());
     c.push(setting("lang", S("settings_app_language"), null, null,
-      slide("lang", ["pl", "en"], st.lang, function (v) { return v === "pl" ? S("language_polish") : S("language_english"); },
-        function (v) { st.notes = translateSamples(st.notes, st.lang, v); st.lang = v; render(); })));
+      held("lang", slide("lang", ["pl", "en"], st.lang, function (v) { return v === "pl" ? S("language_polish") : S("language_english"); },
+        function (v) { holdInPlace("lang", function () { st.notes = translateSamples(st.notes, st.lang, v); st.lang = v; render(); }); }))));
     c.push(rule());
     c.push(setting("motion", S("settings_reduce_motion"), S("settings_reduce_motion_hint"), null,
       lever("motion", s.reduceMotion, function (v) { set({ reduceMotion: v }); }, s.reduceMotion ? S("settings_on") : S("settings_off"), null, S("settings_reduce_motion"))));
@@ -1791,23 +2094,31 @@
     var mode = h("div", { class: "col", style: { paddingBottom: "12px", gap: "8px" } },
       h("span", { class: "titleMedium" }, S("ai_mode")),
       slide("aimode", ["FREE", "CLAUDE"], s.aiMode, function (v) { return S(v === "FREE" ? "ai_mode_free" : "ai_mode_claude"); }, function (v) { set({ aiMode: v }); }));
+    var modeWas = was("aiModeColours", s.aiMode);
     [["FREE", "ai_mode_free"], ["CLAUDE", "ai_mode_claude"]].forEach(function (m) {
-      mode.appendChild(h("p", { class: "bodySmall", style: { margin: 0, color: m[0] === s.aiMode ? "var(--onSurface)" : "var(--onSurfaceVariant)" } },
-        h("b", null, S(m[1])), " - " + S(m[1] + "_hint")));
+      var on = m[0] === s.aiMode;
+      var p = h("p", { class: "bodySmall", style: { margin: 0, color: on ? "var(--onSurface)" : "var(--onSurfaceVariant)" } },
+        h("b", null, S(m[1])), " - " + S(m[1] + "_hint"));
+      if (modeWas != null && modeWas !== s.aiMode && !still()) after(function () { p.animate([{ color: on ? "var(--onSurfaceVariant)" : "var(--onSurface)" }, {}], { duration: 200 }); });
+      mode.appendChild(p);
     });
-    mode.appendChild(ruled(S(paid ? "ai_claude_only_click" : "ai_queue"), "bodySmall", null, { marginTop: "4px" }));
+    mode.appendChild(swap("aiQueue", paid, h("div", { style: { marginTop: "calc(4px - var(--trim-bodySmall, 0px))" } }), function (v) { return ruled(S(v ? "ai_claude_only_click" : "ai_queue"), "bodySmall"); }));
     c.push(mode);
-    var shown = PROVIDERS.filter(function (p) { return paid ? p.id === "ANTHROPIC" : p.free; });
-    c.push(h("div", { class: "col", style: { gap: "12px" } }, shown.map(function (p) {
-      // Paid Claude is on as long as it is chosen above; "off" goes back to the free ones.
-      return paid
-        ? providerCard(p, true, function (v) { if (!v) set({ aiMode: "FREE" }); })
-        : providerCard(p, !!s.aiProviders[p.id], function (v) { s.aiProviders[p.id] = v; render(); });
-    })));
+    // The providers' cards and the limit block: the old set fades out, then the new one in (AiSettings.kt Swap).
+    c.push(swap("aiCards", paid, h("div", { class: "col", style: { gap: "12px" } }), function (v) {
+      return PROVIDERS.filter(function (p) { return v ? p.id === "ANTHROPIC" : p.free; }).map(function (p) {
+        // Paid Claude is on as long as it is chosen above; "off" goes back to the free ones.
+        return v
+          ? providerCard(p, true, function (on) { if (!on) set({ aiMode: "FREE" }); })
+          : providerCard(p, !!s.aiProviders[p.id], function (on) { s.aiProviders[p.id] = on; render(); });
+      });
+    }));
     c.push(h("div", { class: "col", style: { padding: "16px 0 10px", gap: "8px" } },
-      paid ? claudeDay() : h("span", { class: "titleMedium" }, S("ai_limit")),
-      paid ? null : named(counter("ailimit", AI_LIMITS, s.aiDailyLimit, function (v) { return String(v); }, function (v) { set({ aiDailyLimit: v }); }), S("ai_limit")),
-      paid ? null : ruled(S("ai_limit_hint"), "bodySmall"),
+      swap("aiLimit", paid, h("div", { class: "col", style: { gap: "8px" } }), function (v) {
+        return v ? [claudeDay()] : [h("span", { class: "titleMedium" }, S("ai_limit")),
+          named(counter("ailimit", AI_LIMITS, s.aiDailyLimit, function (n) { return String(n); }, function (n) { set({ aiDailyLimit: n }); }), S("ai_limit")),
+          ruled(S("ai_limit_hint"), "bodySmall")];
+      }),
       ruled(S("ai_privacy"), "bodySmall")));
     page.appendChild(section(c));
   }
@@ -1827,7 +2138,12 @@
     if (wf) c.push(wf);
     var bf = fold("aibody" + p.id, a.open, function () { return providerBody(p, a); });
     if (bf) c.push(bf);
-    return h("div", { class: "provider" + (on ? " on" : "") }, c);
+    var card = h("div", { class: "provider" + (on ? " on" : "") }, c);
+    var onWas = was("providerOn:" + p.id, on);
+    if (onWas != null && onWas !== on && !still()) after(function () {
+      card.animate([{ boxShadow: "inset 0 0 0 " + (on ? "1px var(--cardEdge)" : "1.5px var(--controlEdge)") }, {}], { duration: 200 });
+    });
+    return card;
   }
 
   function providerBody(p, a) {
@@ -1863,7 +2179,7 @@
       h("span", { class: "bodySmall variant" }, S("ai_key_hint"))));
     // Model: saved when the field is left; empty = the provider's default.
     var saved = s.aiModels[p.id] || "";
-    var model = h("input", { type: "text", class: "bodyLarge", "aria-label": S("ai_model"), placeholder: p.model, value: saved, autocomplete: "off", spellcheck: "false" });
+    var model = h("input", { type: "text", class: "bodyLarge", "aria-label": S("ai_model"), placeholder: p.model, value: saved, autocomplete: "off", spellcheck: "false", maxlength: 120 });
     model.addEventListener("keydown", function (e) { if (e.key === "Enter") model.blur(); });
     model.addEventListener("change", function () {
       var v = model.value.trim();
@@ -1900,8 +2216,14 @@
       var flow = h("div", { class: "flow" });
       p.saved.forEach(function (m) {
         var picked = m === current;
+        var face = swap("modelTape:" + p.id + ":" + m, picked, h("span", { class: "labelLarge" }), function (v) { return (v ? "✓ " : "") + m; });
+        var pickWas = was("modelPick:" + p.id + ":" + m, picked);
+        if (pickWas != null && pickWas !== picked && !still()) after(function () {
+          face.animate([picked ? { backgroundColor: "var(--card)", borderColor: "var(--controlEdge)", color: "var(--onSurface)" }
+            : { backgroundColor: "var(--primary)", borderColor: "var(--primary)", color: "var(--onPrimary)" }, {}], { duration: 200 });
+        });
         flow.appendChild(h("button", { type: "button", class: "modelTape" + (picked ? " sel" : ""), role: "radio", "aria-checked": String(picked),
-          onclick: function () { st.settings.aiModels[p.id] = m; render(); } }, h("span", { class: "labelLarge" }, (picked ? "✓ " : "") + m)));
+          onclick: function () { st.settings.aiModels[p.id] = m; render(); } }, face));
       });
       return h("div", { class: "col", style: { gap: "8px" } },
         h("span", { class: "bodySmall variant" }, S("ai_free_models_saved")),
@@ -1915,24 +2237,25 @@
     var s = st.settings;
     var dec = function (v) { return st.lang === "pl" ? v.toFixed(2).replace(".", ",") : v.toFixed(2); };
     var input = h("input", { type: "text", inputmode: "decimal", class: "bodyLarge", "aria-label": S("ai_topup"), placeholder: dec(5),
-      value: s.topUpCents != null ? dec(s.topUpCents / 100) : "", autocomplete: "off" });
-    var wrong = h("div");
+      value: st.drafts.topup != null ? st.drafts.topup : s.topUpCents != null ? dec(s.topUpCents / 100) : "", autocomplete: "off", maxlength: 16 });
+    var wrong = fold("wrong:topup", !!st.wrong.topup, function () { return warning(S("ai_topup_wrong")); });
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") input.blur(); });
     input.addEventListener("change", function () {
       // Same rules as ClaudeSpend.parse: dollars with at most two decimals, 0.01 to 10 000, "$" and "usd" allowed.
       var t = input.value.replace(/\$|usd/gi, "").replace(/\s/g, "").replace(",", ".");
-      if (!t) { s.topUpCents = null; s.topUpDay = null; renderAfterPress(); return; }
+      st.drafts.topup = null;
+      if (!t) { s.topUpCents = null; s.topUpDay = null; flash("topup"); return; }
       var m = /^(\d{1,6})(?:\.(\d{1,2}))?$/.exec(t);
       var cents = m ? Number(m[1]) * 100 + Number((m[2] || "").padEnd(2, "0")) : 0;
-      if (cents < 1 || cents > 1000000) { wrong.textContent = ""; wrong.appendChild(warning(S("ai_topup_wrong"))); return; }
-      s.topUpCents = cents; s.topUpDay = todayEpoch(); renderAfterPress();
+      if (cents < 1 || cents > 1000000) { st.drafts.topup = input.value; st.wrong.topup = true; renderAfterPress(); return; }
+      s.topUpCents = cents; s.topUpDay = todayEpoch(); flash("topup");
     });
-    input.addEventListener("input", function () { wrong.textContent = ""; });
+    input.addEventListener("input", function () { st.drafts.topup = input.value; if (st.wrong.topup) { st.wrong.topup = false; render(); } });
     var hint = s.topUpCents != null
       ? S("ai_topup_pln", dec(s.topUpCents / 100 * USD_PLN), new Intl.DateTimeFormat(locale(), { dateStyle: "medium", timeZone: "UTC" }).format(utcDate(s.topUpDay)), rateText(USD_PLN))
       : S("ai_topup_hint");
     return h("div", { class: "col", style: { gap: "4px" } },
-      h("span", { class: "labelLarge variant" }, S("ai_topup")), h("div", { class: "lineField" }, input), wrong,
+      h("span", { class: "labelLarge variant" }, S("ai_topup")), h("div", { class: "lineField" }, input), wrong, savedNote("topup"),
       h("span", { class: "bodySmall variant" }, hint));
   }
 
@@ -1945,23 +2268,24 @@
     var dec = function (v) { return st.lang === "pl" ? v.toFixed(2).replace(".", ",") : v.toFixed(2); };
     var usd = function (v) { return st.lang === "pl" ? dec(v) + " $" : "$" + dec(v); };
     var input = h("input", { type: "text", inputmode: "decimal", class: "bodyLarge", "aria-label": S("ai_day_usd"), placeholder: dec(1),
-      value: s.claudeDayCents != null ? dec(s.claudeDayCents / 100) : "", autocomplete: "off" });
-    var wrong = h("div");
+      value: st.drafts.day != null ? st.drafts.day : s.claudeDayCents != null ? dec(s.claudeDayCents / 100) : "", autocomplete: "off", maxlength: 16 });
+    var wrong = fold("wrong:day", !!st.wrong.day, function () { return warning(S("ai_topup_wrong")); });
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") input.blur(); });
     input.addEventListener("change", function () {
       var t = input.value.replace(/\$|usd/gi, "").replace(/\s/g, "").replace(",", ".");
-      if (!t) { s.claudeDayCents = null; renderAfterPress(); return; }
+      st.drafts.day = null;
+      if (!t) { s.claudeDayCents = null; flash("day"); return; }
       var m = /^(\d{1,6})(?:\.(\d{1,2}))?$/.exec(t);
       var cents = m ? Number(m[1]) * 100 + Number((m[2] || "").padEnd(2, "0")) : 0;
-      if (cents < 1 || cents > 1000000) { wrong.textContent = ""; wrong.appendChild(warning(S("ai_topup_wrong"))); return; }
-      s.claudeDayCents = cents; renderAfterPress();
+      if (cents < 1 || cents > 1000000) { st.drafts.day = input.value; st.wrong.day = true; renderAfterPress(); return; }
+      s.claudeDayCents = cents; flash("day");
     });
-    input.addEventListener("input", function () { wrong.textContent = ""; });
+    input.addEventListener("input", function () { st.drafts.day = input.value; if (st.wrong.day) { st.wrong.day = false; render(); } });
     var today = s.claudeDayCents != null
       ? S("ai_spent_today_of", usd(0), usd(s.claudeDayCents / 100), dec(0))
       : S("ai_spent_today_no_limit", usd(0), dec(0));
     return h("div", { class: "col", style: { gap: "4px" } },
-      h("span", { class: "titleMedium" }, S("ai_day_usd")), h("div", { class: "lineField" }, input), wrong,
+      h("span", { class: "titleMedium" }, S("ai_day_usd")), h("div", { class: "lineField" }, input), wrong, savedNote("day"),
       ruled(S(s.claudeDayCents != null ? "ai_day_usd_hint" : "ai_day_usd_none"), "bodySmall"),
       h("span", { class: "bodySmall", style: { paddingTop: "6px" } }, today + " " + S("ai_rate_rough", rateText(USD_PLN))));
   }
@@ -2054,12 +2378,13 @@
     var old = current;
     var same = old && currentScreen === st.screen;
     // Where things were, so cards that moved glide to their new place (LazyColumn animateItem).
-    var rects = {}, scrolls = {}, focus = null;
+    var rects = {}, scrolls = {}, focus = null, flips = {};
     var a = document.activeElement;
     // A keyboard user's place: focus was on the old screen, or nowhere after the focused key vanished.
     var hadFocus = !!old && !!a && (old.contains(a) || a === document.body);
     if (same) {
-      old.querySelectorAll("[data-flip]").forEach(function (n) { rects[n.getAttribute("data-flip")] = n.getBoundingClientRect().top; });
+      flips = snapFlips(old);
+      Object.keys(flips).forEach(function (k) { rects[k] = flips[k].rect.top; });
       old.querySelectorAll("[data-scroll]").forEach(function (n) { scrolls[n.getAttribute("data-scroll")] = [n.scrollTop, n.scrollLeft]; });
       if (a && old.contains(a)) {
         focus = { key: a.getAttribute("data-focus"), label: a.getAttribute("aria-label"), role: a.getAttribute("role"), cls: a.className,
@@ -2067,17 +2392,20 @@
           sel: "selectionStart" in a && a.type !== "number" ? [a.selectionStart, a.selectionEnd] : null };
       }
     }
-    if (!same && old && currentScreen === "home") {
-      var ol = old.querySelector('[data-scroll="list"]');
-      homeScroll = ol ? ol.scrollTop : 0;
-    }
+    // Every divider keeps its own place in the box (CardStack.kt stackListStates).
+    if (old) old.querySelectorAll('[data-scroll^="list:"]').forEach(function (n) { listScroll[n.getAttribute("data-scroll")] = n.scrollTop; });
+    // The preview lies over the card view in the app, so the card is still where it was when the preview goes.
+    if (!same && old && currentScreen === "card") { var oc = old.querySelector('[data-scroll="card"]'); cardScroll = oc ? oc.scrollTop : 0; }
+    lastScrolls = scrolls;
+    noFlip = false;
     var el = buildScreen();
     el.classList.add("layer");
     if (same) {
       app.replaceChild(el, old);
       el.querySelectorAll("[data-scroll]").forEach(function (n) {
-        var s = scrolls[n.getAttribute("data-scroll")];
+        var k = n.getAttribute("data-scroll"), s = scrolls[k];
         if (s) { n.scrollTop = s[0]; n.scrollLeft = s[1]; }
+        else if (k.indexOf("list:") === 0) n.scrollTop = listScroll[k] || 0;
       });
       var wanted = pendingFocus && hadFocus && el.querySelector(pendingFocus);
       if (wanted) wanted.focus({ preventScroll: true });
@@ -2085,8 +2413,10 @@
     } else {
       transition(old, el, currentScreen, st.screen);
       // Back from a card the list stands where it was (CardStack.kt keeps its scroll state outside).
-      var nl = st.screen === "home" && el.querySelector('[data-scroll="list"]');
-      if (nl) nl.scrollTop = homeScroll;
+      var nl = st.screen === "home" && el.querySelector('[data-scroll^="list:"]');
+      if (nl) nl.scrollTop = listScroll[nl.getAttribute("data-scroll")] || 0;
+      var nc = st.screen === "card" && currentScreen === "preview" && el.querySelector('[data-scroll="card"]');
+      if (nc) nc.scrollTop = cardScroll;
       if (hadFocus && !touring()) arrivalFocus(el, currentScreen);
     }
     pendingFocus = null;
@@ -2096,17 +2426,55 @@
     memo = nextMemo;
     var run = hooks;
     run.forEach(function (f) { f(el, old); });
-    if (same && !still()) {
-      el.querySelectorAll("[data-flip]").forEach(function (n) {
-        var k = n.getAttribute("data-flip");
-        if (k in rects) {
-          var dy = rects[k] - n.getBoundingClientRect().top;
-          if (Math.abs(dy) > 1) n.animate([{ transform: "translateY(" + dy + "px)" }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(.3,1.1,.5,1)" });
-        } else {
-          n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
-        }
-      });
-    }
+    if (same && !noFlip) playFlips(el, flips);
+  }
+
+  // Strips in the box: where each one was before a change, so a moved one glides to its new place, a new one
+  // fades in and a gone one fades out where it stood (LazyColumn animateItem) - also while typing a search.
+  function snapFlips(root) {
+    var out = {};
+    root.querySelectorAll("[data-flip]").forEach(function (n) { out[n.getAttribute("data-flip")] = { node: n, rect: n.getBoundingClientRect() }; });
+    return out;
+  }
+  function playFlips(root, before) {
+    if (still()) return;
+    var seen = {};
+    root.querySelectorAll("[data-flip]").forEach(function (n) {
+      var k = n.getAttribute("data-flip"), b = before[k];
+      seen[k] = true;
+      if (b) {
+        var dy = b.rect.top - n.getBoundingClientRect().top;
+        if (Math.abs(dy) > 1) n.animate([{ transform: "translateY(" + dy + "px)" }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(.3,1.1,.5,1)" });
+      } else {
+        n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
+      }
+    });
+    var list = root.querySelector(".list");
+    if (!list) return;
+    var box = list.getBoundingClientRect();
+    Object.keys(before).forEach(function (k) {
+      if (seen[k]) return;
+      var r = before[k].rect;
+      if (r.bottom < box.top || r.top > box.bottom) return;
+      var ghost = before[k].node.cloneNode(true);
+      ghost.removeAttribute("data-flip");
+      ghost.setAttribute("aria-hidden", "true");
+      ghost.inert = true;
+      // Clipped to the box: a strip fading out must not be drawn over the dividers or the record key.
+      Object.assign(ghost.style, { position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px", margin: "0",
+        pointerEvents: "none", zIndex: 2, clipPath: "inset(" + Math.max(0, box.top - r.top) + "px 0 " + Math.max(0, r.bottom - box.bottom) + "px 0)" });
+      // A task ticked on its strip: the pencil mark still gets drawn while the strip goes (CardStack.kt).
+      var id = +k.slice(1), note = st.notes.filter(function (n) { return n.id === id; })[0];
+      var tick = ghost.querySelector(".tick svg");
+      if (tick && note && note.done && tick.childNodes.length < 2) {
+        var mark = sv("path", { d: "M4.4 10.4L8.8 14.8L17.2 3.6", "stroke-width": 2.4 });
+        tick.appendChild(mark);
+        mark.style.strokeDasharray = 23.1;
+        mark.animate([{ strokeDashoffset: 23.1 }, { strokeDashoffset: 0 }], { duration: 200, fill: "forwards" });
+      }
+      root.appendChild(ghost);
+      ghost.animate([{ opacity: 1 }, { opacity: 1, offset: .35 }, { opacity: 0 }], { duration: 300, fill: "forwards" }).onfinish = function () { ghost.remove(); };
+    });
   }
 
   var FOCUSABLE = "button, [role=button], input, textarea, [tabindex]";
@@ -2118,10 +2486,10 @@
   // one history entry stands for "away from the home screen", so Back closes the card or Settings first.
   // Not inside the demo window on the home page: that page shares the history and its "Close" is history.back(),
   // so an entry from here would make it close only the card or Settings, not the window.
-  var homeScroll = 0, inHistory = false, skipPop = false, ownTab = window.top === window;
+  var listScroll = {}, cardScroll = 0, lastScrolls = {}, noFlip = false, inHistory = false, skipPop = false, ownTab = window.top === window;
   function syncHistory() {
     if (!ownTab) return;
-    var away = st.screen !== "home";
+    var away = st.screen !== "home" || touring();
     try {
       if (away && !inHistory) { history.pushState({ tapedo: 1 }, ""); inHistory = true; }
       else if (!away && inHistory) { inHistory = false; skipPop = true; history.back(); }
@@ -2131,7 +2499,8 @@
     if (skipPop) { skipPop = false; return; }
     inHistory = false;
     hideBubble();
-    if (st.screen !== "home") back();
+    if (touring()) tourBack();
+    else if (st.screen !== "home") back();
   });
 
   function restoreFocus(el, f) {
@@ -2188,10 +2557,22 @@
       app.insertBefore(el, old);
       el.animate([{ opacity: .6 }, { opacity: 1 }], { duration: 300 });
       old.animate([{ transform: "none", opacity: 1 }, { transform: "translateY(100%)", opacity: 0 }], { duration: 220, fill: "forwards" }).onfinish = function () { old.remove(); };
-    } else {
+    } else if (to === "preview") {
+      // The preview fades in over the card view, which stays below it (CardPreview.kt).
       app.appendChild(el);
-      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220 });
-      old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, fill: "forwards" }).onfinish = function () { old.remove(); };
+      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200 }).onfinish = function () { old.remove(); };
+    } else if (from === "preview") {
+      app.insertBefore(el, old);
+      old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: "forwards" }).onfinish = function () { old.remove(); };
+    } else {
+      // Never both at once: the old screen fades out, only then the new one fades in (0.1 s + 0.1 s).
+      app.appendChild(el);
+      var hold = el.animate([{ opacity: 0 }, { opacity: 0 }], { duration: 100, fill: "forwards" });
+      old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: "forwards" }).onfinish = function () {
+        old.remove();
+        hold.cancel();
+        el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 100 });
+      };
     }
   }
 
@@ -2206,8 +2587,18 @@
     else if (st.query) { st.query = ""; render(); }
   }
 
+  // The on-screen keyboard is up while the search line has the focus (WindowInsets.isImeVisible).
+  function keyboardCheck() {
+    var vv = window.visualViewport;
+    var a = document.activeElement;
+    var typing = !!(vv && a && a.getAttribute && a.getAttribute("data-focus") === "search" && window.innerHeight - vv.height > 120);
+    if (typing !== !!st.typing && st.screen === "home") { st.typing = typing; render(); }
+  }
+
   function start() {
     app = document.getElementById("app");
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", keyboardCheck);
+    document.addEventListener("focusout", function () { setTimeout(keyboardCheck, 0); });
     document.addEventListener("keydown", function (e) {
       if (touring()) tourKey(e);
       else if (e.key === "Escape") back();
