@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,7 +74,6 @@ import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.Priority
 import io.github.bakeron.tapedo.ui.cards.PriorityTape
 import io.github.bakeron.tapedo.ui.cards.RuledText
-import io.github.bakeron.tapedo.ui.cards.marginLine
 import io.github.bakeron.tapedo.ui.components.LabelTape
 import io.github.bakeron.tapedo.ui.components.PairOrStack
 import io.github.bakeron.tapedo.ui.components.PaperButton
@@ -136,11 +136,16 @@ fun FirstStepsOverlay(
     /** Recording ends only with the key (Settings) - the first slip must not promise "ends by itself". */
     endsOnStop: Boolean = false,
 ) {
-    val current = FirstStep.entries[step]
-    val last = step == FirstStep.entries.lastIndex
     val colors = TapedoTheme.colors
     val reduceMotion = TapedoTheme.reduceMotion
     BackHandler(onBack = onBack)
+
+    // The slip on screen lags [step] while the old one goes: it fades and its marker winds back, the window
+    // in the shade closes, and only then the next slip comes (author 21.11.2026: no slip may just blink).
+    var shown by remember { mutableIntStateOf(step) }
+    var leaving by remember { mutableStateOf(false) }
+    val current = FirstStep.entries[shown]
+    val last = shown == FirstStep.entries.lastIndex
 
     var origin by remember { mutableStateOf(Offset.Zero) }
     val target = current.spot?.let { spots.bounds[it] }?.translate(-origin)
@@ -150,9 +155,16 @@ fun FirstStepsOverlay(
     val drawn = remember { Animatable(if (reduceMotion) 1f else 0f) }
     LaunchedEffect(step, reduceMotion) {
         if (reduceMotion) {
+            shown = step
             drawn.snapTo(1f)
         } else {
-            drawn.snapTo(0f)
+            if (shown != step) {
+                leaving = true
+                drawn.animateTo(0f, tween((UNDRAW_MS * drawn.value).toInt()))
+                shown = step
+            }
+            // Also when a quick "Back" returned to the slip still on screen before it was gone.
+            leaving = false
             drawn.animateTo(1f, tween(DRAW_MS))
         }
     }
@@ -162,6 +174,9 @@ fun FirstStepsOverlay(
     val keys = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { keys.requestFocus() } }
 
+    // How far the slip and the window in the shade are shown: going, they follow the marker evenly; coming,
+    // they are fully there while the marker still draws.
+    val fade = { if (leaving) drawn.value else (drawn.value * 2.5f).coerceAtMost(1f) }
     val title = stringResource(R.string.first_steps_pane)
     val marker = colors.tapeMedium
     val scrim = Color.Black.copy(alpha = SCRIM_ALPHA)
@@ -198,6 +213,14 @@ fun FirstStepsOverlay(
                 }
                 drawPath(shade, scrim)
                 if (mark != null) {
+                    // The window opens with the marker and closes before the next slip - it never jumps.
+                    val open = fade()
+                    if (open < 1f) {
+                        val hole = Path().apply {
+                            if (mark.small) addOval(mark.oval(0.97f)) else addRoundRect(RoundRect(mark.frame, CornerRadius(12.dp.toPx())))
+                        }
+                        drawPath(hole, scrim.copy(alpha = SCRIM_ALPHA * (1f - open)))
+                    }
                     drawMarker(markerLoop(mark), drawn.value, marker)
                     if (!slip.overlaps(mark.bounds)) {
                         drawArrow(slip, mark.bounds, ((drawn.value - 0.55f) / 0.45f).coerceIn(0f, 1f), marker)
@@ -211,12 +234,12 @@ fun FirstStepsOverlay(
             content = {
                 TipSlip(
                     step = current,
-                    index = step,
+                    index = shown,
                     last = last,
                     onNext = onNext,
                     onSkip = onSkip,
                     endsOnStop = endsOnStop,
-                    modifier = Modifier.graphicsLayer { alpha = (drawn.value * 2.5f).coerceAtMost(1f) },
+                    modifier = Modifier.graphicsLayer { alpha = fade() },
                 )
             },
             modifier = Modifier.fillMaxSize(),
@@ -280,7 +303,6 @@ private fun TipSlip(
                 MaterialTheme.typography.bodyMedium,
                 scheme.onSurface,
                 colors.rule,
-                Modifier.marginLine(colors.record.copy(alpha = 0.5f)),
             )
         }
         if (step == FirstStep.PRIORITY) PriorityLegend()
@@ -439,6 +461,7 @@ private fun DrawScope.drawArrow(slip: Rect, spot: Rect, progress: Float, color: 
 }
 
 private const val DRAW_MS = 520
+private const val UNDRAW_MS = 200
 private const val SCRIM_ALPHA = 0.62f
 private const val LOOP_POINTS = 72
 private const val HEAD_ANGLE = 0.5f

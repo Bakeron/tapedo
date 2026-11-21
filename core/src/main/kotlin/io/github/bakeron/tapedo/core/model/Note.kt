@@ -33,7 +33,7 @@ enum class NoteType {
 
 /** Shop sections for [NoteType.SHOPPING] items. Stored as names, shown translated by the app. */
 @Serializable
-enum class ShoppingGroup { PRODUCE, BAKERY, DAIRY, MEAT, FROZEN, PANTRY, DRINKS, HOUSEHOLD, OTHER }
+enum class ShoppingGroup { PRODUCE, BAKERY, DAIRY, MEAT, FROZEN, PANTRY, SPICES, DRINKS, HOUSEHOLD, OTHER }
 
 @Serializable
 data class ChecklistItem(

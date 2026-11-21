@@ -3,6 +3,7 @@ package io.github.bakeron.tapedo.core.rules
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.model.Priority
 import io.github.bakeron.tapedo.core.model.ShoppingGroup
+import io.github.bakeron.tapedo.core.time.EpochDays
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -136,6 +137,23 @@ class RuleBasedStructurerTest {
     }
 
     @Test
+    fun `spices get their own section, the vegetable pepper stays in produce`() {
+        for (spice in listOf("Oregano", "Bazylia", "Kurkuma", "Cynamon", "Sól", "Pieprz czarny", "Papryka słodka", "Liść laurowy", "Ziele angielskie")) {
+            assertEquals(spice, ShoppingGroup.SPICES, ShoppingGroups.groupOf(spice))
+        }
+        assertEquals(ShoppingGroup.PRODUCE, ShoppingGroups.groupOf("Papryka czerwona"))
+        assertEquals(ShoppingGroup.DRINKS, ShoppingGroups.groupOf("Herbata ziołowa"))
+        assertEquals(ShoppingGroup.PRODUCE, ShoppingGroups.groupOf("Vegetables"))
+    }
+
+    @Test
+    fun `the order of spoken items does not change their sections`() {
+        val one = rules.structure("Kup burak, papier toaletowy, oregano, mleko", saturday, now).single()
+        val two = rules.structure("Kup mleko, oregano, papier toaletowy, burak", saturday, now).single()
+        assertEquals(one.items.associate { it.text to it.group }, two.items.associate { it.text to it.group })
+    }
+
+    @Test
     fun `list words produce a checklist titled before the colon`() {
         val list = rules.structure("Lista na wyjazd: ręczniki, krem i ładowarka", saturday, now).single()
         assertEquals(NoteType.CHECKLIST, list.type)
@@ -237,6 +255,52 @@ class RuleBasedStructurerTest {
         assertEquals(saturday + 2, rules.detectDueDay("pojutrze wieczorem", saturday))
         assertEquals(saturday + 1, rules.detectDueDay("tomorrow at 9", saturday))
         assertNull(rules.detectDueDay("bez terminu", saturday))
+    }
+
+    @Test
+    fun `calendar dates said anywhere in the recording`() {
+        val oct25of2028 = EpochDays.fromCivil(2028, 10, 25)
+        assertEquals(oct25of2028, rules.detectDueDay("25 październik 2028", saturday))
+        assertEquals(oct25of2028, rules.detectDueDay("kino Helios, film o ogórku, 25 października 2028 o 18", saturday))
+        assertEquals(EpochDays.fromCivil(2026, 11, 25), rules.detectDueDay("dentysta 25 listopada", saturday))
+        // Already past this year - next year's.
+        assertEquals(EpochDays.fromCivil(2027, 3, 1), rules.detectDueDay("1 marca", saturday))
+        assertEquals(EpochDays.fromCivil(2026, 11, 25), rules.detectDueDay("meeting on November 25th", saturday))
+        assertEquals(EpochDays.fromCivil(2026, 12, 3), rules.detectDueDay("3rd of December", saturday))
+        assertEquals(EpochDays.fromCivil(2026, 11, 25), rules.detectDueDay("przegląd auta 25.11", saturday))
+        assertEquals(EpochDays.fromCivil(2028, 10, 25), rules.detectDueDay("25.10.2028", saturday))
+        assertNull(rules.detectDueDay("o 10.30 spotkanie", saturday))
+        assertNull(rules.detectDueDay("kup 1.5 litra wody", saturday))
+        assertNull(rules.detectDueDay("31 listopada", saturday))
+    }
+
+    @Test
+    fun `in a few days or weeks`() {
+        assertEquals(saturday + 7, rules.detectDueDay("oddać książkę za tydzień", saturday))
+        assertEquals(saturday + 3, rules.detectDueDay("za 3 dni", saturday))
+        assertEquals(saturday + 14, rules.detectDueDay("za dwa tygodnie", saturday))
+        assertEquals(saturday + 14, rules.detectDueDay("in 2 weeks", saturday))
+        assertEquals(saturday + 7, rules.detectDueDay("in a week", saturday))
+    }
+
+    @Test
+    fun `hours said as words`() {
+        assertEquals(10 * 60, rules.detectTime("spotkanie o dziesiątej"))
+        assertEquals(19 * 60, rules.detectTime("o siódmej wieczorem"))
+        assertEquals(21 * 60, rules.detectTime("o godzinie dwudziestej pierwszej"))
+        assertEquals(12 * 60, rules.detectTime("obiad w południe"))
+        assertEquals(0, rules.detectTime("start o północy"))
+        assertNull(rules.detectTime("zapytaj o drugiej stronie umowy"))
+    }
+
+    @Test
+    fun `an event with the date in the middle gets its date and hour`() {
+        val event = rules.structure(
+            "Kino Helios, film o ogórku, 25 października 2028 o 18, kupić bilety wcześniej",
+            saturday, now, NoteType.EVENT,
+        ).single()
+        assertEquals(EpochDays.fromCivil(2028, 10, 25), event.dueEpochDay)
+        assertEquals(18 * 60, event.timeMinutes)
     }
 
     @Test

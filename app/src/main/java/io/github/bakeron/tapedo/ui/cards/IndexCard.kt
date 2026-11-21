@@ -154,12 +154,7 @@ fun IndexCard(
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = if (compact) 4 else Int.MAX_VALUE,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .padding(top = 6.dp)
-                            // Lists and receipts have their own ruling; the idea slip is plain.
-                            .then(
-                                if (type.hasItems || type == NoteType.IDEA) Modifier else Modifier.marginLine(colors.record.copy(alpha = 0.5f)),
-                            ),
+                        modifier = Modifier.padding(top = 6.dp),
                     )
                 }
 

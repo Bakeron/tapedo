@@ -9,12 +9,18 @@ import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusProperties
@@ -28,6 +34,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -90,6 +99,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -154,6 +164,22 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
         }
     }
     SideEffect { viewModel.stripMs = stripMs }
+    // The first frame waits for the settings and the cards (author 21.11.2026: the start showed empty dividers and
+    // "Goes to: Notes" for a moment, then jumped). The system's launch screen stays meanwhile; never longer than
+    // START_HOLD_MS, so a slow disk cannot keep the app blank.
+    val view = LocalView.current
+    var holdGiveUp by remember { mutableStateOf(false) }
+    val ready = holdGiveUp || (settings != null && stack !is StackState.Loading)
+    DisposableEffect(ready) {
+        if (ready) return@DisposableEffect onDispose { }
+        val hold = android.view.ViewTreeObserver.OnPreDrawListener { false }
+        view.viewTreeObserver.addOnPreDrawListener(hold)
+        onDispose { view.viewTreeObserver.removeOnPreDrawListener(hold) }
+    }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(START_HOLD_MS)
+        holdGiveUp = true
+    }
     // Screen off or another app: write what is open now - the phone may close Tapedo in the background.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onBackground() }
 
@@ -190,7 +216,10 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
     var tourStep by rememberSaveable { mutableIntStateOf(0) }
     // The search and the place in the box outlive opening a card and recording - both swap the box out.
     var stackQuery by rememberSaveable { mutableStateOf("") }
-    val stackScroll = rememberLazyListState()
+    // The search line shows only after the magnifier (author 21.11.2026) - the box keeps its room otherwise.
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    // Each divider keeps its own place in the box.
+    val stackScrolls = remember { stackListStates() }
     var tourClosed by rememberSaveable(settings?.firstStepsSeen) { mutableStateOf(false) }
     val touring = settings?.firstStepsSeen == false && !tourClosed &&
         screen == HomeShown.BOX && recording !is RecordingState.Active
@@ -299,18 +328,32 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             pauseSeconds = settings?.pauseSeconds ?: AppSettings().pauseSeconds,
             query = stackQuery,
             onQueryChange = { stackQuery = it },
-            listState = stackScroll,
+            listStates = stackScrolls,
+            searchOpen = searchOpen,
+            onToggleSearch = {
+                // Closing also forgets the words - a hidden filter would hide cards with no sign why.
+                if (searchOpen) stackQuery = ""
+                searchOpen = !searchOpen
+            },
         )
     }
     }
     }
-    if (touring) {
+    // The shade and the slip fade in and out as one - closed, the last slip stays while it goes.
+    val tourShown = remember { intArrayOf(0) }
+    if (touring) tourShown[0] = tourStep
+    AnimatedVisibility(
+        visible = touring,
+        enter = if (stillNow) EnterTransition.None else fadeIn(tween(SWAP_MS)),
+        exit = if (stillNow) ExitTransition.None else fadeOut(tween(SWAP_MS)),
+    ) {
         FirstStepsOverlay(
-            step = tourStep,
+            step = tourShown[0],
             spots = tourSpots,
-            onNext = { if (tourStep == FirstStep.entries.lastIndex) finishTour() else tourStep++ },
-            onBack = { if (tourStep == 0) finishTour() else tourStep-- },
-            onSkip = finishTour,
+            // Keys pressed while the closed tips fade away do nothing.
+            onNext = { if (touring) { if (tourStep == FirstStep.entries.lastIndex) finishTour() else tourStep++ } },
+            onBack = { if (touring) { if (tourStep == 0) finishTour() else tourStep-- } },
+            onSkip = { if (touring) finishTour() },
             endsOnStop = settings?.recordingEnd == RecordingEnd.STOP_BUTTON,
         )
     }
@@ -318,6 +361,9 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
 }
 
 private enum class HomeShown { BOX, REVIEW, CARD }
+
+private const val START_HOLD_MS = 1500L
+private const val KEYS_MS = 160
 
 /**
  * Home: the card box (or the live recording) in the middle - its open divider is where the next recording
@@ -367,7 +413,9 @@ fun HomeScreen(
     pauseSeconds: Int = 2,
     query: String = "",
     onQueryChange: (String) -> Unit = {},
-    listState: LazyListState = rememberLazyListState(),
+    listStates: Map<StackTab, LazyListState> = remember { stackListStates() },
+    searchOpen: Boolean = false,
+    onToggleSearch: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val isRecording = recording is RecordingState.Active
@@ -434,7 +482,9 @@ fun HomeScreen(
                     onDelete = onDeleteCard,
                     query = query,
                     onQueryChange = onQueryChange,
-                    listState = listState,
+                    listStates = listStates,
+                    searchOpen = searchOpen,
+                    onCloseSearch = onToggleSearch,
                     top = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             FoldValue(recording as? RecordingState.Failed) { failed ->
@@ -464,9 +514,7 @@ fun HomeScreen(
           }
         }
     }
-    val controls = @Composable { scope: ColumnScope ->
-        with(scope) { RecordControls(recording, kind, pauseSeconds, onRecordKey) }
-    }
+    val controls = @Composable { _: ColumnScope -> RecordControls(recording, kind, pauseSeconds, onRecordKey) }
 
     BoxWithConstraints(
         Modifier
@@ -485,14 +533,45 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Nameplate(stringResource(R.string.app_name))
-                IconButton(onClick = onOpenSettings, modifier = Modifier.tourSpot(TourSpot.SETTINGS)) {
-                    Icon(painterResource(R.drawable.ic_settings), contentDescription = stringResource(R.string.home_open_settings))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Open: the magnifier sits in a pressed-in socket, like a latched recorder key.
+                    val socket by animateFloatAsState(
+                        targetValue = if (searchOpen) 1f else 0f,
+                        animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(SWAP_MS),
+                        label = "search key",
+                    )
+                    val edge = TapedoTheme.colors.controlEdge
+                    val sunk = TapedoTheme.colors.cardEdge
+                    IconButton(
+                        onClick = onToggleSearch,
+                        enabled = !isRecording,
+                        modifier = Modifier.drawBehind {
+                            if (socket > 0f) {
+                                drawCircle(sunk.copy(alpha = socket), radius = 19.dp.toPx())
+                                drawCircle(edge.copy(alpha = socket), radius = 19.dp.toPx(), style = Stroke(1.dp.toPx()))
+                            }
+                        },
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.ic_search),
+                            contentDescription = stringResource(if (searchOpen) R.string.search_close else R.string.search_open),
+                        )
+                    }
+                    IconButton(onClick = onOpenSettings, modifier = Modifier.tourSpot(TourSpot.SETTINGS)) {
+                        Icon(painterResource(R.drawable.ic_settings), contentDescription = stringResource(R.string.home_open_settings))
+                    }
                 }
             }
+            // The keyboard pushes the record controls aside and gives them back with a quick slide, not a jump.
+            val still = TapedoTheme.reduceMotion
             if (landscape) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     middle(Modifier.weight(1f).fillMaxHeight())
-                    if (!typing) {
+                    AnimatedVisibility(
+                        visible = !typing,
+                        enter = if (still) EnterTransition.None else expandHorizontally(tween(KEYS_MS)) + fadeIn(tween(KEYS_MS)),
+                        exit = if (still) ExitTransition.None else shrinkHorizontally(tween(KEYS_MS)) + fadeOut(tween(KEYS_MS)),
+                    ) {
                         Column(
                             Modifier.width(controlsWidth).fillMaxHeight().verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.Center,
@@ -501,58 +580,78 @@ fun HomeScreen(
                 }
             } else {
                 middle(Modifier.weight(1f).fillMaxWidth())
-                if (!typing) controls(this)
+                AnimatedVisibility(
+                    visible = !typing,
+                    enter = if (still) EnterTransition.None else expandVertically(tween(KEYS_MS)) + fadeIn(tween(KEYS_MS)),
+                    exit = if (still) ExitTransition.None else shrinkVertically(tween(KEYS_MS)) + fadeOut(tween(KEYS_MS)),
+                ) {
+                    Column { controls(this) }
+                }
             }
         }
     }
 }
 
-/** The pause rule and the record key with its tape counter. */
+/**
+ * The record key in the middle, what used to stand above and under it on its sides (author 21.11.2026: the
+ * block took room the card box needs) - on the left where the recording goes, on the right the key's name
+ * (or "Cancel", or the tape counter) and the pause rule. Both sides are equally wide, so the key stays centred.
+ */
 @Composable
-private fun ColumnScope.RecordControls(
+private fun RecordControls(
     recording: RecordingState,
     kind: NoteType,
     pauseSeconds: Int,
     onRecordKey: () -> Unit,
 ) {
     val isRecording = recording is RecordingState.Active
-    // Where the recording goes, said before it starts (author 10.11.2026: a recording made on "Done" landed
-    // on another divider without a word) - with the divider's own sign.
-    Fold(!isRecording, Modifier.align(Alignment.CenterHorizontally)) {
-        val into = stringResource(R.string.home_record_into, stringResource(tabNameRes(StackTab.of(kind))))
-        Row(
-            Modifier
-                .padding(start = 20.dp, end = 20.dp, top = 14.dp)
-                .semantics(mergeDescendants = true) { contentDescription = into },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            TypeMark(kind, MaterialTheme.colorScheme.onSurface, size = 16.dp)
-            Text(
-                into,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
-    // The pause rule (author 08.11.2026): said up front, so a list in one item is no surprise.
-    // Air above: it must not stick to the last card of the box.
-    Text(
-        if (pauseSeconds > 0) stringResource(R.string.home_pause_rule, pauseSeconds) else stringResource(R.string.home_pause_off),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.align(Alignment.CenterHorizontally).padding(start = 20.dp, end = 20.dp, top = if (isRecording) 14.dp else 4.dp),
-    )
-
+    val stillNow = TapedoTheme.reduceMotion
     // During "3, 2, 1" nothing is recorded yet: the key says plainly that it cancels (author 11.11.2026 - a dimmed
     // key looked switched off, and "Record" pressed by mistake had no visible way out).
     val waiting = (recording as? RecordingState.Active)?.countdown?.let { it > 0 } == true
-    Column(
-        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val counter = (recording as? RecordingState.Active)?.let {
-            stringResource(R.string.record_counter, clock(it.elapsedSeconds), clock(it.limitSeconds))
+        // Where the recording goes, said before it starts (author 10.11.2026: a recording made on "Done" landed
+        // on another divider without a word) - with the divider's own sign.
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            // Faded out, not removed, while recording - the key must not move.
+            val shown by animateFloatAsState(
+                targetValue = if (isRecording) 0f else 1f,
+                animationSpec = if (stillNow) snap() else tween(SWAP_MS),
+                label = "goes to",
+            )
+            run {
+                val name = stringResource(tabNameRes(StackTab.of(kind)))
+                val into = stringResource(R.string.home_record_into, name)
+                Column(
+                    Modifier
+                        .graphicsLayer { alpha = shown }
+                        .then(
+                            if (isRecording) Modifier.clearAndSetSemantics { }
+                            else Modifier.semantics(mergeDescendants = true) { contentDescription = into },
+                        ),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    Text(
+                        stringResource(R.string.home_record_into_label),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.End,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        TypeMark(kind, MaterialTheme.colorScheme.onSurface, size = 16.dp)
+                        Text(
+                            name,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
         }
         RecordButton(
             recording = isRecording,
@@ -569,37 +668,64 @@ private fun ColumnScope.RecordControls(
             onClick = onRecordKey,
             modifier = Modifier.tourSpot(TourSpot.RECORD),
         )
-        Spacer(Modifier.height(8.dp))
-        // Under the key: its name, "Cancel" during the countdown, the tape counter while recording - each fades
-        // into the next. The key already says all of it to screen readers.
-        val under = when {
-            waiting -> UnderKey.CANCEL
-            counter != null -> UnderKey.COUNTER
-            else -> UnderKey.NAME
-        }
-        val lastCounter = remember { arrayOf("") }
-        if (counter != null) lastCounter[0] = counter
-        val stillNow = TapedoTheme.reduceMotion
-        AnimatedContent(
-            targetState = under,
-            transitionSpec = { fadeSwap(stillNow) },
-            contentAlignment = Alignment.Center,
-            label = "under the key",
-        ) { shown ->
-            when (shown) {
-                UnderKey.COUNTER -> CounterDisplay(counter ?: lastCounter[0], Modifier.clearAndSetSemantics { })
-                UnderKey.CANCEL -> Text(
-                    text = stringResource(R.string.record_cancel),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = TapedoTheme.colors.record,
-                    modifier = Modifier.clearAndSetSemantics { },
-                )
-                UnderKey.NAME -> Text(
-                    text = stringResource(R.string.record_start),
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.clearAndSetSemantics { },
-                )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val counter = (recording as? RecordingState.Active)?.let {
+                stringResource(R.string.record_counter, clock(it.elapsedSeconds), clock(it.limitSeconds))
+            }
+            // The key's name, "Cancel" during the countdown, the tape counter while recording - each fades into
+            // the next. The key already says all of it to screen readers.
+            val under = when {
+                waiting -> UnderKey.CANCEL
+                counter != null -> UnderKey.COUNTER
+                else -> UnderKey.NAME
+            }
+            val lastCounter = remember { arrayOf("") }
+            if (counter != null) lastCounter[0] = counter
+            AnimatedContent(
+                targetState = under,
+                transitionSpec = { fadeSwap(stillNow) },
+                contentAlignment = Alignment.CenterStart,
+                label = "beside the key",
+            ) { shown ->
+                when (shown) {
+                    UnderKey.COUNTER -> CounterDisplay(counter ?: lastCounter[0], Modifier.clearAndSetSemantics { })
+                    UnderKey.CANCEL -> Text(
+                        text = stringResource(R.string.record_cancel),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TapedoTheme.colors.record,
+                        modifier = Modifier.clearAndSetSemantics { },
+                    )
+                    UnderKey.NAME -> Text(
+                        text = stringResource(R.string.record_start),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clearAndSetSemantics { },
+                    )
+                }
+            }
+            // A short tip only where it helps (author 21.11.2026): the pause rule only splits lists, so it shows on
+            // shopping and lists. Events and tasks say what the rules listen for; notes and ideas need nothing.
+            val hint = when (kind) {
+                NoteType.SHOPPING, NoteType.CHECKLIST ->
+                    if (pauseSeconds > 0) stringResource(R.string.home_pause_rule, pauseSeconds) else stringResource(R.string.home_pause_off)
+                NoteType.EVENT -> stringResource(R.string.home_hint_event)
+                NoteType.TASK -> stringResource(R.string.home_hint_task)
+                NoteType.NOTE, NoteType.IDEA -> ""
+            }
+            AnimatedContent(
+                targetState = hint,
+                transitionSpec = { fadeSwap(stillNow).let { if (stillNow) it using null else it } },
+                contentAlignment = Alignment.CenterStart,
+                label = "tip beside the key",
+            ) { shownHint ->
+                if (shownHint.isNotEmpty()) {
+                    Text(
+                        shownHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -925,18 +1051,18 @@ private fun Screw() {
     }
 }
 
-/** The tape counter in a small recessed display window (amber digits in Panel, graphite in Paper), with the REC lamp. */
+/** The tape counter in a small recessed display window (amber digits in Panel, graphite in Paper), under the REC lamp. */
 @Composable
 private fun CounterDisplay(text: String, modifier: Modifier = Modifier) {
     val colors = TapedoTheme.colors
     val shape = RoundedCornerShape(3.dp)
-    Row(
+    // The lamp above the digits: the window has to fit beside the key on a narrow phone.
+    Column(
         modifier
             .background(colors.display, shape)
             .border(1.dp, colors.controlEdge, shape)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         RecLamp()
         Text(

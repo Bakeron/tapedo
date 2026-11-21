@@ -31,6 +31,8 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.sp
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.ui.cards.TypeMark
@@ -45,6 +47,8 @@ import io.github.bakeron.tapedo.ui.theme.TapedoTheme
  * `null` is "auto" - the rules / AI pick the type from the words. For screen readers it is a radio group.
  *
  * @param includeAuto false in the card editor - a saved card always has a concrete type.
+ * @param bleed how far the row reaches out past its own bounds on both sides, up to the screen's edges - the
+ *   tapes slide away there, not at the page margin (author 21.11.2026); they rest where they did before.
  */
 @Composable
 fun TypeTapeBar(
@@ -52,6 +56,7 @@ fun TypeTapeBar(
     onSelect: (NoteType?) -> Unit,
     modifier: Modifier = Modifier,
     includeAuto: Boolean = true,
+    bleed: Dp = 0.dp,
 ) {
     val options: List<NoteType?> = (if (includeAuto) listOf(null) else emptyList()) + NoteType.entries
     val index = options.indexOf(selected).coerceAtLeast(0)
@@ -71,9 +76,21 @@ fun TypeTapeBar(
     }
 
     LazyRow(
-        modifier = modifier.fillMaxWidth().selectableGroup(),
+        modifier = modifier
+            .fillMaxWidth()
+            .layout { measurable, constraints ->
+                val out = bleed.roundToPx()
+                val wide = if (constraints.hasBoundedWidth) {
+                    constraints.copy(minWidth = constraints.maxWidth + 2 * out, maxWidth = constraints.maxWidth + 2 * out)
+                } else {
+                    constraints
+                }
+                val placeable = measurable.measure(wide)
+                layout(placeable.width - 2 * out, placeable.height) { placeable.place(-out, 0) }
+            }
+            .selectableGroup(),
         state = state,
-        contentPadding = PaddingValues(horizontal = 16.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp + bleed),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

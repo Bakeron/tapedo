@@ -35,7 +35,7 @@
   // ui/home/CardStack.kt StackTab order.
   var TABS = ["SHOPPING", "CHECKLIST", "TASK", "EVENT", "NOTE", "IDEA", "DONE"];
   var PRIORITIES = ["HIGH", "MEDIUM", "LOW"];
-  var GROUPS = ["PRODUCE", "BAKERY", "DAIRY", "MEAT", "FROZEN", "PANTRY", "DRINKS", "HOUSEHOLD", "OTHER"];
+  var GROUPS = ["PRODUCE", "BAKERY", "DAIRY", "MEAT", "FROZEN", "PANTRY", "SPICES", "DRINKS", "HOUSEHOLD", "OTHER"];
   // core/settings/AiProvider.kt
   var PROVIDERS = [
     { id: "GROQ", t: "groq", free: true, model: "openai/gpt-oss-120b", key: "https://console.groq.com/keys",
@@ -232,10 +232,10 @@
     var norm = function (s) { return s.trim().replace(/[.!?…]+$/, "").trim().toLowerCase(); };
     if (n.body.trim() && norm(n.body) !== norm(n.title)) { out.push(""); out.push(n.body); }
     if (n.items.length) {
-      out.push("");
       groupedItems(n).forEach(function (g) {
+        out.push("");
         if (g.group) out.push(groupName(g.group) + ":");
-        g.items.forEach(function (x) { out.push((x.item.checked ? "☑ " : "☐ ") + x.item.text); });
+        g.items.forEach(function (x) { out.push((x.item.checked ? "✅ " : "⬜ ") + x.item.text); });
       });
     }
     return out.join("\n").trim();
@@ -363,6 +363,12 @@
       pattern);
   }
 
+  function searchIcon() {
+    return sv("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "aria-hidden": "true" },
+      sv("circle", { cx: 10, cy: 10, r: 6, "stroke-width": 2 }),
+      sv("path", { d: "M14.6 14.6L20.4 20.4", "stroke-width": 3, "stroke-linecap": "round" }),
+      sv("path", { d: "M6.8 8.6A3.6 3.6 0 0 1 8.6 6.8", "stroke-width": 1.4, "stroke-linecap": "round" }));
+  }
   function settingsIcon() {
     return sv("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "aria-hidden": "true" },
       sv("circle", { cx: 12, cy: 12, r: 7, "stroke-width": 2 }),
@@ -677,7 +683,7 @@
       h("div", { class: "col", style: { gap: "6px" } },
         h("h2", { class: "titleMedium", id: "tourTitle", style: { margin: 0 } }, S("first_steps_" + step.key + "_title")),
         ruled(S(step.key === "record" && st.settings.recordingEnd === "STOP_BUTTON" ? "first_steps_record_body_stop" : "first_steps_" + step.key + "_body"),
-          "bodyMedium marginLine", "var(--onSurface)")));
+          "bodyMedium", "var(--onSurface)")));
     slip.lastChild.lastChild.id = "tourBody";
     if (step.key === "priority") {
       var legend = h("div", { class: "col", style: { gap: "8px" } });
@@ -782,7 +788,12 @@
     var root = h("div", { class: "screen-home" });
     var gear = iconBtn(settingsIcon(), S("home_open_settings"), function () { go("settings"); });
     gear.setAttribute("data-tour", "SETTINGS");
-    root.appendChild(h("div", { class: "row topRow" }, nameplate(), gear));
+    // The magnifier slides the search line out of the box and back in (HomeScreen.kt, author 21.11.2026).
+    var lens = iconBtn(searchIcon(), S(st.searchOpen ? "search_close" : "search_open"), toggleSearch);
+    lens.classList.add("lens");
+    if (st.searchOpen) lens.classList.add("open");
+    lens.setAttribute("aria-pressed", String(!!st.searchOpen));
+    root.appendChild(h("div", { class: "row topRow" }, nameplate(), h("div", { class: "row" }, lens, gear)));
     var middle = h("div", { class: "middle grow" }, cardStack(tab), stripArea(tab));
     root.appendChild(middle);
     root.appendChild(controls(kind));
@@ -809,7 +820,15 @@
     });
     col.appendChild(tabs);
     var box = h("div", { class: "box grow", "data-tour": "BOX" });
-    if (notes.length) box.appendChild(searchLine());
+    if (st.searchOpen) {
+      var line = searchLine();
+      box.appendChild(line);
+      if (was("searchOpen", true) !== true && !still()) {
+        after(function () { line.animate([{ height: "0px", minHeight: "0px", marginTop: "0px", opacity: 0 }, { height: line.offsetHeight + "px", minHeight: "0px", marginTop: "10px", opacity: 1 }], { duration: 180, easing: "ease-out" }); });
+      }
+    } else {
+      was("searchOpen", false);
+    }
     var list = h("div", { class: "list scroll grow", "data-scroll": "list" });
     fillList(list, tab, notes, numbers);
     box.appendChild(list);
@@ -830,6 +849,20 @@
     else shown.forEach(function (n) { list.appendChild(noteStrip(n, numbers[n.id])); });
     // Space under the last card for the undo tape, so it never hides the last card for good.
     list.appendChild(h("div", { style: { flex: "none", height: (st.deleted || st.moved) ? "80px" : "0px" } }));
+  }
+
+  function toggleSearch() {
+    if (!st.searchOpen) {
+      st.searchOpen = true;
+      pendingFocus = '[data-focus="search"]';
+      render();
+      return;
+    }
+    // Closing forgets the words too - a hidden filter would hide cards with no sign why.
+    function close() { st.searchOpen = false; st.query = ""; render(); }
+    var line = current && current.querySelector(".search");
+    if (!line || still()) { close(); return; }
+    line.animate([{ height: line.offsetHeight + "px", minHeight: "0px", opacity: 1 }, { height: "0px", minHeight: "0px", marginTop: "0px", opacity: 0 }], { duration: 180, easing: "ease-in", fill: "forwards" }).onfinish = close;
   }
 
   function searchLine() {
@@ -867,7 +900,7 @@
     });
     return h("div", { class: "emptyCard", style: { transform: rot(tilt(-1.2)) || "none" } }, svg,
       h("div", { class: "titleMedium" }, S("stack_empty_title")),
-      ruled(S("home_empty"), "bodyMedium marginLine", "var(--onSurfaceVariant)", { marginTop: "8px" }));
+      ruled(S("home_empty"), "bodyMedium", "var(--onSurfaceVariant)", { marginTop: "8px" }));
   }
 
   function noteStrip(note, number) {
@@ -933,15 +966,24 @@
     });
   }
 
+  // One row as in the app (HomeScreen.kt RecordControls): where the recording goes on the left, the key in the
+  // middle, its name and a short tip on the right - the tip only where it helps.
   function controls(kind) {
-    var el = h("div", { class: "controls" });
+    var el = h("div", { class: "row controls" });
     var into = S("home_record_into", tabName(kind));
-    el.appendChild(h("div", { class: "row into" }, typeMark(kind, 16), h("span", { class: "labelLarge" }, into)));
-    var pause = st.settings.pauseSeconds;
-    el.appendChild(h("div", { class: "bodySmall variant pauseRule" }, pause > 0 ? S("home_pause_rule", pause) : S("home_pause_off")));
+    el.appendChild(h("div", { class: "side left", "aria-label": into, role: "note" },
+      h("span", { class: "bodySmall variant", "aria-hidden": "true" }, S("home_record_into_label")),
+      h("span", { class: "row into", "aria-hidden": "true" }, typeMark(kind, 16), h("span", { class: "labelLarge", style: { fontWeight: 700 } }, tabName(kind)))));
     var key = recordKey(S("record_start"), function (b) { bubble(b, D("mic")); });
     key.setAttribute("data-tour", "RECORD");
-    el.appendChild(h("div", { class: "keyCol" }, key, h("span", { class: "labelLarge underKey", "aria-hidden": "true" }, S("record_start"))));
+    el.appendChild(key);
+    var pause = st.settings.pauseSeconds;
+    var hint = kind === "SHOPPING" || kind === "CHECKLIST" ? (pause > 0 ? S("home_pause_rule", pause) : S("home_pause_off"))
+      : kind === "EVENT" ? S("home_hint_event") : kind === "TASK" ? S("home_hint_task") : "";
+    var tip = h("span", { class: "bodySmall variant hint" }, hint);
+    var prevHint = was("hint", hint);
+    if (prevHint != null && prevHint !== hint && !still()) after(function () { tip.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220 }); });
+    el.appendChild(h("div", { class: "side right" }, h("span", { class: "labelLarge", style: { fontWeight: 700 }, "aria-hidden": "true" }, S("record_start")), tip));
     return el;
   }
 
@@ -1298,7 +1340,7 @@
       focusItem = items.length;
       edit({ items: st.editing.items.concat([{ text: "", checked: false, group: shopping ? "OTHER" : null }]) }, true);
     }), voiceKey()], 8);
-    keys.style.marginTop = "8px";
+    keys.style.marginTop = "20px"; // off the last item's ruled line, as in the app
     el.appendChild(keys);
     return el;
   }
@@ -1942,6 +1984,7 @@
     if (st.screen === "card") closeCard();
     else if (st.screen === "licenses") go("settings");
     else if (st.screen === "settings") go("home");
+    else if (st.searchOpen) toggleSearch();
     else if (st.query) { st.query = ""; render(); }
   }
 

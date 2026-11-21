@@ -2,7 +2,7 @@ package io.github.bakeron.tapedo.ui.settings
 
 import android.os.Build
 import android.speech.SpeechRecognizer
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -17,6 +17,8 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -599,20 +601,22 @@ private fun Setting(
     var expanded by rememberSaveable { mutableStateOf(false) }
     val shownHint = richHint ?: hint?.let { AnnotatedString(it) }
     val explains = shownHint != null || more != null
-    Column(Modifier.padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // The gaps live inside the parts, not in the column: a column gap around the folding part would jump
+    // in at the start of the unfold and out at the end of the fold (author 21.11.2026: nothing all-or-nothing).
+    Column(Modifier.padding(vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             if (explains) ExplainNote(title, expanded, onClick = { expanded = !expanded })
         }
         if (explains) {
             Fold(expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (shownHint != null) RuledText(shownHint, MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
                     if (more != null) RuledText(more, MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
                 }
             }
         }
-        Box(controlModifier) { control() }
+        Box(controlModifier.padding(top = 8.dp)) { control() }
     }
 }
 
@@ -639,14 +643,19 @@ private fun ExplainNote(title: String, expanded: Boolean, onClick: () -> Unit) {
             .padding(start = 12.dp, end = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // Both words are laid out; the hidden one only keeps the width.
-        for ((word, shown) in listOf(explain to !expanded, hide to expanded)) {
+        // Both words are laid out; the hidden one only keeps the width. They cross-fade with the fold.
+        val shownHide by animateFloatAsState(
+            targetValue = if (expanded) 1f else 0f,
+            animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(220),
+            label = "explain word",
+        )
+        for ((word, alpha) in listOf(explain to 1f - shownHide, hide to shownHide)) {
             Text(
                 word,
                 style = style,
                 color = MaterialTheme.colorScheme.onSurface,
                 textDecoration = TextDecoration.Underline,
-                modifier = Modifier.alpha(if (shown) 1f else 0f),
+                modifier = Modifier.graphicsLayer { this.alpha = alpha },
             )
         }
     }

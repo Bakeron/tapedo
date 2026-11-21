@@ -1,6 +1,20 @@
 package io.github.bakeron.tapedo.ui.home
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,6 +24,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -18,7 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -37,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
@@ -72,7 +87,6 @@ import io.github.bakeron.tapedo.ui.cards.appLocale
 import io.github.bakeron.tapedo.ui.cards.handStrike
 import io.github.bakeron.tapedo.ui.cards.isDone
 import io.github.bakeron.tapedo.ui.cards.kindNumbers
-import io.github.bakeron.tapedo.ui.cards.marginLine
 import io.github.bakeron.tapedo.ui.cards.matches
 import io.github.bakeron.tapedo.ui.cards.metaLine
 import io.github.bakeron.tapedo.ui.cards.numberedName
@@ -126,12 +140,15 @@ fun CardStack(
     /** Kept by the caller: opening a card or recording swaps the box out, and both must survive that. */
     query: String = "",
     onQueryChange: (String) -> Unit = {},
-    listState: LazyListState = rememberLazyListState(),
+    listStates: Map<StackTab, LazyListState> = remember { stackListStates() },
+    /** The search line is out (the magnifier on top was pressed). */
+    searchOpen: Boolean = false,
+    onCloseSearch: () -> Unit = {},
 ) {
     val colors = TapedoTheme.colors
     val reduceMotion = TapedoTheme.reduceMotion
-    // "Back" first clears the search - it undoes the last move instead of closing the app.
-    BackHandler(enabled = query.isNotEmpty()) { onQueryChange("") }
+    // "Back" first closes the search - it undoes the last move instead of closing the app.
+    BackHandler(enabled = searchOpen || query.isNotEmpty()) { if (searchOpen) onCloseSearch() else onQueryChange("") }
 
     val notes = (stack as? StackState.Loaded)?.notes.orEmpty()
     val counts = remember(notes) { StackTab.entries.associateWith { t -> notes.count(t::holds) } }
@@ -139,7 +156,7 @@ fun CardStack(
     // The strip shows "Zadanie 2", not the title - so that name finds the card too.
     val context = LocalContext.current
     val kindNames = NoteType.entries.associateWith { stringResource(numberedNameRes(it)) }
-    val shown = remember(notes, tab, query, kindNames) {
+    fun shownOn(tab: StackTab): List<Note> =
         notes.filter { note ->
             tab.holds(note) && (
                 note.matches(query) ||
@@ -148,7 +165,6 @@ fun CardStack(
                     } == true)
                 )
         }
-    }
 
     Column(modifier) {
         // Every divider is always there, also empty: it is where the next recording goes.
@@ -161,12 +177,30 @@ fun CardStack(
                 .tourSpot(TourSpot.BOX)
                 .background(colors.cardEdge),
         ) {
-            if (notes.isNotEmpty()) {
+            // Slides out of the box's top edge under the magnifier and back in - at once with "reduce motion".
+            AnimatedVisibility(
+                visible = searchOpen,
+                enter = if (reduceMotion) EnterTransition.None else expandVertically(tween(SEARCH_MS)) + fadeIn(tween(SEARCH_MS)),
+                exit = if (reduceMotion) ExitTransition.None else shrinkVertically(tween(SEARCH_MS)) + fadeOut(tween(SEARCH_MS)),
+            ) {
                 SearchLine(query, onChange = onQueryChange, Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp))
             }
+            // Another divider is another pile: the old one fades out as a whole, then the new one fades in.
+            // Animated one strip at a time, the old strips flew out over the record key (author 21.11.2026).
+            AnimatedContent(
+                targetState = tab,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                transitionSpec = {
+                    if (reduceMotion) EnterTransition.None togetherWith ExitTransition.None
+                    else fadeIn(tween(PILE_IN_MS, delayMillis = PILE_OUT_MS)) togetherWith fadeOut(tween(PILE_OUT_MS))
+                },
+                label = "divider pile",
+            ) { pileTab ->
+            val shown = remember(notes, pileTab, query, kindNames) { shownOn(pileTab) }
+            // Clipped: a strip fading out after "Delete" must not be drawn outside the box.
             LazyColumn(
-                Modifier.weight(1f).fillMaxWidth(),
-                state = listState,
+                Modifier.fillMaxSize().clipToBounds(),
+                state = listStates.getValue(pileTab),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -176,7 +210,7 @@ fun CardStack(
                     StackState.Failed -> item(key = "failed") { StackFailed(onRetry) }
                     is StackState.Loaded -> when {
                         // An empty kind's divider: the dashed card says the red button fills it.
-                        shown.isEmpty() && query.isBlank() && tab != StackTab.DONE -> item(key = "empty") { EmptyCard() }
+                        shown.isEmpty() && query.isBlank() && pileTab != StackTab.DONE -> item(key = "empty") { EmptyCard() }
                         shown.isEmpty() -> item(key = "none") { NothingFound(query) }
                         else -> items(shown, key = { it.id }) { note ->
                             NoteStrip(
@@ -191,9 +225,17 @@ fun CardStack(
                     }
                 }
             }
+            }
         }
     }
 }
+
+/** One remembered place in the box for every divider. */
+internal fun stackListStates(): Map<StackTab, LazyListState> = StackTab.entries.associateWith { LazyListState() }
+
+private const val PILE_OUT_MS = 110
+private const val PILE_IN_MS = 170
+private const val SEARCH_MS = 180
 
 /**
  * Card-box dividers: only the kind's drawn sign and the count, so all seven fit side by side. The chosen one
@@ -264,6 +306,13 @@ private fun SearchLine(query: String, onChange: (String) -> Unit, modifier: Modi
     val keyboard = LocalSoftwareKeyboardController.current
     val label = stringResource(R.string.search_hint)
     val shape = RoundedCornerShape(3.dp)
+    // Opened by the magnifier: the cursor is in the line and the keyboard comes up, ready to type.
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    // The typewriter font sits low in its line - centred line height keeps the hint and the words mid-line.
+    val style = MaterialTheme.typography.bodyMedium.copy(
+        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
+    )
     Row(
         modifier
             .fillMaxWidth()
@@ -277,15 +326,15 @@ private fun SearchLine(query: String, onChange: (String) -> Unit, modifier: Modi
             value = query,
             onValueChange = onChange,
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
+            textStyle = style.copy(color = scheme.onSurface),
             cursorBrush = SolidColor(scheme.primary),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-            modifier = Modifier.weight(1f).semantics { contentDescription = label },
+            modifier = Modifier.weight(1f).focusRequester(focus).semantics { contentDescription = label },
             decorationBox = { inner ->
-                Box {
+                Box(contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) {
-                        Text(label, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                        Text(label, style = style, color = scheme.onSurfaceVariant)
                     }
                     inner()
                 }
@@ -462,13 +511,13 @@ private fun EmptyCard() {
             .padding(horizontal = 20.dp, vertical = 18.dp),
     ) {
         Text(stringResource(R.string.stack_empty_title), style = MaterialTheme.typography.titleMedium)
-        // Typed on the card's lines, next to its red margin.
+        // Typed on the card's lines.
         RuledText(
             stringResource(R.string.home_empty),
             MaterialTheme.typography.bodyMedium,
             scheme.onSurfaceVariant,
             colors.rule,
-            Modifier.padding(top = 8.dp).marginLine(colors.record.copy(alpha = 0.5f)),
+            Modifier.padding(top = 8.dp),
         )
     }
 }

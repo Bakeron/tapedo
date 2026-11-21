@@ -200,6 +200,8 @@ fun CardOptions(note: Note, onChange: (Note) -> Unit, onDelete: () -> Unit, modi
                 selected = note.type,
                 onSelect = { type -> if (type != null) onChange(note.changeType(type)) },
                 includeAuto = false,
+                // The card screen's side margins (12 dp) and the options' own (4 dp).
+                bleed = 16.dp,
             )
         }
         if (note.type != NoteType.IDEA) {
@@ -387,8 +389,11 @@ private fun ItemsEditor(note: Note, voiceKey: (@Composable () -> Unit)?, onChang
                             },
                         contentAlignment = Alignment.Center,
                     ) { PencilBox(item.checked, scheme.onSurface) }
+                    // A ticked item is struck through with the pencil line, drawn on and wiped off (author 21.11.2026).
+                    var itemLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
                     BasicTextField(
                         value = item.text,
+                        onTextLayout = { itemLayout = it },
                         onValueChange = { text -> onChange(items.mapIndexed { j, it -> if (j == i) it.copy(text = text) else it }) },
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
                         singleLine = true,
@@ -397,6 +402,7 @@ private fun ItemsEditor(note: Note, voiceKey: (@Composable () -> Unit)?, onChang
                         modifier = Modifier
                             .weight(1f)
                             .then(if (i == items.lastIndex) Modifier.focusRequester(newItem) else Modifier)
+                            .handStrike(item.checked, { itemLayout }, scheme.onSurface)
                             .semantics { contentDescription = itemLabel },
                     )
                     val removeLabel = stringResource(R.string.editor_remove_item, i + 1)
@@ -414,7 +420,8 @@ private fun ItemsEditor(note: Note, voiceKey: (@Composable () -> Unit)?, onChang
                 }
             }
         }
-        PairOrStack(Modifier.fillMaxWidth().padding(top = 8.dp), stackGap = 8.dp) {
+        // Room above the keys, so they do not sit on the last item's ruled line (author 21.11.2026).
+        PairOrStack(Modifier.fillMaxWidth().padding(top = 20.dp), stackGap = 8.dp) {
             PaperButton(
                 stringResource(R.string.editor_add_item),
                 onClick = {

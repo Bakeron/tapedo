@@ -31,15 +31,6 @@ import androidx.compose.ui.unit.dp
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 
 /**
- * The red margin line of a notebook page, down the left edge of the text, and room after it.
- * No ruling across the text: lines in dp never match text in sp, so at a bigger text size they cut through words.
- */
-fun Modifier.marginLine(color: Color): Modifier = drawBehind {
-    val x = 1.dp.toPx()
-    drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.5.dp.toPx())
-}.padding(start = 12.dp)
-
-/**
  * Text written on the lines of an index card: a faint rule under every line of text.
  * The rules follow the text's own layout (not a dp grid), so they stay under the words at any text size.
  */

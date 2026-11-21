@@ -48,6 +48,7 @@ fun groupNameRes(group: ShoppingGroup?): Int = when (group) {
     ShoppingGroup.MEAT -> R.string.group_meat
     ShoppingGroup.FROZEN -> R.string.group_frozen
     ShoppingGroup.PANTRY -> R.string.group_pantry
+    ShoppingGroup.SPICES -> R.string.group_spices
     ShoppingGroup.DRINKS -> R.string.group_drinks
     ShoppingGroup.HOUSEHOLD -> R.string.group_household
     ShoppingGroup.OTHER, null -> R.string.group_other
@@ -142,10 +143,12 @@ fun shareText(context: Context, note: Note, today: Long, locale: Locale): String
         appendLine(note.body)
     }
     if (note.items.isNotEmpty()) {
-        appendLine()
+        // Emoji boxes look the same size in every messenger (author 21.11.2026: WhatsApp drew "☑" grey and "☐"
+        // tiny); an empty line before every shop section, so the sections read apart.
         for ((group, items) in groupedItems(note)) {
+            appendLine()
             if (group != null) appendLine(context.getString(groupNameRes(group)) + ":")
-            items.forEach { (_, item) -> appendLine((if (item.checked) "☑ " else "☐ ") + item.text) }
+            items.forEach { (_, item) -> appendLine((if (item.checked) "✅ " else "⬜ ") + item.text) }
         }
     }
 }.trimEnd()

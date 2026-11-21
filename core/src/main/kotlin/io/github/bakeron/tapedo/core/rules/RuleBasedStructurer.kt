@@ -134,6 +134,13 @@ class RuleBasedStructurer(
     }
 
     internal fun detectDueDay(text: String, today: Long): Long? {
+        // A calendar date is the most exact thing said, wherever it stands in the recording.
+        calendarDate(text, today)?.let { return it }
+        IN_DAYS.find(text)?.let { m ->
+            val n = m.groups["n"]?.value?.let { COUNT_WORDS[it.lowercase()] ?: it.toIntOrNull() } ?: 1
+            val week = m.groups["u"]!!.value.lowercase().let { it.startsWith("t") || it.startsWith("w") }
+            return today + n * if (week) 7L else 1L
+        }
         RELATIVE_DAYS.forEach { (regex, offset) -> if (regex.containsMatchIn(text)) return today + offset }
         WEEKDAYS.forEachIndexed { weekday, regex ->
             if (regex.containsMatchIn(text)) return nextWeekday(today, weekday)
@@ -141,7 +148,32 @@ class RuleBasedStructurer(
         return null
     }
 
-    /** "o 10", "o 10:30", "o godzinie 7 wieczorem", "at 9", "9pm", "14:15" -> minutes after midnight. */
+    /**
+     * "25 października 2028", "25 listopad", "November 25th", "25.11", "25.11.2028" -> epoch day.
+     * Without a year: this year, or the next one when that day has already passed.
+     */
+    internal fun calendarDate(text: String, today: Long): Long? {
+        val named = DAY_MONTH.find(text) ?: MONTH_DAY.find(text)
+        val m = named ?: DATE_DOTS.findAll(text).firstOrNull { !isClockBefore(text, it) } ?: return null
+        val day = m.groups["d"]!!.value.toInt()
+        val month = if (named != null) monthOf(m.groups["mon"]!!.value) else m.groups["mon"]!!.value.toInt()
+        val year = m.groups["y"]?.value?.toInt()?.let { if (it < 100) 2000 + it else it }
+        if (month !in 1..12 || day !in 1..31) return null
+        fun valid(y: Int) = EpochDays.fromCivil(y, month, day).takeIf { EpochDays.toCivil(it) == Triple(y, month, day) }
+        if (year != null) return valid(year)
+        val thisYear = EpochDays.toCivil(today).first
+        return valid(thisYear)?.takeIf { it >= today } ?: valid(thisYear + 1)
+    }
+
+    /** "o 10.30" is an hour, not the 10th of some month. */
+    private fun isClockBefore(text: String, m: MatchResult) = CLOCK_BEFORE.containsMatchIn(text.substring(0, m.range.first))
+
+    private fun monthOf(word: String): Int {
+        val w = word.lowercase()
+        return MONTHS.indexOfFirst { forms -> forms.any { w == it } } + 1
+    }
+
+    /** "o 10", "o 10:30", "o godzinie 7 wieczorem", "o dziesiątej", "w południe", "at 9", "9pm", "14:15" -> minutes. */
     internal fun detectTime(text: String): Int? {
         TIME_AM_PM.find(text)?.let { m ->
             val hour12 = m.groups["h"]!!.value.toInt()
@@ -149,9 +181,19 @@ class RuleBasedStructurer(
             val pm = m.groups["pm"]!!.value.startsWith("p", ignoreCase = true)
             return minutesOf(hour12 % 12 + if (pm) 12 else 0, m.groups["m"]?.value)
         }
-        val m = TIME_SAID.findAll(text).firstOrNull { !isCountOfThings(text, it) } ?: TIME_COLON.find(text) ?: return null
-        var hour = m.groups["h"]!!.value.toInt()
-        val after = text.substring(m.range.last + 1)
+        val m = TIME_SAID.findAll(text).firstOrNull { !isCountOfThings(text, it) } ?: TIME_COLON.find(text)
+        if (m == null) {
+            NOON.find(text)?.let { return if (it.value.lowercase().let { w -> w.contains("półn") || w.contains("midnight") }) 0 else 12 * 60 }
+            // "zapytaj o drugiej stronie" - "about", not an hour.
+            val w = TIME_WORDS.findAll(text).firstOrNull { !ABOUT_VERB_BEFORE.containsMatchIn(text.substring(0, it.range.first)) }
+                ?: return null
+            return withPartOfDay(HOUR_WORDS.getValue(w.groups["w"]!!.value.lowercase()), text.substring(w.range.last + 1), null)
+        }
+        return withPartOfDay(m.groups["h"]!!.value.toInt(), text.substring(m.range.last + 1), m.groups["m"]?.value)
+    }
+
+    private fun withPartOfDay(spokenHour: Int, after: String, minute: String?): Int? {
+        var hour = spokenHour
         // "o 7 wieczorem" -> 19:00. "W nocy" is late evening up to 11 and early morning after midnight:
         // "o 11 w nocy" -> 23:00, "o 12 w nocy" -> 0:00, "o 2 w nocy" -> 2:00.
         if (NIGHT_AFTER.containsMatchIn(after)) {
@@ -159,7 +201,7 @@ class RuleBasedStructurer(
         } else if (hour < 12 && EVENING_AFTER.containsMatchIn(after)) {
             hour += 12
         }
-        return minutesOf(hour, m.groups["m"]?.value)
+        return minutesOf(hour, minute)
     }
 
     /** "pamiętaj o 5 zdjęciach", "zapytaj o 3 bilety", "kup o 2 więcej" - "o" + a number that counts things. */
@@ -291,6 +333,59 @@ class RuleBasedStructurer(
             words("sobota", "sobotę", "soboty", "saturday"),
             words("niedziela", "niedzielę", "niedzieli", "sunday"),
         )
+
+        // Index + 1 = month. Polish nominative (as recognition sometimes writes it) and genitive, English.
+        val MONTHS = listOf(
+            listOf("styczeń", "stycznia", "january"),
+            listOf("luty", "lutego", "february"),
+            listOf("marzec", "marca", "march"),
+            listOf("kwiecień", "kwietnia", "april"),
+            listOf("maj", "maja", "may"),
+            listOf("czerwiec", "czerwca", "june"),
+            listOf("lipiec", "lipca", "july"),
+            listOf("sierpień", "sierpnia", "august"),
+            listOf("wrzesień", "września", "september"),
+            listOf("październik", "października", "october"),
+            listOf("listopad", "listopada", "november"),
+            listOf("grudzień", "grudnia", "december"),
+        )
+        private val MONTH_NAMES = MONTHS.flatten().joinToString("|")
+        // "25 października 2028", "25th of November", "1. maja"
+        val DAY_MONTH = Regex(
+            "(?iu)(?<![\\d\\p{L}:.])(?<d>\\d{1,2})(?:st|nd|rd|th|\\.)?\\s+(?:of\\s+)?(?<mon>$MONTH_NAMES)(?!\\p{L})(?:\\s+(?<y>\\d{4})(?!\\d))?",
+        )
+        // "November 25th, 2028"
+        val MONTH_DAY = Regex(
+            "(?iu)(?<!\\p{L})(?<mon>$MONTH_NAMES)\\s+(?<d>\\d{1,2})(?:st|nd|rd|th)?(?!\\d)(?:,?\\s+(?<y>\\d{4})(?!\\d))?",
+        )
+        // "25.11", "25.11.2028", "25/11/28" - a two-digit month, so "1.5 litra" is not the 1st of May.
+        val DATE_DOTS = Regex("(?<![\\d.:/])(?<d>\\d{1,2})[./](?<mon>\\d{2})(?:[./](?<y>\\d{4}|\\d{2}))?(?![\\d:]|[./]\\d)")
+        val CLOCK_BEFORE = Regex("(?iu)(?<!\\p{L})(o|o godzinie|godz\\.?|at)\\s*$")
+
+        // "za tydzień", "za 3 dni", "za dwa tygodnie", "in 2 weeks", "in a week"
+        val IN_DAYS = Regex(
+            "(?iu)(?<!\\p{L})(za|in)\\s+(?:(?<n>\\d{1,2}|a|one|two|three|four|dwa|dwie|trzy|cztery|pięć)\\s+)?" +
+                "(?<u>dzień|dni|tydzień|tygodnie|tygodni|day|days|week|weeks)(?!\\p{L})",
+        )
+        val COUNT_WORDS = mapOf(
+            "a" to 1, "one" to 1, "two" to 2, "three" to 3, "four" to 4,
+            "dwa" to 2, "dwie" to 2, "trzy" to 3, "cztery" to 4, "pięć" to 5,
+        )
+
+        // Hours said as words when recognition does not turn them into digits: "o dziesiątej", "o wpół..." is left out.
+        val HOUR_WORDS = mapOf(
+            "dwudziestej pierwszej" to 21, "dwudziestej drugiej" to 22, "dwudziestej trzeciej" to 23,
+            "pierwszej" to 1, "drugiej" to 2, "trzeciej" to 3, "czwartej" to 4, "piątej" to 5, "szóstej" to 6,
+            "siódmej" to 7, "ósmej" to 8, "dziewiątej" to 9, "dziesiątej" to 10, "jedenastej" to 11, "dwunastej" to 12,
+            "trzynastej" to 13, "czternastej" to 14, "piętnastej" to 15, "szesnastej" to 16, "siedemnastej" to 17,
+            "osiemnastej" to 18, "dziewiętnastej" to 19, "dwudziestej" to 20,
+        )
+        // Longest first, so "dwudziestej pierwszej" wins over "dwudziestej".
+        val TIME_WORDS = Regex(
+            "(?iu)(?<!\\p{L})o\\s+(?:godzinie\\s+)?(?<w>" +
+                HOUR_WORDS.keys.sortedByDescending { it.length }.joinToString("|") + ")(?!\\p{L})",
+        )
+        val NOON = words("w południe", "o północy", "at noon", "at midnight")
 
         // Speech recognition writes hours as digits: "o 10", "o 10:30", "at 9".
         val TIME_SAID = Regex(
