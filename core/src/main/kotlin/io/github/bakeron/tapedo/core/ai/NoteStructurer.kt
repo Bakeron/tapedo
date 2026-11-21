@@ -164,10 +164,12 @@ class NoteStructurer(
         chosenType: NoteType?,
         todayEpochDay: Long,
         nowMillis: Long,
+        /** The saved card's type for "More exact" in the card view - see [StructureRequest.cardType]. */
+        cardType: NoteType? = null,
     ): Refined {
         if (settings.aiMode == AiMode.FREE) {
             val problems = mutableListOf<AiProblem>()
-            val request = StructureRequest(transcript, todayEpochDay, nowMillis, AppSettings.NEW_CARD_PRIORITY, chosenType)
+            val request = StructureRequest(transcript, todayEpochDay, nowMillis, AppSettings.NEW_CARD_PRIORITY, chosenType, cardType)
             val (notes, by) = freeCards(request, settings, todayEpochDay, problems)
                 ?: return Refined.Failed(problems.lastOrNull() ?: AiProblem(AiProvider.FREE.first(), "", Problem.NO_KEY))
             return Refined.Cards(notes, lowFunds = null, by = by)
@@ -184,7 +186,7 @@ class NoteStructurer(
             Key.Unreadable -> return failed(Problem.KEY_UNREADABLE)
             is Key.Found -> k.value ?: return failed(Problem.NO_KEY)
         }
-        val request = StructureRequest(transcript, todayEpochDay, nowMillis, AppSettings.NEW_CARD_PRIORITY, chosenType)
+        val request = StructureRequest(transcript, todayEpochDay, nowMillis, AppSettings.NEW_CARD_PRIORITY, chosenType, cardType)
         val answer = try {
             ask(provider, model, key, request, todayEpochDay)
         } catch (e: AiException) {

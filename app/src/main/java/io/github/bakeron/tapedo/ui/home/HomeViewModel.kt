@@ -498,8 +498,8 @@ class HomeViewModel(
     }
 
     /** One "More exact" / "Try AI again" question; anything unexpected is a failure, never a crash. */
-    private suspend fun askRefine(text: String, s: AppSettings, type: NoteType?): Refined = try {
-        structurer.refine(text, s, type, todayEpochDay(), nowMillis())
+    private suspend fun askRefine(text: String, s: AppSettings, type: NoteType?, cardType: NoteType? = null): Refined = try {
+        structurer.refine(text, s, type, todayEpochDay(), nowMillis(), cardType)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -809,8 +809,9 @@ class HomeViewModel(
         val s = settings.value ?: AppSettings()
         val id = open.note.id
         cardRefining = viewModelScope.launch {
-            // No type: the AI may see a list in a note, or two things in one card.
-            val refined = askRefine(open.note.tidy().asDictation(), s, null)
+            // No fixed type: the AI may see a list in a note, or two things in one card - but it hears what the
+            // card is now, so a neat event does not come back as a note.
+            val refined = askRefine(open.note.tidy().asDictation(), s, null, open.note.type)
             if (_editing.value?.note?.id != id) return@launch
             _cardRefine.update { it?.copy(state = refined.asRefine(s), lowFunds = refined.lowFunds ?: it.lowFunds) }
         }
@@ -833,19 +834,22 @@ class HomeViewModel(
         saving = true
         autosave?.cancel()
         val old = open.note
+        // No "AI" stamp on cards the user asked the AI to improve (author 21.11.2026) - the stamp marks cards the
+        // AI laid out on its own. Opened again, such a card offers "More exact" again.
+        val cards = offer.cards.map { it.copy(byAi = false) }
         viewModelScope.launch {
             try {
-                if (offer.cards.size == 1) {
-                    val card = offer.cards.single().copy(id = old.id, createdAtMillis = old.createdAtMillis, priority = old.priority)
+                if (cards.size == 1) {
+                    val card = cards.single().copy(id = old.id, createdAtMillis = old.createdAtMillis, priority = old.priority)
                     // A failed write keeps the old card and the offer - "Use this" can be tapped again.
                     if (!write { notes.save(card) }) return@launch
                     show(card)
-                    // The AI wrote it now - no button any more.
+                    // The offer is taken - the button goes until the card is opened again.
                     closeCardRefine()
                     return@launch
                 }
                 val written = mutableListOf<Long>()
-                val saved = write { for (card in offer.cards.reversed()) written += notes.save(card) }
+                val saved = write { for (card in cards.reversed()) written += notes.save(card) }
                 if (!saved) {
                     // Half a set is worse than none: what got written goes back out, the old card stays.
                     written.forEach { id -> write { notes.delete(id) } }

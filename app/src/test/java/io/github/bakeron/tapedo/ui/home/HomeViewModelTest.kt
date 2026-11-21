@@ -943,8 +943,8 @@ class HomeViewModelTest {
         assertEquals(old.id, now?.id)
         assertEquals(old.createdAtMillis, now?.createdAtMillis)
         assertEquals(Priority.HIGH, now?.priority)
-        assertTrue(now!!.byAi)
-        assertEquals("the AI wrote it now - no button", null, vm.cardRefine.value)
+        assertEquals("asked for by the user - no AI stamp", false, now?.byAi)
+        assertEquals("the offer is taken - no button", null, vm.cardRefine.value)
         assertEquals(setOf(old.id), notes.rows.value.keys)
         assertEquals("Dentysta", notes.rows.value[old.id]?.title)
     }

@@ -76,7 +76,7 @@
     <string name="settings_online_speech_ask">Pytaj</string>
     <string name="settings_online_speech_always">Zawsze</string>
     <string name="settings_online_speech_never">Nigdy</string>
-    <string name="settings_online_speech_hint">Domyślnie głos zostaje w\u00A0telefonie. Gdy brakuje pakietu offline dla języka mowy, Tapedo najpierw zapyta, zanim wyśle głos do Google.</string>
+    <string name="settings_online_speech_hint">Domyślnie „Nigdy” - głos zostaje w\u00A0telefonie i\u00A0nic nie idzie do Google. Gdy brakuje pakietu offline dla języka mowy, Tapedo podpowie, jak go pobrać. Przy „Pytaj” najpierw zapyta, zanim wyśle głos do Google.</string>
     <string name="settings_online_speech_more">Na telefonach z\u00A0rozpoznawaniem na urządzeniu (zwykle Android 12 i\u00A0nowszy) głos bez Twojej zgody nie wychodzi z\u00A0telefonu. Na pozostałych system może sam użyć internetu.</string>
     <string name="settings_online_speech_no_ondevice">Ten telefon nie rozpoznaje mowy w\u00A0samym telefonie, więc system może wysłać głos do Google sam, bez pytania. Tapedo nie może tego zablokować.</string>
     <string name="settings_save_failed">Nie udało się zapisać zmiany. Spróbuj jeszcze raz.</string>
@@ -338,6 +338,10 @@
     <string name="card_item_unchecked">nieodhaczone</string>
     <string name="card_ai_stamp" translatable="false">AI</string>
     <string name="card_ai_desc">Rozpisane przez AI</string>
+    <string name="card_preview">Podgląd</string>
+    <string name="card_preview_open">Pokaż podgląd karteczki</string>
+    <string name="card_preview_close">Zamknij podgląd</string>
+    <string name="card_share_image">Udostępnij jako obrazek</string>
     <string name="card_share">Udostępnij</string>
     <plurals name="card_more_items">
         <item quantity="one">+ jeszcze %d</item>

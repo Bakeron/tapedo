@@ -232,7 +232,13 @@ private fun CardSheet(
  * its type, its priority (not for an idea), then "Share" and "Delete card" as the last keys.
  */
 @Composable
-fun CardOptions(note: Note, onChange: (Note) -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+fun CardOptions(
+    note: Note,
+    onChange: (Note) -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+    onOpened: () -> Unit = {},
+) {
     val context = LocalContext.current
     val locale = appLocale()
     val today = rememberToday()
@@ -248,6 +254,7 @@ fun CardOptions(note: Note, onChange: (Note) -> Unit, onDelete: () -> Unit, modi
                 keyboard?.hide()
                 focus.clearFocus()
                 open = !open
+                if (open) onOpened()
             },
             modifier = Modifier.fillMaxWidth(),
         )

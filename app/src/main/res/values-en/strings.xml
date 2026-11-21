@@ -68,7 +68,7 @@
     <string name="settings_online_speech_ask">Ask</string>
     <string name="settings_online_speech_always">Always</string>
     <string name="settings_online_speech_never">Never</string>
-    <string name="settings_online_speech_hint">By default your voice stays on the phone. When the offline pack for the speech language is missing, Tapedo asks before sending your voice to Google.</string>
+    <string name="settings_online_speech_hint">By default “Never” - your voice stays on the phone and nothing goes to Google. When the offline pack for the speech language is missing, Tapedo shows how to download it. With “Ask” it asks before sending your voice to Google.</string>
     <string name="settings_online_speech_more">On phones with on-device recognition (usually Android 12 and newer) your voice never leaves the phone without your consent. On others the system may go online by itself.</string>
     <string name="settings_online_speech_no_ondevice">This phone cannot recognise speech on the phone itself, so the system may send your voice to Google by itself, without asking. Tapedo cannot block that.</string>
     <string name="settings_save_failed">Couldn’t save the change. Try again.</string>
@@ -313,6 +313,10 @@
     <string name="card_item_checked">ticked</string>
     <string name="card_item_unchecked">not ticked</string>
     <string name="card_ai_desc">Written by AI</string>
+    <string name="card_preview">Preview</string>
+    <string name="card_preview_open">Show card preview</string>
+    <string name="card_preview_close">Close preview</string>
+    <string name="card_share_image">Share as image</string>
     <string name="card_share">Share</string>
     <plurals name="card_more_items">
         <item quantity="one">+ %d more</item>

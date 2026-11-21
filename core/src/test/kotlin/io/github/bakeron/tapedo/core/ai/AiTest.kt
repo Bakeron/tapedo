@@ -96,6 +96,14 @@ class AiTest {
     }
 
     @Test
+    fun `a saved card's type is named in the prompt, but a chosen type wins`() {
+        val event = request.copy(cardType = NoteType.EVENT)
+        assertTrue(AiContract.systemPrompt(event).contains("already saved as \"event\""))
+        assertFalse(AiContract.systemPrompt(request).contains("already saved as"))
+        assertFalse(AiContract.systemPrompt(event.copy(chosenType = NoteType.TASK)).contains("already saved as"))
+    }
+
+    @Test
     fun `null fields from the model get defaults instead of failing`() {
         val reply = """{"cards":[{"title":"Zadzwonić do mamy","type":"task","body":null,"items":null,"priority":null}]}"""
         val note = AiContract.parse(reply, request).single()

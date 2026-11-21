@@ -40,6 +40,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -198,7 +200,9 @@ fun SettingsScreen(
                     .verticalScroll(scroll)
                     .padding(horizontal = 16.dp)
                     .padding(top = 16.dp, bottom = 24.dp)
-                    .windowInsetsPadding(WindowInsets.navigationBars),
+                    // Room for the keyboard too: typing a key, the fields below it could not be scrolled into
+                    // view until the keyboard was closed (author 21.11.2026).
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 when (shown) {

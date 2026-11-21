@@ -31,8 +31,8 @@ data class AppSettings(
     val pauseSeconds: Int = 2,
     /** BCP 47 tag passed to the speech recognizer. */
     val speechLanguage: String = "pl-PL",
-    /** Ask by default - the voice never leaves the phone without the user saying yes. */
-    val onlineSpeech: OnlineSpeech = OnlineSpeech.ASK,
+    /** Never by default (author 21.11.2026: nothing should be sent anywhere) - online recognition only when switched on. */
+    val onlineSpeech: OnlineSpeech = OnlineSpeech.NEVER,
     /** The divider open on the home screen - a recording there becomes a card of this type; null = "auto". */
     val noteTypeChoice: NoteType? = null,
     val theme: ThemeMode = ThemeMode.SYSTEM,

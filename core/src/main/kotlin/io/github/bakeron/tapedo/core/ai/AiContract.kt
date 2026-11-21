@@ -21,6 +21,11 @@ data class StructureRequest(
     val defaultPriority: Priority,
     /** Type picked on the home screen, or null for "auto" - the model decides. */
     val chosenType: NoteType? = null,
+    /**
+     * "More exact" on a saved card: the type it has now. Claude Sonnet turned a neat event (title, day, hour)
+     * into a note (author 21.11.2026) - the model keeps the type unless the words clearly say otherwise.
+     */
+    val cardType: NoteType? = null,
 )
 
 /**
@@ -56,6 +61,12 @@ object AiContract {
         val typeRule = request.chosenType?.let {
             "- The user chose the type \"${TYPE_NAMES.getValue(it)}\": make exactly ONE card of that type from the whole memo."
         } ?: "- One card per separate task or topic. A memo with one thing gives one card."
+        val cardRule = request.chosenType?.let { "" } ?: request.cardType?.let {
+            "- The memo is a card the user already saved as \"${TYPE_NAMES.getValue(it)}\" (title first, then the text," +
+                " the date and hour as YYYY-MM-DD HH:MM, the place). Keep that type and its date, hour and place;" +
+                " change the type only when the words clearly do not fit it. Never make a card with a date and" +
+                " an hour into a \"note\"."
+        }.orEmpty()
         return """
             You turn a short voice memo into index cards for a to-do app.
             The memo may be Polish, English or mixed. It comes from speech recognition, so punctuation
@@ -82,11 +93,15 @@ object AiContract {
             - time: "HH:MM" (24 h) only for "event" when an hour is said, otherwise null.
             - place: where an "event" happens, in the memo's words, otherwise null.
             - Do not invent tasks, items, people or details that are not in the memo.
+            $cardRule
 
             Answer with JSON only, exactly this shape:
             {"cards":[{"title":"...","type":"note","priority":"medium","body":"...","items":[],"due":null,"time":null,"place":null}]}
             Shopping items look like {"text":"Milk","group":"dairy"}; checklist items are plain strings.
-        """.trimIndent()
+        """
+            .trimIndent()
+            // No saved card: its rule line is empty - one blank line stays, not two.
+            .replace("\n\n\n", "\n\n")
     }
 
     fun userMessage(request: StructureRequest): String = "Memo:\n" + request.transcript.trim()
