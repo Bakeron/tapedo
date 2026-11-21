@@ -40,8 +40,6 @@
   var PROVIDERS = [
     { id: "GROQ", t: "groq", free: true, model: "openai/gpt-oss-120b", key: "https://console.groq.com/keys",
       saved: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3.8-27b"] },
-    { id: "OPENROUTER", t: "openrouter", free: true, model: "openrouter/free", key: "https://openrouter.ai/keys",
-      saved: ["openrouter/free", "google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-3.5-super-vl:free"] },
     { id: "ANTHROPIC", t: "anthropic", free: false, model: "claude-sonnet-5-5", key: "https://platform.claude.com/settings/keys", saved: [] },
     { id: "OPENAI", t: "openai", free: false, model: "gpt-6-luna", key: "https://platform.openai.com/api-keys", saved: [] },
     { id: "GEMINI", t: "gemini", free: false, model: "gemini-3.5-flash-lite", key: "https://aistudio.google.com/apikey", saved: [] }
@@ -83,9 +81,9 @@
     notes: window.TAPEDO_SAMPLE(lang, SAMPLE_TODAY, SAMPLE_NOW),
     settings: {
       recordingEnd: "SILENCE", maxRecordingSeconds: 60, silenceSeconds: 7, pauseSeconds: 2,
-      speechLanguage: lang === "pl" ? "pl-PL" : "en-US", onlineSpeech: "ASK",
+      speechLanguage: lang === "pl" ? "pl-PL" : "en-US", onlineSpeech: "NEVER",
       noteTypeChoice: "TASK", theme: "SYSTEM", reduceMotion: false, aiProviders: {}, aiModels: {},
-      aiDailyLimit: 200, textScale: 1, whisper: null, tiltedPaper: false, topUpCents: null, topUpDay: null,
+      aiDailyLimit: 200, textScale: 1, tiltedPaper: false, topUpCents: null, topUpDay: null,
       aiMode: "FREE", claudeDayCents: 100
     },
     screen: "home", onDone: false, query: "", tour: 0,
@@ -1175,8 +1173,8 @@
     deleteNote(note);
   }
 
-  function header(title, onBack) {
-    return h("div", { class: "row header" }, iconBtn(backIcon(), S("back"), onBack),
+  function header(title, onBack, backLabel) {
+    return h("div", { class: "row header" }, iconBtn(backIcon(), backLabel || S("back"), onBack),
       h("h1", { class: "headlineSmall grow", style: { margin: 0 } }, title));
   }
 
@@ -1184,7 +1182,10 @@
     var note = st.editing;
     var number = kindNumbers()[note.id];
     var root = h("div", { class: "screen-card" });
-    root.appendChild(header(S("editor_title"), closeCard));
+    var head = header(S("editor_title"), closeCard);
+    // The read-only preview of the card, top right (author 21.11.2026).
+    head.appendChild(iconBtn(previewIcon(), S("card_preview_open"), openPreview));
+    root.appendChild(head);
     var col = h("div", { class: "cardCol" });
     col.appendChild(editableCard(note, number));
     // A list has "Add by voice" inside the card, next to "Add item"; a text card keeps the wide key and the hint.
@@ -1196,6 +1197,123 @@
     col.appendChild(cardOptions(note));
     root.appendChild(h("div", { class: "scroll grow", "data-scroll": "card" }, col));
     return root;
+  }
+
+  // ---------- Card preview (ui/home/CardPreview.kt, ui/cards/IndexCard.kt with preview = true) ----------
+
+  function openPreview() {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    go("preview");
+  }
+  function closePreview() { go("card"); }
+
+  function buildPreview() {
+    var note = tidy(st.editing);
+    var root = h("div", { class: "screen-card" });
+    root.appendChild(header(S("card_preview"), closePreview, S("card_preview_close")));
+    root.appendChild(h("div", { class: "scroll grow", "data-scroll": "preview" },
+      h("div", { class: "col", style: { padding: "20px 16px" } }, previewCard(note, kindNumbers()[note.id]))));
+    // The app sends this very picture; a browser page cannot draw one under the demo's strict rules.
+    root.appendChild(h("div", { class: "col", style: { padding: "12px 16px", flex: "none" } },
+      pbtn(S("card_share_image"), function (e, b) { bubble(b, D("off")); }, "filled", { wide: true, style: { minHeight: "52px" } })));
+    return root;
+  }
+
+  function titleIsKindName(note, names) {
+    var t = note.title.trim().replace(/[:.]+$/, "").trim().toLowerCase();
+    return names.some(function (n) { return n.toLowerCase() === t; });
+  }
+  function words(t) { return t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean); }
+  function titleComesFromBody(note) {
+    var title = words(note.title), body = words(note.body), at = 0;
+    if (!title.length) return false;
+    return title.every(function (w) { while (at < body.length) { if (body[at++] === w) return true; } return false; });
+  }
+  function bodyRepeatsTitle(note) {
+    function norm(t) { return t.trim().replace(/[.!?…]+$/, "").trim().toLowerCase(); }
+    return norm(note.body) === norm(note.title);
+  }
+
+  // The whole card as on the stack, read-only: no title that only repeats the kind or the text, a task headed
+  // "Zadanie [number]", the event's date on its calendar page.
+  function previewCard(note, number) {
+    var type = note.type;
+    var title;
+    if (type === "TASK" && number != null) title = numberedName(type, number);
+    else if (type === "EVENT") title = null;
+    else if (hasItems(type) && titleIsKindName(note, [typeName(type), S("default_checklist_title"), S("default_shopping_title")])) title = null;
+    else if (titleComesFromBody(note)) title = null;
+    else title = note.title;
+    var bodyText = title === note.title
+      ? (note.body.trim() && !bodyRepeatsTitle(note) ? note.body : null)
+      : ((note.body.trim() ? note.body : (hasItems(type) ? "" : note.title)) || null);
+
+    var content = h("div", { class: "content", style: { gap: "0" } });
+    var meta = type === "EVENT" ? (note.place || "") : type === "TASK" ? "" : metaLine(note);
+    var listHead = type === "CHECKLIST";
+    var head = (listHead ? S("default_checklist_title") : typeName(type)) + (meta ? "  ·  " + meta : "");
+    content.appendChild(h("div", { class: "labelSmall variant", style: { paddingRight: "52px" } }, upper(listHead ? head + ":" : head)));
+
+    if (title != null) {
+      var text = h("span", { class: "titleMedium", style: { display: "block" } }, title);
+      var box = h("div", { class: "titleWrap", style: { position: "relative" } }, text);
+      if (type === "TASK" && note.done) strike(box, text, "preview:" + note.id);
+      var line = h("div", { class: "row", style: { gap: "10px", marginTop: "6px", paddingRight: "40px" } });
+      // A lined note: the title sits on the red header line, like on an index card.
+      if (type === "NOTE") line.style.borderBottom = "1px solid color-mix(in srgb, var(--record) 60%, transparent)";
+      if (type === "TASK") line.appendChild(pencilBox(note.done));
+      line.appendChild(box);
+      content.appendChild(line);
+    }
+    if (type === "NOTE") {
+      // The paper goes on after the text - also when the note is only its title.
+      content.appendChild(ruled((bodyText || " ") + "\n ", "bodyMedium", "var(--onSurface)", { marginTop: "6px" }));
+    } else if (bodyText) {
+      content.appendChild(h("p", { class: "bodyMedium pre", style: { margin: "6px 0 0" } }, bodyText));
+    }
+
+    if (note.items.length) {
+      var list = h("div", { class: "col", style: { marginTop: "4px" } });
+      groupedItems(note).forEach(function (g) {
+        if (g.group) {
+          list.appendChild(h("div", { style: { height: "14px" }, "aria-hidden": "true" }));
+          list.appendChild(h("div", { class: "bodySmall bold variant", style: { marginTop: "2px" } }, upper(groupName(g.group))));
+        }
+        g.items.forEach(function (x) {
+          var ink = x.item.checked ? "var(--onSurfaceVariant)" : "var(--onSurface)";
+          var t = h("span", { class: "bodyMedium", style: { display: "block" } }, x.item.text);
+          var tb = h("div", { class: "titleWrap", style: { position: "relative" } }, t);
+          if (x.item.checked) strike(tb, t, "previewItem:" + note.id + ":" + x.i);
+          list.appendChild(h("div", { class: "row", role: "img", "aria-label": x.item.text + ", " + S(x.item.checked ? "card_item_checked" : "card_item_unchecked"),
+            style: { gap: "10px", minHeight: "32px", color: ink } }, pencilBox(x.item.checked), tb));
+        });
+      });
+      content.appendChild(list);
+    }
+
+    if (type === "TASK") {
+      var due = [note.dueEpochDay != null ? dueText(note.dueEpochDay) : null, note.timeMinutes != null ? clockTime(note.timeMinutes) : null].filter(Boolean).join(" · ");
+      content.appendChild(h("div", { class: "row", role: "img", "aria-label": S("card_due_field") + (due ? ": " + due : ""), style: { marginTop: "12px", gap: "8px", alignItems: "flex-end" } },
+        h("span", { class: "labelSmall variant", "aria-hidden": "true" }, upper(S("card_due_field"))),
+        h("span", { class: "bodyMedium grow", "aria-hidden": "true", style: { borderBottom: "1px solid var(--outline)", minHeight: "var(--lh-bodyMedium)" } }, due)));
+    }
+    if (note.byAi) { var stp = stamp(); stp.style.marginTop = "8px"; content.appendChild(stp); }
+
+    var tapeRoom = type !== "IDEA" && st.settings.tiltedPaper ? 14 : 0;
+    var paperBox = h("div", { class: "paperBox", style: { width: paperWidth(type) + "%", paddingTop: tapeRoom + "px" } }, cardPaper(note, content));
+    if (type !== "IDEA") {
+      var tp = priorityTape(note.priority, 64, 20, "cardPrio");
+      tp.style.top = (4 + tapeRoom) + "px";
+      paperBox.appendChild(tp);
+    }
+    return paperBox;
+  }
+
+  function previewIcon() {
+    return sv("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "aria-hidden": "true" },
+      sv("path", { d: "M2.6 12.2C5.2 7.6 8.4 5.6 12.1 5.6C15.8 5.7 18.9 7.7 21.4 12C18.8 16.4 15.7 18.4 12 18.4C8.3 18.3 5.1 16.5 2.6 12.2Z",
+        "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round" }),
+      sv("circle", { cx: 12, cy: 12, r: 3.1, "stroke-width": 2 }));
   }
 
   function voiceKey(opts) { return pbtn(S("preview_add_voice"), function (e, b) { bubble(b, D("mic")); }, "filled", opts); }
@@ -1424,6 +1542,18 @@
     return el;
   }
 
+  // "Show settings" unfolded below the screen's edge and seemed to do nothing (author 21.11.2026): the view
+  // follows the unfolding down, frame by frame (CardScreen.kt OPTIONS_FOLLOW_NS).
+  function followOptions() {
+    var start = performance.now();
+    function step(now) {
+      var sc = document.querySelector('[data-scroll="card"]');
+      if (sc) sc.scrollTop = sc.scrollHeight;
+      if (!still() && now - start < 450) requestAnimationFrame(step);
+    }
+    step(start);
+  }
+
   // A wide "Show settings" key first; type, priority, Share and Delete only behind it (author 15.11.2026).
   function cardOptions(note) {
     var el = h("div", { class: "options" });
@@ -1434,6 +1564,7 @@
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
         st.optionsOpen = !st.optionsOpen;
         render();
+        if (st.optionsOpen) followOptions();
       }, null, { wide: true }));
     // The type row reaches out to the screen's edges, and the fold clips while it moves - so the fold reaches out
     // as far (16px: the card column's 12 and the options' 4), or the row's ends popped in after the motion.
@@ -1615,9 +1746,6 @@
     c.push(rule());
     c.push(setting("online", S("settings_online_speech"), S("settings_online_speech_hint"), S("settings_online_speech_more"),
       slide("online", ["ASK", "ALWAYS", "NEVER"], s.onlineSpeech, function (v) { return S("settings_online_speech_" + v.toLowerCase()); }, function (v) { set({ onlineSpeech: v }); })));
-    c.push(rule());
-    c.push(ruled(S("settings_whisper_moved"), "bodySmall", null, { marginTop: "10px" }));
-    c.push(pbtn(S("settings_whisper_open_ai"), function () { st.setTab = "AI"; render(); }, "", { style: { margin: "8px 0 10px" } }));
     page.appendChild(section(c));
   }
 
@@ -1682,21 +1810,6 @@
       paid ? null : ruled(S("ai_limit_hint"), "bodySmall"),
       ruled(S("ai_privacy"), "bodySmall")));
     page.appendChild(section(c));
-
-    // Whisper needs the free Groq key, so with paid Claude it is only named, never both at once.
-    if (paid) { page.appendChild(section([ruled(S("settings_whisper_free_only"), "bodySmall", null, { margin: "10px 0" })])); return; }
-    var w = s.whisper;
-    var wc = [setting("whisper", S("settings_whisper"), S("settings_whisper_hint"), S("settings_whisper_more"),
-      slide("whisper", [null, "GROQ"], w, function (v) { return v == null ? S("settings_whisper_off") : providerName(v); }, function (v) { set({ whisper: v }); }))];
-    var lastW = was("whisperShown", w) || w;
-    var wf = fold("whisper", w != null, function () {
-      var name = providerName(w || lastW);
-      return h("div", { class: "col", style: { paddingBottom: "10px", gap: "6px" } },
-        ruled(S("settings_whisper_data", name), "bodySmall", "var(--onSurface)"),
-        ruled(S("settings_whisper_key_missing", name), "bodySmall"));
-    });
-    if (wf) wc.push(wf);
-    page.appendChild(section(wc));
   }
 
   function providerCard(p, on, onToggle) {
@@ -1917,6 +2030,7 @@
 
   function buildScreen() {
     if (st.screen === "card" && st.editing) return buildCard();
+    if (st.screen === "preview" && st.editing) return buildPreview();
     if (st.screen === "settings") return buildSettings();
     if (st.screen === "licenses") return buildLicenses();
     st.screen = "home";
@@ -2085,6 +2199,7 @@
   function back() {
     if (bubbleEl) { hideBubble(); return; }
     if (st.screen === "card") closeCard();
+    else if (st.screen === "preview") closePreview();
     else if (st.screen === "licenses") go("settings");
     else if (st.screen === "settings") go("home");
     else if (st.searchOpen) toggleSearch();
