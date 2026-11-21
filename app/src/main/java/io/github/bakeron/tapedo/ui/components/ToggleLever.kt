@@ -1,5 +1,7 @@
 package io.github.bakeron.tapedo.ui.components
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -79,9 +81,14 @@ fun ToggleLever(
             drawCircle(scheme.onSurface, 5.dp.toPx(), tip)
             drawCircle(colors.knobLight, 1.5.dp.toPx(), Offset(tip.x - 1.5.dp.toPx(), tip.y - 1.5.dp.toPx()))
         }
-        // LED next to the word: lit when on.
+        // LED next to the word: lit when on - it lights up and dims, never blinks over.
+        val led by animateColorAsState(
+            targetValue = if (checked) colors.record else colors.ledOff,
+            animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(200),
+            label = "lever led",
+        )
         Canvas(Modifier.size(8.dp).clearAndSetSemantics { }) {
-            drawCircle(if (checked) colors.record else colors.ledOff)
+            drawCircle(led)
         }
         Box(contentAlignment = Alignment.CenterStart) {
             allLabels.forEach {
@@ -92,11 +99,12 @@ fun ToggleLever(
                     modifier = Modifier.alpha(0f).clearAndSetSemantics { },
                 )
             }
-            Text(
+            // "On" / "Off": the old word fades out, then the new one fades in.
+            SwapText(
                 stateLabel,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                 color = scheme.onSurface,
+                contentAlignment = Alignment.CenterStart,
             )
         }
     }

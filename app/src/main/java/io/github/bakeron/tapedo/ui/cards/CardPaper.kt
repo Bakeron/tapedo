@@ -1,5 +1,7 @@
 package io.github.bakeron.tapedo.ui.cards
 
+import androidx.compose.animation.AnimatedContent
+import io.github.bakeron.tapedo.ui.components.fadeSwap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -174,33 +176,44 @@ private fun CalendarHead(note: Note) {
             .clearAndSetSemantics { contentDescription = spoken },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val day = note.dueEpochDay?.let { LocalDate.ofEpochDay(it) }
-        if (day != null) {
-            Text(
-                day.dayOfMonth.toString(),
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                color = ink,
-            )
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(
-                    day.format(DateTimeFormatter.ofPattern("EEEE", locale)).uppercase(locale),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = ink,
-                )
-                Text(
-                    listOfNotNull(day.format(DateTimeFormatter.ofPattern("LLLL", locale)), time).joinToString("  ·  "),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = ink,
-                )
+        // Removing the date or time redraws the head: old fades out, new fades in (author 21.11.2026).
+        val still = TapedoTheme.reduceMotion
+        AnimatedContent(
+            targetState = note.dueEpochDay to time,
+            transitionSpec = { fadeSwap(still).let { if (still) it using null else it } },
+            contentAlignment = Alignment.CenterStart,
+            label = "calendar head",
+        ) { (shownDay, shownTime) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val day = shownDay?.let { LocalDate.ofEpochDay(it) }
+                if (day != null) {
+                    Text(
+                        day.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = ink,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            day.format(DateTimeFormatter.ofPattern("EEEE", locale)).uppercase(locale),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = ink,
+                        )
+                        Text(
+                            listOfNotNull(day.format(DateTimeFormatter.ofPattern("LLLL", locale)), shownTime).joinToString("  ·  "),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = ink,
+                        )
+                    }
+                } else {
+                    Text(
+                        shownTime ?: stringResource(typeNameRes(note.type)).uppercase(locale),
+                        style = if (shownTime != null) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.labelLarge,
+                        color = ink,
+                    )
+                }
             }
-        } else {
-            Text(
-                time ?: stringResource(typeNameRes(note.type)).uppercase(locale),
-                style = if (time != null) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.labelLarge,
-                color = ink,
-            )
         }
     }
     // Perforation: a row of small holes along the tear line.

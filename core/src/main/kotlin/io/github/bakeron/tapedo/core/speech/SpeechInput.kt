@@ -29,11 +29,8 @@ sealed interface SpeechEvent {
     /** Text so far: every finished phrase plus the one being spoken. */
     data class Partial(val text: String) : SpeechEvent
 
-    /**
-     * Listening ended normally; the whole transcript. Always the last event.
-     * @param audio the recording itself, only when it was asked for (Whisper) and the phone let Tapedo record.
-     */
-    data class Done(val text: String, val audio: RecordedAudio? = null) : SpeechEvent
+    /** Listening ended normally; the whole transcript. Always the last event. */
+    data class Done(val text: String) : SpeechEvent
 
     /**
      * Listening ended with an error and nothing usable was heard. Always the last event.
@@ -64,8 +61,8 @@ enum class ListeningMode {
 
 /**
  * Speech-to-text of the platform (Android's recognizer; on iPhone it would be Apple's).
- * Kept behind this interface so `core` stays free of Android code. Audio is never stored - only text
- * comes out, plus the recording in memory when Whisper asks for it.
+ * Kept behind this interface so `core` stays free of Android code. Audio is never stored or sent - only
+ * text comes out.
  */
 interface SpeechInput {
     /**
@@ -76,14 +73,12 @@ interface SpeechInput {
      *   recognizer when the offline language pack is missing. Otherwise it ends with [SpeechError.OFFLINE_UNAVAILABLE].
      * @param skipFirstMs what is said in this first stretch (the 3-2-1 countdown) is not used - the author's
      *   decision 08.11.2026. The recognizer starts at once anyway, so it is ready by "go".
-     * @param keepAudio keep the recording in memory and hand it over in [SpeechEvent.Done] (for Whisper).
      * @param pauseMillis a pause this long between words becomes a comma (a new list item); null = never.
      */
     fun listen(
         languageTag: String,
         allowOnline: Boolean,
         skipFirstMs: Long = 0,
-        keepAudio: Boolean = false,
         pauseMillis: Long? = Transcript.PAUSE_MILLIS,
     ): Flow<SpeechEvent>
 

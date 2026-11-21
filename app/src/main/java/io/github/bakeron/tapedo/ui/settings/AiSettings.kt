@@ -1,5 +1,14 @@
 package io.github.bakeron.tapedo.ui.settings
 
+import io.github.bakeron.tapedo.ui.components.SwapText
+import io.github.bakeron.tapedo.ui.components.Swap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.animateColorAsState
 import android.view.WindowManager
 import androidx.activity.compose.LocalActivity
 import androidx.annotation.StringRes
@@ -128,10 +137,6 @@ private fun textsOf(p: AiProvider) = when (p) {
         R.string.ai_groq_what, R.string.ai_groq_privacy, R.string.ai_p_groq_hint,
         listOf(R.string.ai_how_groq_1, R.string.ai_how_groq_2, R.string.ai_how_groq_3),
     )
-    AiProvider.OPENROUTER -> ProviderTexts(
-        R.string.ai_openrouter_what, R.string.ai_openrouter_privacy, R.string.ai_p_openrouter_hint,
-        listOf(R.string.ai_how_openrouter_1, R.string.ai_how_openrouter_2, R.string.ai_how_openrouter_3),
-    )
     AiProvider.ANTHROPIC -> ProviderTexts(
         R.string.ai_anthropic_what, R.string.ai_anthropic_privacy, R.string.ai_p_anthropic_hint,
         listOf(R.string.ai_how_anthropic_1, R.string.ai_how_anthropic_2, R.string.ai_how_anthropic_3),
@@ -150,7 +155,6 @@ private fun textsOf(p: AiProvider) = when (p) {
 fun providerName(p: AiProvider): String = stringResource(
     when (p) {
         AiProvider.GROQ -> R.string.ai_p_groq
-        AiProvider.OPENROUTER -> R.string.ai_p_openrouter
         AiProvider.ANTHROPIC -> R.string.ai_p_anthropic
         AiProvider.OPENAI -> R.string.ai_p_openai
         AiProvider.GEMINI -> R.string.ai_p_gemini
@@ -175,8 +179,6 @@ fun problemText(p: Problem): String = stringResource(
         Problem.KEY_UNREADABLE -> R.string.ai_problem_key_unreadable
         Problem.OFFLINE -> R.string.ai_problem_offline
         Problem.ANSWER -> R.string.ai_problem_answer
-        Problem.NO_AUDIO -> R.string.ai_problem_no_audio
-        Problem.TOO_LONG -> R.string.ai_problem_too_long
         Problem.OTHER -> R.string.ai_problem_other
     },
 )
@@ -266,19 +268,26 @@ fun ColumnScope.AiSection(settings: AppSettings, ai: Map<AiProvider, ProviderSta
                     append(stringResource(hint))
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = if (m == settings.aiMode) scheme.onSurface else scheme.onSurfaceVariant,
+                color = animateColorAsState(
+                    if (m == settings.aiMode) scheme.onSurface else scheme.onSurfaceVariant,
+                    if (TapedoTheme.reduceMotion) snap() else tween(200),
+                    label = "mode ink",
+                ).value,
             )
         }
-        RuledText(
-            stringResource(if (paid) R.string.ai_claude_only_click else R.string.ai_queue),
-            MaterialTheme.typography.bodySmall,
-            scheme.onSurfaceVariant,
-            rule,
-            Modifier.padding(top = 4.dp),
-        )
+        Swap(paid, Modifier.padding(top = 4.dp)) { shownPaid ->
+            RuledText(
+                stringResource(if (shownPaid) R.string.ai_claude_only_click else R.string.ai_queue),
+                MaterialTheme.typography.bodySmall,
+                scheme.onSurfaceVariant,
+                rule,
+            )
+        }
     }
+    // Free cards and the Claude card fade one into the other when the mode changes.
+    Swap(paid) { shownPaid ->
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (paid) {
+        if (shownPaid) {
             // Paid Claude is on as long as it is chosen above; "off" goes back to the free ones.
             ProviderCard(AiProvider.ANTHROPIC, true, settings, ai.getValue(AiProvider.ANTHROPIC), actions, usdRate) { on ->
                 if (!on) actions.setMode(AiMode.FREE)
@@ -289,35 +298,41 @@ fun ColumnScope.AiSection(settings: AppSettings, ai: Map<AiProvider, ProviderSta
             }
         }
     }
+    }
 
     Column(Modifier.padding(top = 16.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Calls per day - free providers only; Claude counts money and waits for a tap.
-        if (paid) {
-            ClaudeDay(settings, ai.getValue(AiProvider.ANTHROPIC).spent, usdRate, actions)
-        } else {
-            Text(stringResource(R.string.ai_limit), style = MaterialTheme.typography.titleMedium)
-            CounterSlider(
-                options = AppSettings.AI_DAILY_LIMITS,
-                selected = settings.aiDailyLimit,
-                label = { "$it" },
-                onSelect = actions.setDailyLimit,
-            )
-            RuledText(stringResource(R.string.ai_limit_hint), MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
+        Swap(paid) { shownPaid ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (shownPaid) {
+                    ClaudeDay(settings, ai.getValue(AiProvider.ANTHROPIC).spent, usdRate, actions)
+                } else {
+                    Text(stringResource(R.string.ai_limit), style = MaterialTheme.typography.titleMedium)
+                    CounterSlider(
+                        options = AppSettings.AI_DAILY_LIMITS,
+                        selected = settings.aiDailyLimit,
+                        label = { "$it" },
+                        onSelect = actions.setDailyLimit,
+                    )
+                    RuledText(stringResource(R.string.ai_limit_hint), MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
+                }
+            }
         }
 
         val enabled = settings.autoProviders
         val usedUp = enabled.filter { ai.getValue(it).usedUp != null }
-        if (usedUp.isNotEmpty()) {
+        val usedUpText = if (usedUp.isNotEmpty()) {
             val list = usedUp.map { p ->
                 providerName(p) + " (" + stringResource(
                     if (ai.getValue(p).usedUp == UsedUp.APP) R.string.ai_limit_app else R.string.ai_limit_provider,
                 ) + ")"
             }.joinToString(", ")
-            Warning(
-                stringResource(R.string.ai_limit_now, list) + " " +
-                    stringResource(if (usedUp.size == enabled.size) R.string.ai_limit_all else R.string.ai_limit_next),
-            )
+            // Groq is the only free provider (OpenRouter removed 21.11.2026), so a used-up limit means the rules.
+            stringResource(R.string.ai_limit_now, list) + " " + stringResource(R.string.ai_limit_all)
+        } else {
+            null
         }
+        FoldValue(usedUpText) { Warning(it) }
         RuledText(stringResource(R.string.ai_privacy), MaterialTheme.typography.bodySmall, scheme.onSurfaceVariant, rule)
     }
 }
@@ -343,7 +358,11 @@ private fun ProviderCard(
             .fillMaxWidth()
             .background(scheme.background, shape)
             // A card that is on gets an inked edge - the lever and its words say it too.
-            .border(if (on) 1.5.dp else 1.dp, if (on) colors.controlEdge else colors.cardEdge, shape)
+            .border(
+                animateDpAsState(if (on) 1.5.dp else 1.dp, if (TapedoTheme.reduceMotion) snap() else tween(200), label = "card edge").value,
+                animateColorAsState(if (on) colors.controlEdge else colors.cardEdge, if (TapedoTheme.reduceMotion) snap() else tween(200), label = "card edge ink").value,
+                shape,
+            )
             .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -503,13 +522,15 @@ private fun ClaudeDay(settings: AppSettings, spent: Spent?, usdRate: UsdRate?, a
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
-        RuledText(
-            stringResource(if (cents != null) R.string.ai_day_usd_hint else R.string.ai_day_usd_none),
-            MaterialTheme.typography.bodySmall,
-            scheme.onSurfaceVariant,
-            rule,
-        )
-        if (spent != null) {
+        Swap(cents != null) { limited ->
+            RuledText(
+                stringResource(if (limited) R.string.ai_day_usd_hint else R.string.ai_day_usd_none),
+                MaterialTheme.typography.bodySmall,
+                scheme.onSurfaceVariant,
+                rule,
+            )
+        }
+        FoldValue(spent) { spent ->
             val pln = usdRate?.pln ?: USD_PLN
             val today = if (cents != null) {
                 stringResource(R.string.ai_spent_today_of, usdText(spent.today, locale), usdText(cents / 100.0, locale), plnText(spent.today, locale, pln))
@@ -618,7 +639,7 @@ private fun TopUp(settings: AppSettings, spent: Spent?, usdRate: UsdRate?, actio
         }
         val usd = settings.claudeTopUpUsd
         val day = settings.claudeTopUpDay
-        Text(
+        SwapText(
             if (usd != null && day != null) {
                 stringResource(R.string.ai_topup_pln, plnText(usd, locale, pln), dayText(day, locale), rateText(pln, locale))
             } else {
@@ -626,8 +647,9 @@ private fun TopUp(settings: AppSettings, spent: Spent?, usdRate: UsdRate?, actio
             },
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
+            contentAlignment = Alignment.CenterStart,
         )
-        if (spent != null) {
+        FoldValue(spent) { spent ->
             Column(
                 Modifier.padding(top = 6.dp).semantics { liveRegion = LiveRegionMode.Polite },
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -642,7 +664,7 @@ private fun TopUp(settings: AppSettings, spent: Spent?, usdRate: UsdRate?, actio
                         ),
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    lowFunds(usd, since)?.let { Warning(lowFundsText(it) + " " + stringResource(R.string.ai_low_funds_here)) }
+                    FoldValue(lowFunds(usd, since)) { Warning(lowFundsText(it) + " " + stringResource(R.string.ai_low_funds_here)) }
                 }
                 Text(
                     stringResource(R.string.ai_spent_periods, usdText(spent.today, locale), usdText(spent.month, locale)),
@@ -733,10 +755,9 @@ private fun KeyField(p: AiProvider, st: ProviderState, actions: AiActions) {
                 enter = if (TapedoTheme.reduceMotion) EnterTransition.None else fadeIn(tween(220)),
                 exit = if (TapedoTheme.reduceMotion) ExitTransition.None else fadeOut(tween(160)),
             ) {
-                Text(
+                SwapText(
                     stringResource(if (st.shown) R.string.ai_hide_key else R.string.ai_show_key),
-                    style = MaterialTheme.typography.labelLarge,
-                    textDecoration = TextDecoration.Underline,
+                    style = MaterialTheme.typography.labelLarge.copy(textDecoration = TextDecoration.Underline),
                     modifier = Modifier
                         .heightIn(min = 48.dp)
                         .clickable(role = Role.Switch) { actions.showKey(p, !st.shown) }
@@ -752,10 +773,11 @@ private fun KeyField(p: AiProvider, st: ProviderState, actions: AiActions) {
             placeholder = st.keySuffix?.let { "••••$it" },
             secret = !st.shown,
         )
-        Text(
+        SwapText(
             if (st.keySuffix != null) stringResource(R.string.ai_key_set, st.keySuffix) else stringResource(R.string.ai_key_not_set),
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
+            contentAlignment = Alignment.CenterStart,
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PaperButton(
@@ -764,8 +786,12 @@ private fun KeyField(p: AiProvider, st: ProviderState, actions: AiActions) {
                 style = PaperButtonStyle.FILLED,
                 enabled = st.draft.length >= 8 && st.draft != st.revealed,
             )
-            if (st.keySuffix != null) {
-                // Deleting a key takes two taps.
+            // Deleting a key takes two taps. The key fades in once a key is saved and out when it is gone.
+            AnimatedVisibility(
+                visible = st.keySuffix != null,
+                enter = if (TapedoTheme.reduceMotion) EnterTransition.None else fadeIn(tween(200)) + expandHorizontally(tween(200)),
+                exit = if (TapedoTheme.reduceMotion) ExitTransition.None else fadeOut(tween(200)) + shrinkHorizontally(tween(200)),
+            ) {
                 var confirm by rememberSaveable(p, st.keySuffix) { mutableStateOf(false) }
                 PaperButton(
                     stringResource(if (confirm) R.string.ai_key_delete_confirm else R.string.ai_key_delete),
@@ -871,10 +897,15 @@ private fun ModelTape(name: String, picked: Boolean, onPick: () -> Unit) {
     val colors = TapedoTheme.colors
     val shape = RoundedCornerShape(2.dp)
     val chosen = stringResource(R.string.ai_model_chosen)
-    Text(
+    val still = TapedoTheme.reduceMotion
+    val ink by animateColorAsState(if (picked) scheme.onPrimary else scheme.onSurface, if (still) snap() else tween(200), label = "model ink")
+    val fill by animateColorAsState(if (picked) scheme.primary else colors.card, if (still) snap() else tween(200), label = "model fill")
+    val edge by animateColorAsState(if (picked) scheme.primary else colors.controlEdge, if (still) snap() else tween(200), label = "model edge")
+    SwapText(
         (if (picked) "✓ " else "") + name,
         style = MaterialTheme.typography.labelLarge,
-        color = if (picked) scheme.onPrimary else scheme.onSurface,
+        color = ink,
+        contentAlignment = Alignment.CenterStart,
         modifier = Modifier
             .heightIn(min = 48.dp)
             .clickable(role = Role.RadioButton, onClick = onPick)
@@ -883,8 +914,8 @@ private fun ModelTape(name: String, picked: Boolean, onPick: () -> Unit) {
                 if (picked) stateDescription = chosen
             }
             .padding(vertical = 6.dp)
-            .background(if (picked) scheme.primary else colors.card, shape)
-            .border(1.dp, if (picked) scheme.primary else colors.controlEdge, shape)
+            .background(fill, shape)
+            .border(1.dp, edge, shape)
             .padding(horizontal = 10.dp, vertical = 8.dp),
     )
 }
@@ -904,11 +935,12 @@ private fun ConnectionCheck(p: AiProvider, st: ProviderState, actions: AiActions
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-            when (val c = st.check) {
+        // The result unfolds when it comes and folds away on the next check.
+        FoldValue(st.check.takeIf { it is CheckState.Ok || it is CheckState.Failed }, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) { c ->
+            when (c) {
                 is CheckState.Ok -> Text(stringResource(R.string.ai_test_ok, c.model), style = MaterialTheme.typography.bodyMedium)
                 is CheckState.Failed -> ProblemView(c.problem)
-                CheckState.Idle, CheckState.Running -> Unit
+                else -> Unit
             }
         }
     }
@@ -934,6 +966,8 @@ private fun LineField(
     val scheme = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
+    val lineWidth by animateDpAsState(if (focused) 2.5.dp else 1.5.dp, if (TapedoTheme.reduceMotion) snap() else tween(200), label = "line width")
+    val lineInk by animateColorAsState(if (focused) scheme.primary else scheme.outline, if (TapedoTheme.reduceMotion) snap() else tween(200), label = "line ink")
     var hadFocus by remember { mutableStateOf(false) }
     val style = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface)
     BasicTextField(
@@ -956,8 +990,13 @@ private fun LineField(
         interactionSource = interaction,
         decorationBox = { inner ->
             Box {
-                if (value.isEmpty() && placeholder != null) {
-                    Text(placeholder, style = style.copy(color = scheme.onSurfaceVariant))
+                val hint by animateFloatAsState(
+                    if (value.isEmpty() && placeholder != null) 1f else 0f,
+                    if (TapedoTheme.reduceMotion) snap() else tween(150),
+                    label = "placeholder",
+                )
+                if (placeholder != null && hint > 0f) {
+                    Text(placeholder, style = style.copy(color = scheme.onSurfaceVariant), modifier = Modifier.graphicsLayer { alpha = hint })
                 }
                 inner()
             }
@@ -971,9 +1010,9 @@ private fun LineField(
             }
             .semantics { contentDescription = label }
             .drawBehind {
-                val stroke = (if (focused) 2.5.dp else 1.5.dp).toPx()
+                val stroke = lineWidth.toPx()
                 val y = size.height - stroke / 2
-                drawLine(if (focused) scheme.primary else scheme.outline, Offset(0f, y), Offset(size.width, y), stroke)
+                drawLine(lineInk, Offset(0f, y), Offset(size.width, y), stroke)
             }
             .padding(top = 12.dp, bottom = 8.dp),
     )

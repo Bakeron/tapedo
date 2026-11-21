@@ -1,5 +1,11 @@
 package io.github.bakeron.tapedo.ui.home
 
+import io.github.bakeron.tapedo.ui.components.fadeSwap
+import io.github.bakeron.tapedo.ui.components.SwapText
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedContent
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
@@ -53,6 +59,8 @@ import androidx.core.content.ContextCompat
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.report.Problem
+import io.github.bakeron.tapedo.core.settings.AiMode
+import io.github.bakeron.tapedo.ui.settings.LowFundsWarning
 import io.github.bakeron.tapedo.ui.cards.CardOptions
 import io.github.bakeron.tapedo.ui.cards.EditableCard
 import io.github.bakeron.tapedo.ui.components.Fold
@@ -87,6 +95,10 @@ fun CardScreen(
     onDismissError: () -> Unit,
     onDismissActionFailed: () -> Unit,
     onReport: ((Problem) -> Unit)? = null,
+    refine: CardRefine? = null,
+    onRefine: () -> Unit = {},
+    onAcceptRefine: () -> Unit = {},
+    onKeepRefine: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -158,15 +170,17 @@ fun CardScreen(
                     .fillMaxSize()
                     .verticalScroll(scroll)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                // Each part carries its own gap, so a message that folds away takes its gap with it - a shared
+                // spacedBy gap jumped in and out around the fold (author 21.11.2026).
+                verticalArrangement = Arrangement.Top,
             ) {
-                FoldValue(recording as? RecordingState.Failed) { failed ->
+                FoldValue(recording as? RecordingState.Failed, Modifier.padding(bottom = GAP)) { failed ->
                     ErrorNote(
                         failed.error, askOnline, onOnlineOnce, onOnlineAlways, onDismissError,
                         code = failed.code, onReport = onReport,
                     )
                 }
-                Fold(actionFailed) {
+                Fold(actionFailed, Modifier.padding(bottom = GAP)) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
                             stringResource(R.string.stack_action_failed),
@@ -200,56 +214,88 @@ fun CardScreen(
                 EditableCard(note, number, onChange, voiceKey = if (listCard) voiceKey else null)
 
                 // Under the card: the live line and words while recording; "adding" after it; the hint and the key
-                // on a text card. An idle list has nothing here, so no empty gap.
-                if (active != null || appending || !listCard) Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp)
-                        .onPlaced {
-                            voice[0] = it.positionInParent().y
-                            voice[1] = voice[0] + it.size.height
-                        },
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (active != null) {
-                        SpeakNowCue(active)
-                        Seismograph(active.levels, active.sampleCount, SEISMOGRAPH_SAMPLES, penUp = !active.ready)
-                        // After the countdown and before the microphone listens: "starting", so no words are
-                        // said into a closed mic.
-                        val status = if (active.countdown == 0 && !active.listening) {
-                            stringResource(if (active.micOpened) R.string.record_wait else R.string.record_starting)
-                        } else {
-                            null
+                // on a text card. An idle list has nothing here, so no empty gap - it folds away.
+                active?.let { SpeakNowCue(it) }
+                val lastActive = remember { arrayOfNulls<RecordingState.Active>(1) }
+                if (active != null) lastActive[0] = active
+                Fold(active != null || appending || !listCard) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = GAP)
+                            .padding(horizontal = 4.dp)
+                            .onPlaced {
+                                voice[0] = it.positionInParent().y
+                                voice[1] = voice[0] + it.size.height
+                            },
+                    ) {
+                        // The seismograph and the hint fade one into the other, never both at once.
+                        AnimatedContent(
+                            targetState = active != null,
+                            transitionSpec = { fadeSwap(reduceMotion) },
+                            label = "under the card",
+                        ) { live ->
+                            val shown = if (live) active ?: lastActive[0] else null
+                            if (shown != null) {
+                                Column {
+                                    Seismograph(shown.levels, shown.sampleCount, SEISMOGRAPH_SAMPLES, penUp = !shown.ready)
+                                    // After the countdown and before the microphone listens: "starting", so no words
+                                    // are said into a closed mic.
+                                    val status = if (shown.countdown == 0 && !shown.listening) {
+                                        stringResource(if (shown.micOpened) R.string.record_wait else R.string.record_starting)
+                                    } else {
+                                        null
+                                    }
+                                    FoldValue(status) { text ->
+                                        SwapText(
+                                            text,
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = TapedoTheme.colors.record,
+                                            contentAlignment = Alignment.CenterStart,
+                                            modifier = Modifier.padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                                        )
+                                    }
+                                    Fold(shown.text.isNotEmpty() || shown.ready) {
+                                        val ink by animateColorAsState(
+                                            if (shown.text.isEmpty()) scheme.onSurfaceVariant else scheme.onSurface,
+                                            if (reduceMotion) snap() else tween(200),
+                                            label = "words ink",
+                                        )
+                                        Text(
+                                            shown.text.ifEmpty { stringResource(R.string.record_listening) },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = ink,
+                                            maxLines = 3,
+                                            modifier = Modifier
+                                                .padding(top = 8.dp)
+                                                .then(if (shown.text.isEmpty()) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier),
+                                        )
+                                    }
+                                }
+                            } else {
+                                SwapText(
+                                    stringResource(if (appending) R.string.preview_adding else R.string.preview_add_hint_text),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = scheme.onSurfaceVariant,
+                                    contentAlignment = Alignment.CenterStart,
+                                    modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+                                )
+                            }
                         }
-                        if (status != null) {
-                            Text(
-                                status,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TapedoTheme.colors.record,
-                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                            )
-                        }
-                        if (active.text.isNotEmpty() || active.ready) Text(
-                            active.text.ifEmpty { stringResource(R.string.record_listening) },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (active.text.isEmpty()) scheme.onSurfaceVariant else scheme.onSurface,
-                            maxLines = 3,
-                            modifier = if (active.text.isEmpty()) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier,
-                        )
-                    } else {
-                        Text(
-                            stringResource(if (appending) R.string.preview_adding else R.string.preview_add_hint_text),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant,
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                        )
+                        if (!listCard) Box(Modifier.padding(top = 8.dp)) { voiceKey() }
                     }
-                    if (!listCard) voiceKey()
+                }
+
+                // "More exact" for a card the rules wrote (author 21.11.2026): the AI's version waits for a yes.
+                FoldValue(refine?.takeIf { !note.byAi }, Modifier.padding(top = GAP).padding(horizontal = 4.dp)) { r ->
+                    Column {
+                        FoldValue(r.lowFunds) { LowFundsWarning(it, Modifier.padding(bottom = 8.dp)) }
+                        RefineBlock(r.state, RefineTexts.card(free = r.mode == AiMode.FREE), onRefine, onAcceptRefine, onKeepRefine)
+                    }
                 }
 
                 // "Delete card" scrolls with the rest, next to "Share" at the very end - far from the ticks.
-                CardOptions(note, onChange, onDelete, Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+                CardOptions(note, onChange, onDelete, Modifier.padding(top = GAP).padding(horizontal = 4.dp, vertical = 8.dp))
             }
             // "3, 2, 1" in the middle, over the card - the same dial as on the main screen.
             val lastDigit = remember { intArrayOf(3) }
@@ -266,3 +312,6 @@ fun CardScreen(
         }
     }
 }
+
+/** Room between the parts of the card screen. */
+private val GAP = 16.dp

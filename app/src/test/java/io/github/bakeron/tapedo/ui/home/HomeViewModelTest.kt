@@ -4,8 +4,6 @@ import io.github.bakeron.tapedo.core.ai.AiAnswer
 import io.github.bakeron.tapedo.core.ai.AiChat
 import io.github.bakeron.tapedo.core.ai.AiException
 import io.github.bakeron.tapedo.core.ai.Problem
-import io.github.bakeron.tapedo.core.ai.SpeechToText
-import io.github.bakeron.tapedo.core.ai.WhisperRetyper
 import io.github.bakeron.tapedo.core.ai.AiGateway
 import io.github.bakeron.tapedo.core.ai.MemoryAiUsage
 import io.github.bakeron.tapedo.core.ai.NoteStructurer
@@ -14,14 +12,13 @@ import io.github.bakeron.tapedo.core.data.NoteRepository
 import io.github.bakeron.tapedo.core.model.ChecklistItem
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
+import io.github.bakeron.tapedo.core.model.Priority
 import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.settings.RecordingEnd
 import io.github.bakeron.tapedo.core.settings.SettingsStore
-import io.github.bakeron.tapedo.core.settings.WhisperProvider
-import io.github.bakeron.tapedo.core.speech.RecordedAudio
 import io.github.bakeron.tapedo.core.speech.ListeningMode
 import io.github.bakeron.tapedo.core.speech.SpeechError
 import io.github.bakeron.tapedo.core.speech.SpeechEvent
@@ -44,6 +41,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -75,11 +73,9 @@ class HomeViewModelTest {
     private class FakeSpeech(private val events: () -> Flow<SpeechEvent>) : SpeechInput {
         val allowOnline = mutableListOf<Boolean>()
         val skipped = mutableListOf<Long>()
-        val keptAudio = mutableListOf<Boolean>()
-        override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long, keepAudio: Boolean, pauseMillis: Long?): Flow<SpeechEvent> {
+        override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long, pauseMillis: Long?): Flow<SpeechEvent> {
             this.allowOnline += allowOnline
             skipped += skipFirstMs
-            keptAudio += keepAudio
             return events()
         }
         var stops = 0
@@ -144,7 +140,6 @@ class HomeViewModelTest {
         notice: FakeNotice = FakeNotice(),
         // Most tests time the recording itself - the "3, 2, 1" has its own test.
         countdownMillis: Long = 0,
-        retyper: WhisperRetyper? = null,
         structurer: NoteStructurer = NoteStructurer(NoSecrets(), MemoryAiUsage(), NoGateway),
     ) = HomeViewModel(
         store, speech, notes,
@@ -154,7 +149,6 @@ class HomeViewModelTest {
         todayEpochDay = { 20_000L },
         timeSource = testScheduler.timeSource,
         countdownMillis = countdownMillis,
-        retyper = retyper,
     ).also { vm ->
         backgroundScope.launch { vm.settings.collect { } }
         backgroundScope.launch { vm.stack.collect { } }
@@ -493,58 +487,6 @@ class HomeViewModelTest {
         assertEquals("Zadzwonić do hydraulika", (vm.stack.value as StackState.Loaded).notes.first().title)
     }
 
-    private fun whisper(answer: suspend () -> String, key: String? = "gsk_test") = WhisperRetyper(
-        object : SecretStore {
-            override suspend fun apiKey(provider: AiProvider) = key
-            override suspend fun setApiKey(provider: AiProvider, key: String?) = Unit
-        },
-        SpeechToText { _, _, _, _, _ -> answer() },
-    )
-
-    private val loud = RecordedAudio(ByteArray(32_000) { if (it % 2 == 1) 0x30 else 0 }, 16_000)
-
-    @Test
-    fun `with Whisper on, its text replaces the phone's and the audio is asked for`() = runTest(dispatcher) {
-        val speech = FakeSpeech { flowOf(SpeechEvent.Done("mleko marchew", loud)) }
-        val store = FakeStore(AppSettings(noteTypeChoice = NoteType.SHOPPING, whisper = WhisperProvider.GROQ))
-        val vm = viewModel(store, speech, retyper = whisper({ "Mleko, marchew" }))
-
-        vm.startRecording()
-        runCurrent()
-        val review = vm.recording.value as RecordingState.Review
-        assertEquals("Mleko, marchew", review.transcript)
-        assertEquals(listOf("Mleko", "Marchew"), review.cards.single().items.map { it.text })
-        assertEquals(null, review.whisperProblem)
-        assertEquals(listOf(true), speech.keptAudio)
-    }
-
-    @Test
-    fun `Whisper failing keeps the phone's text and says why`() = runTest(dispatcher) {
-        val speech = FakeSpeech { flowOf(SpeechEvent.Done("mleko marchew", loud)) }
-        val store = FakeStore(AppSettings(noteTypeChoice = NoteType.NOTE, whisper = WhisperProvider.GROQ))
-        val vm = viewModel(store, speech, retyper = whisper({ throw AiException(Problem.LIMIT, "rate limit") }))
-
-        vm.startRecording()
-        runCurrent()
-        val review = vm.recording.value as RecordingState.Review
-        assertEquals("mleko marchew", review.transcript)
-        assertEquals(Problem.LIMIT, review.whisperProblem?.problem)
-        assertEquals(AiProvider.GROQ, review.whisperProblem?.provider)
-    }
-
-    @Test
-    fun `with Whisper off nothing is kept and nothing is sent`() = runTest(dispatcher) {
-        var asked = 0
-        val speech = FakeSpeech { flowOf(SpeechEvent.Done("mleko")) }
-        val vm = viewModel(FakeStore(AppSettings()), speech, retyper = whisper({ asked++; "x" }))
-
-        vm.startRecording()
-        runCurrent()
-        assertEquals("mleko", (vm.recording.value as RecordingState.Review).transcript)
-        assertEquals(0, asked)
-        assertEquals(listOf(false), speech.keptAudio)
-    }
-
     @Test
     fun `nothing heard is a message, not an empty card`() = runTest(dispatcher) {
         val vm = viewModel(FakeStore(AppSettings()))
@@ -832,7 +774,7 @@ class HomeViewModelTest {
         val vm = claudeViewModel(FakeNotes(), AiMode.FREE)
         vm.onTranscript("kupić mleko")
         runCurrent()
-        assertFalse((vm.recording.value as RecordingState.Review).claudeKey)
+        assertEquals(null, (vm.recording.value as RecordingState.Review).refineMode)
     }
 
     @Test
@@ -842,7 +784,7 @@ class HomeViewModelTest {
         vm.onTranscript("kupić mleko i umówić dentystę")
         runCurrent()
         val review = vm.recording.value as RecordingState.Review
-        assertTrue("a Claude key is saved and the rules wrote the cards", review.claudeKey)
+        assertEquals("a Claude key is saved and the rules wrote the cards", AiMode.CLAUDE, review.refineMode)
         assertEquals(null, review.by)
         val old = review.cards.map { it.id }
 
@@ -884,7 +826,46 @@ class HomeViewModelTest {
         val vm = viewModel(FakeStore(AppSettings()))
         vm.onTranscript("kupić mleko")
         runCurrent()
-        assertFalse((vm.recording.value as RecordingState.Review).claudeKey)
+        assertEquals(null, (vm.recording.value as RecordingState.Review).refineMode)
+    }
+
+    @Test
+    fun `free AI that failed offers trying again, and its cards replace the rules' only when taken`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        var calls = 0
+        val groq = object : AiGateway {
+            override fun chat(provider: AiProvider, model: String, key: String) = AiChat { _, _, _ ->
+                if (calls++ == 0) throw AiException(Problem.OFFLINE)
+                AiAnswer("""{"cards":[{"title":"Mleko","type":"shopping","items":[{"text":"Mleko"}]}]}""", model)
+            }
+            override suspend fun freeModels(provider: AiProvider, key: String?) = emptyList<String>()
+        }
+        val keys = object : SecretStore {
+            override suspend fun apiKey(provider: AiProvider): String? = if (provider == AiProvider.GROQ) "gsk_test" else null
+            override suspend fun setApiKey(provider: AiProvider, key: String?) = Unit
+        }
+        val vm = viewModel(
+            FakeStore(AppSettings(aiProviders = setOf(AiProvider.GROQ))), notes = notes,
+            structurer = NoteStructurer(keys, MemoryAiUsage(), groq, testScheduler.timeSource),
+        )
+        vm.onTranscript("kupić mleko")
+        runCurrent()
+        val review = vm.recording.value as RecordingState.Review
+        assertEquals("Groq was offline, so the rules wrote the cards", null, review.by)
+        assertEquals(AiMode.FREE, review.refineMode)
+        val old = review.cards.map { it.id }
+
+        vm.refine()
+        advanceUntilIdle()
+        val offer = (vm.recording.value as RecordingState.Review).refine as RecordingState.Refine.Offer
+        assertEquals(AiProvider.GROQ, offer.by)
+        assertEquals("nothing changes before the user picks", old.toSet(), notes.rows.value.keys)
+
+        vm.acceptRefined()
+        advanceUntilIdle()
+        val after = vm.recording.value as RecordingState.Review
+        assertEquals(AiProvider.GROQ, after.by)
+        assertEquals(setOf(after.cards.single().id), notes.rows.value.keys)
     }
 
     @Test
@@ -905,4 +886,114 @@ class HomeViewModelTest {
         assertTrue("the offer is still there to try again", review.refine is RecordingState.Refine.Offer)
         assertEquals(old.map { it.id }.toSet(), notes.rows.value.keys)
     }
+
+    // --- "More exact" in the card view ---
+
+    /** A card of the stack that the rules wrote, already in the database. */
+    private suspend fun FakeNotes.rulesCard(): Note {
+        val card = Note(title = "Mleko i dentysta", body = "kupić mleko, umówić dentystę", priority = Priority.HIGH, createdAtMillis = 5)
+        return card.copy(id = save(card))
+    }
+
+    @Test
+    fun `a card the rules wrote offers more exact, and Claude's cards take its place only when taken`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        val vm = claudeViewModel(notes)
+        val old = notes.rulesCard()
+        vm.openCard(old)
+        runCurrent()
+        assertEquals(AiMode.CLAUDE, vm.cardRefine.value?.mode)
+
+        vm.refineCard()
+        runCurrent()
+        val offer = vm.cardRefine.value?.state as RecordingState.Refine.Offer
+        assertEquals("no type is forced, so the AI may split the card", listOf("Mleko", "Dentysta"), offer.cards.map { it.title })
+        assertEquals("nothing changes before the user picks", setOf(old.id), notes.rows.value.keys)
+
+        vm.acceptCardRefine()
+        runCurrent()
+        assertEquals("several cards: the view closes onto the stack", null, vm.editing.value)
+        assertEquals(null, vm.cardRefine.value)
+        assertFalse("the old card is gone", old.id in notes.rows.value.keys)
+        assertEquals(setOf("Mleko", "Dentysta"), notes.rows.value.values.map { it.title }.toSet())
+    }
+
+    @Test
+    fun `one card from the AI replaces the card in place, keeping its id, date and priority`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        val one = object : AiGateway {
+            override fun chat(provider: AiProvider, model: String, key: String) = AiChat { _, _, _ ->
+                AiAnswer("""{"cards":[{"title":"Dentysta","type":"event","due":"2026-11-25","time":"14:00"}]}""", model)
+            }
+            override suspend fun freeModels(provider: AiProvider, key: String?) = emptyList<String>()
+        }
+        val vm = viewModel(
+            FakeStore(AppSettings(aiMode = AiMode.CLAUDE)), notes = notes,
+            structurer = NoteStructurer(ClaudeKey(), MemoryAiUsage(), one, testScheduler.timeSource),
+        )
+        val old = notes.rulesCard()
+        vm.openCard(old)
+        runCurrent()
+        vm.refineCard()
+        runCurrent()
+        vm.acceptCardRefine()
+        runCurrent()
+        val now = vm.editing.value?.note
+        assertEquals("Dentysta", now?.title)
+        assertEquals(old.id, now?.id)
+        assertEquals(old.createdAtMillis, now?.createdAtMillis)
+        assertEquals(Priority.HIGH, now?.priority)
+        assertTrue(now!!.byAi)
+        assertEquals("the AI wrote it now - no button", null, vm.cardRefine.value)
+        assertEquals(setOf(old.id), notes.rows.value.keys)
+        assertEquals("Dentysta", notes.rows.value[old.id]?.title)
+    }
+
+    @Test
+    fun `keep mine drops the offer and the card stays as it was`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        val vm = claudeViewModel(notes)
+        val old = notes.rulesCard()
+        vm.openCard(old)
+        runCurrent()
+        vm.refineCard()
+        runCurrent()
+        vm.keepCard()
+        assertEquals(null, vm.cardRefine.value?.state)
+        assertEquals(old, vm.editing.value?.note)
+        assertEquals(old, notes.rows.value[old.id])
+    }
+
+    @Test
+    fun `no more exact for a card the AI wrote, or with no AI to ask`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        val vm = claudeViewModel(notes)
+        vm.openCard(notes.rulesCard().copy(byAi = true))
+        runCurrent()
+        assertEquals(null, vm.cardRefine.value)
+
+        val plain = viewModel(FakeStore(AppSettings()), notes = notes)
+        plain.openCard(notes.rulesCard())
+        runCurrent()
+        assertEquals(null, plain.cardRefine.value)
+    }
+
+    @Test
+    fun `a failed save of the AI's cards keeps the old card and the offer`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        val vm = claudeViewModel(notes)
+        val old = notes.rulesCard()
+        vm.openCard(old)
+        runCurrent()
+        vm.refineCard()
+        runCurrent()
+        notes.failOnSave = 3 // save 1 was the old card; the AI's second card is save 3 and fails
+        vm.acceptCardRefine()
+        runCurrent()
+        assertEquals(setOf(old.id), notes.rows.value.keys)
+        assertEquals(old, vm.editing.value?.note)
+        assertTrue(vm.cardRefine.value?.state is RecordingState.Refine.Offer)
+        assertTrue(vm.actionFailed.value)
+    }
 }
+

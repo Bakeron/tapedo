@@ -168,19 +168,11 @@ class AiGatewayTest {
     }
 
     @Test
-    fun `only free chat models are offered, openrouter without a key`() = runTest {
-        var openRouterAuth: String? = "unset"
-        val engine = MockEngine { req ->
-            if (req.url.host == "openrouter.ai") {
-                openRouterAuth = req.headers[HttpHeaders.Authorization]
-                respond("""{"data":[{"id":"google/gemma-4-31b-it:free"},{"id":"google/gemma-4-31b-it"},{"id":"openrouter/free"},{"id":"<b>x</b>:free"}]}""", headers = jsonHeaders)
-            } else {
-                respond("""{"data":[{"id":"llama-3.3-70b-versatile"},{"id":"whisper-large-v3"},{"id":"openai/gpt-oss-safeguard-20b"},{"id":"old","active":false}]}""", headers = jsonHeaders)
-            }
+    fun `only free chat models are offered`() = runTest {
+        val engine = MockEngine {
+            respond("""{"data":[{"id":"llama-3.3-70b-versatile"},{"id":"whisper-large-v3"},{"id":"openai/gpt-oss-safeguard-20b"},{"id":"<b>x</b>"},{"id":"old","active":false}]}""", headers = jsonHeaders)
         }
         val gateway = HttpAiGateway(aiHttpClient(engine))
-        assertEquals(listOf("google/gemma-4-31b-it:free", "openrouter/free"), gateway.freeModels(AiProvider.OPENROUTER, null))
-        assertEquals(null, openRouterAuth)
         assertEquals(listOf("llama-3.3-70b-versatile"), gateway.freeModels(AiProvider.GROQ, "gsk"))
         assertTrue(gateway.freeModels(AiProvider.ANTHROPIC, "k").isEmpty())
     }
@@ -188,7 +180,8 @@ class AiGatewayTest {
     @Test
     fun `defaults of free providers are on their saved free lists`() {
         for (p in AiProvider.entries.filter { it.free }) assertTrue(p.name, p.defaultModel in p.savedFreeModels)
-        assertEquals(listOf("groq", "openrouter", "anthropic", "openai", "gemini"), AiProvider.entries.map { it.id })
+        assertEquals(listOf("groq", "anthropic", "openai", "gemini"), AiProvider.entries.map { it.id })
+        assertTrue("a removed id is never used again", AiProvider.REMOVED_IDS.none { AiProvider.ofId(it) != null })
         assertFalse("Gemini is paid - new projects get no free plan", AiProvider.GEMINI.free)
     }
 }

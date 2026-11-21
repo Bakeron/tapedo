@@ -8,7 +8,7 @@ import io.github.bakeron.tapedo.core.ai.Problem
 import io.github.bakeron.tapedo.core.ai.Refined
 import io.github.bakeron.tapedo.core.ai.LowFunds
 import io.github.bakeron.tapedo.core.ai.StructureResult
-import io.github.bakeron.tapedo.core.ai.WhisperRetyper
+import io.github.bakeron.tapedo.core.ai.asDictation
 import io.github.bakeron.tapedo.core.data.NoteRepository
 import io.github.bakeron.tapedo.core.model.ChecklistItem
 import io.github.bakeron.tapedo.core.model.Note
@@ -71,11 +71,8 @@ sealed interface RecordingState {
         val countdown: Int = 0,
     ) : RecordingState
 
-    /**
-     * Speech is done; the rules or the AI are cutting the text into cards.
-     * @param retyping Whisper is typing the recording again first - [transcript] is still the phone's text.
-     */
-    data class Structuring(val transcript: String, val retyping: Boolean = false) : RecordingState
+    /** Speech is done; the rules or the AI are cutting the text into cards. */
+    data class Structuring(val transcript: String) : RecordingState
 
     /**
      * The cards of a recording, already written to the database (a card with id 0 is not saved yet -
@@ -90,23 +87,25 @@ sealed interface RecordingState {
         val saveFailed: Boolean = false,
         /** "Record more" heard nothing usable (or could not start) - the cards are unchanged. */
         val moreFailed: SpeechError? = null,
-        /** Whisper was on but did not type the recording - why; the phone's text was used. */
-        val whisperProblem: AiProblem? = null,
         /** Claude wrote the cards, but less than 10% of the top-up is left. */
         val lowFunds: LowFunds? = null,
         /** The provider that wrote the cards; null = the rules. "More exact" is offered unless it was Claude. */
         val by: AiProvider? = null,
         /** The type picked for the recording - "More exact" asks for the same. */
         val type: NoteType? = null,
-        /** Paid Claude is chosen and its key saved - only then "More exact" is offered (the only way Claude is asked). */
-        val claudeKey: Boolean = false,
+        /**
+         * Which AI the button under rule-written cards asks: [AiMode.CLAUDE] ("More exact", paid Claude chosen and
+         * its key saved - the only way Claude is asked) or [AiMode.FREE] ("Try AI again", a free provider is on but
+         * failed - author 21.11.2026); null = no button.
+         */
+        val refineMode: AiMode? = null,
         val refine: Refine? = null,
     ) : RecordingState
 
-    /** "More exact": Claude is writing the cards again, offers its cards, or could not. */
+    /** "More exact" / "Try AI again": the AI is writing the cards again, offers its cards, or could not. */
     sealed interface Refine {
         data object Working : Refine
-        data class Offer(val cards: List<Note>) : Refine
+        data class Offer(val cards: List<Note>, val by: AiProvider = AiProvider.ANTHROPIC) : Refine
         data class Failed(val problem: AiProblem) : Refine
     }
 
@@ -121,6 +120,17 @@ sealed interface StackState {
     /** The database could not be opened or read (disk, Keystore) - the screen offers "try again". */
     data object Failed : StackState
 }
+
+/**
+ * "More exact" under a card of the stack that the AI did not write (author 21.11.2026: once free AI is on, older
+ * cards are worth asking too). [mode] picks the AI as after a recording; [state] is the question and its answer.
+ */
+data class CardRefine(
+    val mode: AiMode,
+    val state: RecordingState.Refine? = null,
+    /** Claude answered and less than 10% of the top-up is left. */
+    val lowFunds: LowFunds? = null,
+)
 
 /** A tick moved [note] to the [to] divider - said on a strip, with a button to look there. */
 data class Moved(val note: Note, val to: StackTab)
@@ -159,8 +169,6 @@ class HomeViewModel(
     private val timeSource: TimeSource = TimeSource.Monotonic,
     /** "3, 2, 1" before each recording, so the user knows when to speak (the author's decision 07.11.2026). */
     private val countdownMillis: Long = COUNTDOWN_MS,
-    /** Whisper after "stop", when turned on in Settings; null in tests that do not need it. */
-    private val retyper: WhisperRetyper? = null,
 ) : ViewModel() {
 
     /** Default list titles in the app language - set by the screen, which can read resources. */
@@ -196,6 +204,11 @@ class HomeViewModel(
 
     /** The review window put aside while the user adds by voice to one of its cards - it comes back after. */
     private var held: RecordingState.Review? = null
+
+    /** "More exact" for the card open in the card view; null = no button (the AI wrote it, or no AI to ask). */
+    private val _cardRefine = MutableStateFlow<CardRefine?>(null)
+    val cardRefine: StateFlow<CardRefine?> = _cardRefine.asStateFlow()
+    private var cardRefining: Job? = null
 
     /** Words said in the card view are being added to the card. */
     private val _appending = MutableStateFlow(false)
@@ -335,8 +348,7 @@ class HomeViewModel(
                 }
             }
             try {
-                val keepAudio = retyper != null && s.activeWhisper != null
-                speech.listen(s.speechLanguage, allowOnline = allowOnline, skipFirstMs = countdownMillis, keepAudio = keepAudio, pauseMillis = s.pauseMillis).collect { e ->
+                speech.listen(s.speechLanguage, allowOnline = allowOnline, skipFirstMs = countdownMillis, pauseMillis = s.pauseMillis).collect { e ->
                     when (e) {
                         is SpeechEvent.Level -> level = max(level, e.value)
                         is SpeechEvent.Partial -> {
@@ -350,13 +362,10 @@ class HomeViewModel(
                                 if (it is RecordingState.Active) it.copy(listening = e.on, micOpened = it.micOpened || e.on) else it
                             }
                         }
-                        is SpeechEvent.Done -> {
-                            val (text, whisperProblem) = retyped(s, e, showProgress = appendTo == null)
-                            when {
-                                appendTo != null -> appendSpoken(appendTo, text)
-                                continuing != null -> continueReview(text, whisperProblem)
-                                else -> onTranscript(text, whisperProblem = whisperProblem)
-                            }
+                        is SpeechEvent.Done -> when {
+                            appendTo != null -> appendSpoken(appendTo, e.text)
+                            continuing != null -> continueReview(e.text)
+                            else -> onTranscript(e.text)
                         }
                         is SpeechEvent.Failed -> endRecording(e.error, e.code)
                         // The recording goes on; the note waits on the home screen until dismissed.
@@ -387,18 +396,6 @@ class HomeViewModel(
             endRecording(null)
         } else {
             speech.stop()
-        }
-    }
-
-    /** Whisper's text when it is on and worked; otherwise the phone's text, with Whisper's reason. */
-    private suspend fun retyped(s: AppSettings, done: SpeechEvent.Done, showProgress: Boolean): Pair<String, AiProblem?> {
-        val r = retyper ?: return done.text to null
-        if (s.activeWhisper == null || done.text.isBlank()) return done.text to null
-        if (showProgress) _recording.value = RecordingState.Structuring(done.text.trim(), retyping = true)
-        return when (val outcome = r.retype(s, done.audio)) {
-            null -> done.text to null
-            is WhisperRetyper.Outcome.Text -> outcome.text to null
-            is WhisperRetyper.Outcome.Failed -> done.text to outcome.problem
         }
     }
 
@@ -439,7 +436,7 @@ class HomeViewModel(
      * Adds what was said to the review: to the list card as new items (keeping the user's edits),
      * or - with no list among the cards - cuts the whole dictation again, as if it had been one recording.
      */
-    private fun continueReview(text: String, whisperProblem: AiProblem? = null) {
+    private fun continueReview(text: String) {
         val review = continuing ?: return
         continuing = null
         val spoken = text.trim()
@@ -450,7 +447,7 @@ class HomeViewModel(
         val transcript = Phrases.join(listOf(review.transcript, spoken))
         val listIndex = review.cards.indexOfLast { it.type.hasItems }
         if (listIndex < 0) {
-            onTranscript(transcript, replacing = review.cards, whisperProblem = whisperProblem)
+            onTranscript(transcript, replacing = review.cards)
             return
         }
         _recording.value = RecordingState.Structuring(transcript)
@@ -462,7 +459,6 @@ class HomeViewModel(
                     transcript = transcript,
                     cards = cards,
                     aiProblems = result?.rulesProblems() ?: review.aiProblems,
-                    whisperProblem = whisperProblem,
                     lowFunds = result?.lowFunds ?: review.lowFunds,
                     // Claude's cards with items added by someone else are worth asking Claude again.
                     by = review.by?.takeIf { it == result?.by },
@@ -482,44 +478,63 @@ class HomeViewModel(
     private var refining: Job? = null
 
     /**
-     * "More exact" (the author's decision 11.11.2026): the whole dictation once more to Claude Sonnet. The cards
-     * on screen stay saved until the user takes Claude's - it may be worse, and it may not answer at all.
+     * "More exact" (the author's decision 11.11.2026): the whole dictation once more to Claude Sonnet; in free mode
+     * "Try AI again" to the free providers. The cards on screen stay saved until the user takes the new ones -
+     * they may be worse, and the AI may not answer at all.
      */
     fun refine() {
         val review = _recording.value as? RecordingState.Review ?: return
         if (saving || refining?.isActive == true || review.refine is RecordingState.Refine.Offer) return
         _recording.value = review.copy(refine = RecordingState.Refine.Working)
+        val s = settings.value ?: AppSettings()
         refining = viewModelScope.launch {
-            val refined = try {
-                structurer.refine(review.transcript, settings.value ?: AppSettings(), review.type, todayEpochDay(), nowMillis())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Refined.Failed(AiProblem(AiProvider.ANTHROPIC, NoteStructurer.REFINE_MODEL, Problem.OTHER))
-            }
+            val refined = askRefine(review.transcript, s, review.type)
             _recording.update { st ->
                 // The window may have closed or moved on ("record more") meanwhile - then the answer is not offered.
                 if (st !is RecordingState.Review || st.refine != RecordingState.Refine.Working) return@update st
-                when (refined) {
-                    is Refined.Cards -> st.copy(
-                        refine = if (refined.notes.isEmpty()) RecordingState.Refine.Failed(
-                            AiProblem(AiProvider.ANTHROPIC, NoteStructurer.REFINE_MODEL, Problem.ANSWER),
-                        ) else RecordingState.Refine.Offer(refined.notes),
-                        lowFunds = refined.lowFunds ?: st.lowFunds,
-                    )
-                    is Refined.Failed -> st.copy(refine = RecordingState.Refine.Failed(refined.problem), lowFunds = refined.lowFunds ?: st.lowFunds)
-                }
+                st.copy(refine = refined.asRefine(s), lowFunds = refined.lowFunds ?: st.lowFunds)
             }
         }
     }
 
-    /** "Keep these" (or back): Claude's offer goes, the cards on screen stay; a running question is dropped. */
+    /** One "More exact" / "Try AI again" question; anything unexpected is a failure, never a crash. */
+    private suspend fun askRefine(text: String, s: AppSettings, type: NoteType?): Refined = try {
+        structurer.refine(text, s, type, todayEpochDay(), nowMillis())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        val asked = if (s.aiMode == AiMode.FREE) AiProblem(AiProvider.FREE.first(), s.modelFor(AiProvider.FREE.first()), Problem.OTHER)
+        else AiProblem(AiProvider.ANTHROPIC, NoteStructurer.REFINE_MODEL, Problem.OTHER)
+        Refined.Failed(asked)
+    }
+
+    private fun Refined.asRefine(s: AppSettings): RecordingState.Refine = when (this) {
+        is Refined.Cards -> if (notes.isEmpty()) RecordingState.Refine.Failed(
+            AiProblem(by, if (by == AiProvider.ANTHROPIC) NoteStructurer.REFINE_MODEL else s.modelFor(by), Problem.ANSWER),
+        ) else RecordingState.Refine.Offer(notes, by)
+        is Refined.Failed -> RecordingState.Refine.Failed(problem)
+    }
+
+    private val Refined.lowFunds: LowFunds?
+        get() = when (this) {
+            is Refined.Cards -> lowFunds
+            is Refined.Failed -> lowFunds
+        }
+
+    /** Which AI "More exact" asks: paid Claude with its key saved, or the free providers that are on; null = none. */
+    private suspend fun refineMode(s: AppSettings): AiMode? = when {
+        s.aiMode == AiMode.CLAUDE && hasClaudeKey() -> AiMode.CLAUDE
+        s.autoProviders.isNotEmpty() -> AiMode.FREE
+        else -> null
+    }
+
+    /** "Keep these" (or back): the AI's offer goes, the cards on screen stay; a running question is dropped. */
     fun keepCards() {
         refining?.cancel()
         _recording.update { if (it is RecordingState.Review && it.refine != null) it.copy(refine = null) else it }
     }
 
-    /** "Use these": Claude's cards are written first, and only then the old ones go - nothing is lost on a failed save. */
+    /** "Use these": the AI's cards are written first, and only then the old ones go - nothing is lost on a failed save. */
     fun acceptRefined() {
         val review = _recording.value as? RecordingState.Review ?: return
         val offer = review.refine as? RecordingState.Refine.Offer ?: return
@@ -528,7 +543,7 @@ class HomeViewModel(
         viewModelScope.launch {
             try {
                 val saved = persist(
-                    review.copy(cards = offer.cards, aiProblems = emptyList(), by = AiProvider.ANTHROPIC, refine = null, moreFailed = null),
+                    review.copy(cards = offer.cards, aiProblems = emptyList(), by = offer.by, refine = null, moreFailed = null),
                 )
                 if (saved.saveFailed) {
                     // The old cards are still saved: keep them, offer Claude's again; written ones go back out.
@@ -583,7 +598,7 @@ class HomeViewModel(
      * Cuts what was said into cards (rules or AI), writes them to the database at once and opens the review window.
      * @param replacing saved cards of the same dictation that the new cards take the place of ("record more").
      */
-    fun onTranscript(text: String, replacing: List<Note> = emptyList(), whisperProblem: AiProblem? = null) {
+    fun onTranscript(text: String, replacing: List<Note> = emptyList()) {
         val transcript = text.trim()
         if (transcript.isEmpty()) {
             _recording.value = RecordingState.Failed(SpeechError.NO_SPEECH)
@@ -625,11 +640,10 @@ class HomeViewModel(
             val review = persist(
                 RecordingState.Review(
                     transcript, cards, result?.rulesProblems().orEmpty(),
-                    whisperProblem = whisperProblem,
                     lowFunds = result?.lowFunds,
                     by = result?.by,
                     type = type,
-                    claudeKey = s.aiMode == AiMode.CLAUDE && hasClaudeKey(),
+                    refineMode = refineMode(s),
                 ),
             )
             _recording.value = review
@@ -775,6 +789,81 @@ class HomeViewModel(
     fun openCard(note: Note) {
         openedDone = note.isDone()
         _editing.value = Editing.Saved(note)
+        closeCardRefine()
+        if (note.byAi) return
+        cardRefining = viewModelScope.launch {
+            val mode = refineMode(settings.value ?: AppSettings()) ?: return@launch
+            if (_editing.value?.note?.id == note.id) _cardRefine.value = CardRefine(mode)
+        }
+    }
+
+    /**
+     * "More exact" in the card view: the card's words (title, text, items, date, hour, place) to the AI. Nothing
+     * changes until the user takes the answer - the AI may make it worse (author 21.11.2026).
+     */
+    fun refineCard() {
+        val open = _editing.value as? Editing.Saved ?: return
+        val asking = _cardRefine.value ?: return
+        if (cardRefining?.isActive == true || asking.state is RecordingState.Refine.Offer) return
+        _cardRefine.value = asking.copy(state = RecordingState.Refine.Working)
+        val s = settings.value ?: AppSettings()
+        val id = open.note.id
+        cardRefining = viewModelScope.launch {
+            // No type: the AI may see a list in a note, or two things in one card.
+            val refined = askRefine(open.note.tidy().asDictation(), s, null)
+            if (_editing.value?.note?.id != id) return@launch
+            _cardRefine.update { it?.copy(state = refined.asRefine(s), lowFunds = refined.lowFunds ?: it.lowFunds) }
+        }
+    }
+
+    /** "Keep mine": the AI's offer goes, the card stays as it is. */
+    fun keepCard() {
+        cardRefining?.cancel()
+        _cardRefine.update { it?.copy(state = null) }
+    }
+
+    /**
+     * "Use this / these": one card takes the AI's version in place (same id, date of writing and priority);
+     * several are written first, and only then the old card goes and the view closes onto the stack.
+     */
+    fun acceptCardRefine() {
+        val open = _editing.value as? Editing.Saved ?: return
+        val offer = _cardRefine.value?.state as? RecordingState.Refine.Offer ?: return
+        if (saving) return
+        saving = true
+        autosave?.cancel()
+        val old = open.note
+        viewModelScope.launch {
+            try {
+                if (offer.cards.size == 1) {
+                    val card = offer.cards.single().copy(id = old.id, createdAtMillis = old.createdAtMillis, priority = old.priority)
+                    // A failed write keeps the old card and the offer - "Use this" can be tapped again.
+                    if (!write { notes.save(card) }) return@launch
+                    show(card)
+                    // The AI wrote it now - no button any more.
+                    closeCardRefine()
+                    return@launch
+                }
+                val written = mutableListOf<Long>()
+                val saved = write { for (card in offer.cards.reversed()) written += notes.save(card) }
+                if (!saved) {
+                    // Half a set is worse than none: what got written goes back out, the old card stays.
+                    written.forEach { id -> write { notes.delete(id) } }
+                    _actionFailed.value = true
+                    return@launch
+                }
+                write { notes.delete(old.id) }
+                _editing.value = null
+                closeCardRefine()
+            } finally {
+                saving = false
+            }
+        }
+    }
+
+    private fun closeCardRefine() {
+        cardRefining?.cancel()
+        _cardRefine.value = null
     }
 
     /** Any change in the card view: on screen at once, in the database a moment later (and on closing). */
@@ -827,6 +916,7 @@ class HomeViewModel(
             is Editing.Draft -> {
                 updateReviewCard(card)
                 _editing.value = null
+                closeCardRefine()
                 dismissError()
                 // Already in the database - the edit goes there too (a card not saved yet waits for "try again").
                 if (card.id != 0L) viewModelScope.launch { write { notes.save(card) } }
@@ -834,6 +924,7 @@ class HomeViewModel(
             is Editing.Saved -> viewModelScope.launch {
                 if (!write { notes.save(card) }) return@launch
                 _editing.value = null
+                closeCardRefine()
                 dismissError()
                 if (card.isDone() != openedDone) showMoved(card)
             }
@@ -850,6 +941,7 @@ class HomeViewModel(
             _recording.value = RecordingState.Idle
         }
         _editing.value = null
+        closeCardRefine()
         dismissError()
         held?.let { _recording.value = it }
         held = null

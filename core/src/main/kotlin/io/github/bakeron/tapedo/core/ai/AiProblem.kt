@@ -55,11 +55,6 @@ enum class Problem {
     /** An answer came, but empty, refused or broken. */
     ANSWER,
 
-    /** Whisper: the phone gave Tapedo no recording to send (older Android, or its recognizer refused Tapedo's audio). */
-    NO_AUDIO,
-
-    /** Whisper: the recording is bigger than the provider takes in one file. */
-    TOO_LONG,
     OTHER,
     ;
 

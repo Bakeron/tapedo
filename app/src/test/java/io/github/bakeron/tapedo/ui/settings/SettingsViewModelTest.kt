@@ -76,7 +76,7 @@ class SettingsViewModelTest {
     }
 
     private object NoSpeech : SpeechInput {
-        override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long, keepAudio: Boolean, pauseMillis: Long?) = emptyFlow<SpeechEvent>()
+        override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long, pauseMillis: Long?) = emptyFlow<SpeechEvent>()
         override fun stop() = Unit
         override suspend fun listeningMode() = ListeningMode.CONTINUOUS
     }
@@ -162,11 +162,11 @@ class SettingsViewModelTest {
 
     @Test
     fun `check connection counts one call and shows the model`() = runTest(dispatcher) {
-        val vm = viewModel(FakeSecrets().apply { keys[AiProvider.OPENROUTER] = "sk-or-abcdefgh" })
+        val vm = viewModel(FakeSecrets().apply { keys[AiProvider.GROQ] = "gsk_abcdefgh" })
         runCurrent()
-        vm.check(AiProvider.OPENROUTER)
+        vm.check(AiProvider.GROQ)
         runCurrent()
-        assertEquals(CheckState.Ok(AiProvider.OPENROUTER.defaultModel), vm.of(AiProvider.OPENROUTER).check)
-        assertEquals(1, vm.of(AiProvider.OPENROUTER).callsToday)
+        assertEquals(CheckState.Ok(AiProvider.GROQ.defaultModel), vm.of(AiProvider.GROQ).check)
+        assertEquals(1, vm.of(AiProvider.GROQ).callsToday)
     }
 }

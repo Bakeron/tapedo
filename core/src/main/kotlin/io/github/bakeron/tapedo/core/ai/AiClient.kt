@@ -58,12 +58,12 @@ fun interface AiChat {
 interface AiGateway {
     fun chat(provider: AiProvider, model: String, key: String): AiChat
 
-    /** Free chat models of a free provider as it lists them today. OpenRouter's list is public - [key] may be null. */
+    /** Free chat models of a free provider as it lists them today. */
     suspend fun freeModels(provider: AiProvider, key: String?): List<String>
 }
 
 /**
- * Two kinds of API cover every provider: OpenAI-compatible chat (Groq, OpenRouter, OpenAI, Gemini through
+ * Two kinds of API cover every provider: OpenAI-compatible chat (Groq, OpenAI, Gemini through
  * its OpenAI endpoint) and the Anthropic Messages API (Claude). The key goes only into a request header.
  */
 class HttpAiGateway(private val http: HttpClient) : AiGateway {
@@ -84,7 +84,6 @@ class HttpAiGateway(private val http: HttpClient) : AiGateway {
         val root = call(key) {
             http.post(chatUrl(provider)) {
                 header(HttpHeaders.Authorization, "Bearer $key")
-                if (provider == AiProvider.OPENROUTER) header("X-Title", "Tapedo")
                 setBody(TextContent(body.toString(), ContentType.Application.Json))
             }
         }
@@ -130,15 +129,12 @@ class HttpAiGateway(private val http: HttpClient) : AiGateway {
             }
             tidy(models(root).filter { it.active && chatGroq(it.id) }.map { it.id })
         }
-        // The list is public - no key is sent, so it works before a key is saved.
-        AiProvider.OPENROUTER -> tidy(models(call(null) { http.get("https://openrouter.ai/api/v1/models") }).map { it.id }.filter(::freeOpenRouter))
         AiProvider.ANTHROPIC, AiProvider.OPENAI, AiProvider.GEMINI -> emptyList()
     }
 
     private fun chatUrl(provider: AiProvider) = when (provider) {
         AiProvider.GEMINI -> "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
         AiProvider.GROQ -> "https://api.groq.com/openai/v1/chat/completions"
-        AiProvider.OPENROUTER -> "https://openrouter.ai/api/v1/chat/completions"
         AiProvider.OPENAI -> "https://api.openai.com/v1/chat/completions"
         AiProvider.ANTHROPIC -> "https://api.anthropic.com/v1/messages"
     }
@@ -196,6 +192,3 @@ internal fun isModelName(v: String): Boolean =
 
 /** Groq lists speech and safety models too - only chat models are offered. */
 internal fun chatGroq(name: String): Boolean = listOf("whisper", "orpheus", "guard", "tts", "playai", "distil").none { it in name }
-
-/** OpenRouter: free models end with ":free"; "openrouter/free" picks one of them itself. */
-internal fun freeOpenRouter(name: String): Boolean = name.endsWith(":free") || name == "openrouter/free"

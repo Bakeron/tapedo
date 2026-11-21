@@ -21,8 +21,8 @@ android {
         applicationId = "io.github.bakeron.tapedo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 23
-        versionName = "2.3"
+        versionCode = 24
+        versionName = "2.4"
         // Instrumented tests (app/src/androidTest) - run on the emulator only, see docs/plan-1a.md.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // "Send the error to the app's author" mails this address. It lives in local.properties (outside Git),

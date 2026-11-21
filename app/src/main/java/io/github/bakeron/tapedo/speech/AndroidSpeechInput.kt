@@ -89,7 +89,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             SpeechRecognizer.createSpeechRecognizer(context)
         }
 
-    override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long, keepAudio: Boolean, pauseMillis: Long?): Flow<SpeechEvent> = callbackFlow {
+    override fun listen(languageTag: String, allowOnline: Boolean, skipFirstMs: Long, pauseMillis: Long?): Flow<SpeechEvent> = callbackFlow {
         val onDevice = onDeviceAvailable()
         if (!onDevice && !SpeechRecognizer.isRecognitionAvailable(context)) {
             trySend(SpeechEvent.Failed(SpeechError.NOT_AVAILABLE))
@@ -105,7 +105,6 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
             ContinuousMic(
                 skipMs = skipFirstMs,
                 onLevel = { trySend(SpeechEvent.Level(it)) },
-                keepAll = keepAudio,
             ).takeIf { it.start() }
         } else {
             null
@@ -145,7 +144,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
         fun finish() {
             if (closed) return
             trySend(
-                if (transcript.isEmpty()) SpeechEvent.Failed(SpeechError.NO_SPEECH) else SpeechEvent.Done(transcript.text(), mic?.recorded()),
+                if (transcript.isEmpty()) SpeechEvent.Failed(SpeechError.NO_SPEECH) else SpeechEvent.Done(transcript.text()),
             )
             close()
         }

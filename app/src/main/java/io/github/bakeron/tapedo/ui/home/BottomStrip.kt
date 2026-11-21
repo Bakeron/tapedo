@@ -1,5 +1,6 @@
 package io.github.bakeron.tapedo.ui.home
 
+import io.github.bakeron.tapedo.ui.components.Fold
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
@@ -91,7 +92,9 @@ internal fun BottomStrip(
             if (still) {
                 EnterTransition.None togetherWith ExitTransition.None
             } else {
-                (slideInVertically(tween(STRIP_IN_MS)) { it / 2 } + fadeIn(tween(STRIP_IN_MS))) togetherWith
+                // One strip after another: the old one leaves first, so the two never show at once.
+                val wait = if (initialState != null && targetState != null) STRIP_OUT_MS else 0
+                (slideInVertically(tween(STRIP_IN_MS, delayMillis = wait)) { it / 2 } + fadeIn(tween(STRIP_IN_MS, delayMillis = wait))) togetherWith
                     (slideOutVertically(tween(STRIP_OUT_MS)) { it / 2 } + fadeOut(tween(STRIP_OUT_MS)))
             }
         },
@@ -112,7 +115,8 @@ internal fun BottomStrip(
                 text = stringResource(R.string.stack_moved, stringResource(tabNameRes(shown.to))),
                 onClose = onDismissMoved,
             ) {
-                if (shown.to != tab) {
+                // Gone smoothly once its divider is open.
+                Fold(shown.to != tab) {
                     PaperButton(
                         stringResource(R.string.stack_moved_show),
                         onClick = { onShowMoved(shown.to) },

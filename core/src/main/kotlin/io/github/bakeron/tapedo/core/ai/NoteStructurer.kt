@@ -4,8 +4,10 @@ import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.rules.ListTitles
 import io.github.bakeron.tapedo.core.rules.RuleBasedStructurer
+import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
+import io.github.bakeron.tapedo.core.time.EpochDays
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 import kotlinx.coroutines.CancellationException
@@ -32,11 +34,25 @@ data class StructureResult(
     val by: AiProvider? = null,
 )
 
-/** The answer to "More exact": Claude's cards to offer, or why there are none (the old cards stay). */
+/** The answer to "More exact" / "Try AI again": the AI's cards to offer, or why there are none (the old cards stay). */
 sealed interface Refined {
-    data class Cards(val notes: List<Note>, val lowFunds: LowFunds?) : Refined
+    data class Cards(val notes: List<Note>, val lowFunds: LowFunds?, val by: AiProvider = AiProvider.ANTHROPIC) : Refined
     data class Failed(val problem: AiProblem, val lowFunds: LowFunds? = null) : Refined
 }
+
+/**
+ * A saved card as words for "More exact" in the card view (author 21.11.2026): title, text, items, the date
+ * and hour as ISO and the place, one per line - the AI reads it like a dictation and may cut it differently.
+ */
+fun Note.asDictation(): String = buildList {
+    add(title.trim())
+    if (body.isNotBlank()) add(body.trim())
+    items.map { it.text.trim() }.filter { it.isNotEmpty() }.forEach { add("- $it") }
+    val day = dueEpochDay?.let { EpochDays.toIso(it) }
+    val hour = timeMinutes?.let { "${(it / 60).toString().padStart(2, '0')}:${(it % 60).toString().padStart(2, '0')}" }
+    listOfNotNull(day, hour).joinToString(" ").ifEmpty { null }?.let(::add)
+    place?.trim()?.ifEmpty { null }?.let(::add)
+}.filter { it.isNotEmpty() }.joinToString("\n")
 
 /**
  * AI or rules. AI is optional: with no provider on, no key, no internet or every limit used the app still
@@ -71,7 +87,21 @@ class NoteStructurer(
         if (providers.isEmpty() || transcript.isBlank()) return rules()
 
         val request = StructureRequest(transcript, todayEpochDay, nowMillis, AppSettings.NEW_CARD_PRIORITY, chosenType)
-        for (provider in providers) {
+        val (notes, by) = freeCards(request, settings, todayEpochDay, problems) ?: return rules()
+        return StructureResult(notes, problems.toList(), by = by)
+    }
+
+    /**
+     * The free providers in turn, as described on the class; the cards and who wrote them, or null when none
+     * did - every reason is then in [problems].
+     */
+    private suspend fun freeCards(
+        request: StructureRequest,
+        settings: AppSettings,
+        todayEpochDay: Long,
+        problems: MutableList<AiProblem>,
+    ): Pair<List<Note>, AiProvider>? {
+        for (provider in settings.autoProviders) {
             val model = settings.modelFor(provider)
             fun failed(problem: Problem, message: String = "") = problems.add(AiProblem(provider, model, problem, message))
 
@@ -95,38 +125,38 @@ class NoteStructurer(
                 when {
                     e.problem == Problem.LIMIT -> { usage.markLimit(provider, todayEpochDay); continue }
                     e.problem.tryNext -> continue
-                    else -> return rules()
+                    else -> return null
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Anything unexpected from the AI path must not cost the note - the rules take over.
+                // Anything unexpected from the AI path must not cost the note.
                 failed(Problem.OTHER)
-                return rules()
+                return null
             } finally {
                 lastCall[provider] = timeSource.markNow()
             }
             usage.addCall(provider, todayEpochDay)
-            val low = if (provider == AiProvider.ANTHROPIC) claudeSpending(answer, model, settings, todayEpochDay) else null
             return try {
-                StructureResult(AiContract.parse(answer.text, request), problems.toList(), low, provider)
+                AiContract.parse(answer.text, request) to provider
             } catch (e: AiException) {
-                // A broken answer: this note is written by the rules (asking again would cost another call).
+                // A broken answer: asking again would cost another call.
                 failed(e.problem, e.providerMessage)
-                rules().copy(lowFunds = low)
+                null
             }
         }
-        return rules()
+        return null
     }
 
     /** A usable key is saved for [provider] - "More exact" is offered only with a Claude key. */
     suspend fun hasKey(provider: AiProvider): Boolean = (readKey(provider) as? Key.Found)?.value != null
 
     /**
-     * "More exact" after a recording that a free model or the rules wrote: the same words once more to
+     * In Claude mode "More exact" after a recording that the rules wrote: the same words once more to
      * Claude Sonnet (paid, about 2-3 grosze), whatever Claude model the settings name - a cheaper model
-     * would not be more exact. Offered only in Claude mode, and this tap is the only way Claude is asked;
-     * the daily spending limit is checked first. No rules here - on any failure the old cards simply stay.
+     * would not be more exact. This tap is the only way Claude is asked; the daily spending limit is checked
+     * first. In free mode "Try AI again" after the free AI failed: the free providers in turn, as after a
+     * recording (author 21.11.2026). No rules here - on any failure the old cards simply stay.
      */
     suspend fun refine(
         transcript: String,
@@ -135,6 +165,13 @@ class NoteStructurer(
         todayEpochDay: Long,
         nowMillis: Long,
     ): Refined {
+        if (settings.aiMode == AiMode.FREE) {
+            val problems = mutableListOf<AiProblem>()
+            val request = StructureRequest(transcript, todayEpochDay, nowMillis, AppSettings.NEW_CARD_PRIORITY, chosenType)
+            val (notes, by) = freeCards(request, settings, todayEpochDay, problems)
+                ?: return Refined.Failed(problems.lastOrNull() ?: AiProblem(AiProvider.FREE.first(), "", Problem.NO_KEY))
+            return Refined.Cards(notes, lowFunds = null, by = by)
+        }
         val provider = AiProvider.ANTHROPIC
         val model = REFINE_MODEL
         fun failed(problem: Problem, message: String = "", low: LowFunds? = null) =
@@ -296,9 +333,8 @@ class AiConnection(
         val saved = provider.savedFreeModels
         val model = settings.modelFor(provider)
         return try {
-            // OpenRouter's list is public - it is shown before a key is saved.
-            val key = if (provider == AiProvider.OPENROUTER) null else secrets.apiKey(provider)?.takeIf { it.isNotBlank() }
-            if (key == null && provider != AiProvider.OPENROUTER) {
+            val key = secrets.apiKey(provider)?.takeIf { it.isNotBlank() }
+            if (key == null) {
                 return FreeModels(saved, false, AiProblem(provider, model, Problem.NO_KEY))
             }
             val models = gateway.freeModels(provider, key)

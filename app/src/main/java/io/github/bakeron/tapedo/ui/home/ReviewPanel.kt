@@ -1,9 +1,15 @@
 package io.github.bakeron.tapedo.ui.home
 
+import io.github.bakeron.tapedo.ui.components.fadeSwap
+import io.github.bakeron.tapedo.ui.components.SwapText
+import io.github.bakeron.tapedo.ui.components.FoldValue
+import io.github.bakeron.tapedo.ui.components.Fold
+import androidx.compose.animation.AnimatedContent
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -41,6 +47,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -53,7 +60,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import io.github.bakeron.tapedo.R
-import io.github.bakeron.tapedo.core.settings.AiProvider
+import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.ui.cards.IndexCard
 import io.github.bakeron.tapedo.ui.components.LabelTape
 import io.github.bakeron.tapedo.ui.components.PaperButton
@@ -154,18 +161,18 @@ fun ReviewPanel(
 
         // Status line, read out as it changes: writing, how many cards, or why the AI did not help.
         val status = when {
-            review == null && (state as? RecordingState.Structuring)?.retyping == true -> stringResource(R.string.review_retyping)
             review == null -> stringResource(R.string.review_structuring)
             else -> pluralStringResource(R.plurals.review_count, review.cards.size, review.cards.size)
         }
-        Text(
+        SwapText(
             status,
             style = MaterialTheme.typography.titleMedium,
+            contentAlignment = Alignment.CenterStart,
             modifier = Modifier
                 .padding(horizontal = 20.dp, vertical = 4.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
         )
-        if (review != null && !review.saveFailed) {
+        Fold(review != null && !review.saveFailed) {
             Text(
                 stringResource(R.string.review_saved),
                 style = MaterialTheme.typography.bodySmall,
@@ -173,19 +180,8 @@ fun ReviewPanel(
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
         }
-        review?.whisperProblem?.let { problem ->
-            // Whisper did not type it: the phone's text is on the sheet above, and why is said here.
-            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    stringResource(R.string.review_whisper_failed),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                )
-                ProblemView(problem)
-            }
-        }
-        review?.lowFunds?.let { LowFundsWarning(it, Modifier.padding(horizontal = 20.dp)) }
-        if (!review?.aiProblems.isNullOrEmpty()) {
+        FoldValue(review?.lowFunds) { LowFundsWarning(it, Modifier.padding(horizontal = 20.dp)) }
+        FoldValue(review?.aiProblems?.takeIf { it.isNotEmpty() }) { problems ->
             // Every provider that failed and what to do - the same words as in Settings.
             Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
@@ -193,7 +189,7 @@ fun ReviewPanel(
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
                 )
-                review.aiProblems.forEach { ProblemView(it) }
+                problems.forEach { ProblemView(it) }
             }
         }
 
@@ -212,8 +208,10 @@ fun ReviewPanel(
         ) {
             val cards = review?.cards.orEmpty()
             itemsIndexed(cards, key = { i, c -> "$i-${c.title}" }) { i, card ->
+                // "Delete card" closes the gap smoothly instead of the cards below jumping up.
                 AnimatedVisibility(
                     visible = i < revealed,
+                    modifier = if (reduceMotion) Modifier else Modifier.animateItem(),
                     enter = if (reduceMotion) EnterTransition.None
                     else slideInVertically(tween(260)) { -it / 3 } + fadeIn(tween(200)),
                 ) {
@@ -232,15 +230,20 @@ fun ReviewPanel(
                     }
                 }
             }
-            // "More exact": only with a Claude key, when Claude did not write these cards, once they are all in.
-            if (review != null && review.claudeKey && review.by != AiProvider.ANTHROPIC && revealed >= cards.size) {
+            // "More exact" (Claude key) or "Try AI again" (free AI that failed): only when the rules wrote these
+            // cards, once they are all in.
+            val refineMode = review?.refineMode
+            if (review != null && refineMode != null && review.by == null && revealed >= cards.size) {
                 item(key = "refine") {
-                    RefineBlock(review.refine, onRefine, onAcceptRefined, onKeepCards)
+                    RefineBlock(
+                        review.refine, RefineTexts.review(free = refineMode == AiMode.FREE), onRefine, onAcceptRefined, onKeepCards,
+                        if (reduceMotion) Modifier else Modifier.animateItem(),
+                    )
                 }
             }
         }
 
-        if (review?.saveFailed == true) {
+        Fold(review?.saveFailed == true) {
             Text(
                 stringResource(R.string.review_save_failed),
                 style = MaterialTheme.typography.bodyMedium,
@@ -250,7 +253,7 @@ fun ReviewPanel(
                     .semantics { liveRegion = LiveRegionMode.Assertive },
             )
         }
-        review?.moreFailed?.let { error ->
+        FoldValue(review?.moreFailed) { error ->
             Text(
                 stringResource(R.string.review_more_failed, speechErrorText(error)),
                 style = MaterialTheme.typography.bodyMedium,
@@ -306,28 +309,77 @@ fun ReviewPanel(
     }
 }
 
+/** The words of [RefineBlock]: after a recording, or under one card in the card view. */
+internal class RefineTexts(
+    @StringRes val button: Int,
+    @StringRes val working: Int,
+    @StringRes val hint: Int,
+    @StringRes val failed: Int,
+    @StringRes val offer: Int,
+    @StringRes val acceptOne: Int,
+    @StringRes val accept: Int,
+    @StringRes val keep: Int,
+) {
+    companion object {
+        fun review(free: Boolean) = if (free) {
+            RefineTexts(
+                R.string.review_retry, R.string.review_retry_working, R.string.review_retry_hint, R.string.review_retry_failed,
+                R.string.review_retry_offer, R.string.review_refine_accept, R.string.review_refine_accept, R.string.review_refine_keep,
+            )
+        } else {
+            RefineTexts(
+                R.string.review_refine, R.string.review_refine_working, R.string.review_refine_hint, R.string.review_refine_failed,
+                R.string.review_refine_offer, R.string.review_refine_accept, R.string.review_refine_accept, R.string.review_refine_keep,
+            )
+        }
+
+        fun card(free: Boolean) = if (free) {
+            RefineTexts(
+                R.string.card_refine_free, R.string.review_retry_working, R.string.card_refine_free_hint, R.string.card_refine_free_failed,
+                R.string.review_retry_offer, R.string.card_refine_accept_one, R.string.review_refine_accept, R.string.card_refine_keep,
+            )
+        } else {
+            RefineTexts(
+                R.string.review_refine, R.string.review_refine_working, R.string.card_refine_hint, R.string.card_refine_failed,
+                R.string.review_refine_offer, R.string.card_refine_accept_one, R.string.review_refine_accept, R.string.card_refine_keep,
+            )
+        }
+    }
+}
+
 /**
- * "More exact" under the cards: the button with its cost, then Claude's cards to take or leave. The old cards
- * stay saved above until "Use these" - Claude may be worse, so the user compares first.
+ * "More exact" (or, with free AI, "Try AI again") under the cards: the button, then the AI's cards to take or
+ * leave. The old cards stay saved above until "Use these" - the AI may be worse, so the user compares first.
  */
 @Composable
-private fun RefineBlock(
+internal fun RefineBlock(
     refine: RecordingState.Refine?,
+    texts: RefineTexts,
     onRefine: () -> Unit,
     onAccept: () -> Unit,
     onKeep: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val still = TapedoTheme.reduceMotion
+    // The button and Claude's cards fade one into the other (old out, then new in).
+    AnimatedContent(
+        targetState = refine as? RecordingState.Refine.Offer,
+        modifier = modifier,
+        transitionSpec = { fadeSwap(still) },
+        contentKey = { it != null },
+        label = "refine",
+    ) { offer ->
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (refine is RecordingState.Refine.Offer) {
-            LabelTape(stringResource(R.string.review_refine_offer))
-            refine.cards.forEachIndexed { i, card ->
+        if (offer != null) {
+            LabelTape(stringResource(texts.offer))
+            offer.cards.forEachIndexed { i, card ->
                 IndexCard(card, compact = false, tilt = if (i % 2 == 0) 0.5f else -0.6f, preview = true)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PaperButton(stringResource(R.string.review_refine_keep), onClick = onKeep)
+                PaperButton(stringResource(texts.keep), onClick = onKeep)
                 PaperButton(
-                    stringResource(R.string.review_refine_accept),
+                    stringResource(if (offer.cards.size == 1) texts.acceptOne else texts.accept),
                     onClick = onAccept,
                     style = PaperButtonStyle.FILLED,
                     modifier = Modifier.weight(1f),
@@ -337,25 +389,28 @@ private fun RefineBlock(
         }
         val working = refine is RecordingState.Refine.Working
         PaperButton(
-            stringResource(if (working) R.string.review_refine_working else R.string.review_refine),
+            stringResource(if (working) texts.working else texts.button),
             onClick = onRefine,
             enabled = !working,
             modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         )
         Text(
-            stringResource(R.string.review_refine_hint),
+            stringResource(texts.hint),
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
         )
-        if (refine is RecordingState.Refine.Failed) {
-            Text(
-                stringResource(R.string.review_refine_failed),
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
-            ProblemView(refine.problem)
+        FoldValue(refine as? RecordingState.Refine.Failed) { failed ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(texts.failed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+                ProblemView(failed.problem)
+            }
         }
+    }
     }
 }
 

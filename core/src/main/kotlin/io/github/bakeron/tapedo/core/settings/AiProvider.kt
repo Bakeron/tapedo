@@ -22,13 +22,6 @@ enum class AiProvider(
         listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3.8-27b"),
         "https://console.groq.com/keys",
     ),
-    OPENROUTER(
-        // "openrouter/free" picks a free model that is not busy at the moment - one popular free model
-        // was often "rate-limited upstream" after a single call (Tablica ofert, 7.11.2026).
-        "openrouter", true, "openrouter/free", 3_500,
-        listOf("openrouter/free", "google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-3.5-super-vl:free"),
-        "https://openrouter.ai/keys",
-    ),
     // Sonnet: accurate enough for sorting notes at about 2-3 grosze a minute of speech; Opus costs twice as much
     // for no gain here, Haiku is cheaper but wrong more often (author's shared AI rules, 11.11.2026).
     ANTHROPIC("anthropic", false, "claude-sonnet-5-5", 500, emptyList(), "https://platform.claude.com/settings/keys"),
@@ -37,6 +30,12 @@ enum class AiProvider(
     ;
 
     companion object {
+        /**
+         * Ids of providers the app no longer has - OpenRouter, removed 21.11.2026 (its free models made things up).
+         * An old setting naming one is skipped; its saved key is deleted.
+         */
+        val REMOVED_IDS = listOf("openrouter")
+
         fun ofId(id: String): AiProvider? = entries.firstOrNull { it.id == id.trim() }
 
         /**

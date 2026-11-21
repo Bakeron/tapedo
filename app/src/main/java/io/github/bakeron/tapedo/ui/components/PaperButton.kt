@@ -1,5 +1,8 @@
 package io.github.bakeron.tapedo.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,8 +11,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,7 +57,12 @@ fun PaperButton(
         PaperButtonStyle.DANGER -> Triple(Color.Transparent, record, record)
         PaperButtonStyle.ON_INK -> Triple(Color.Transparent, scheme.onPrimary, scheme.onPrimary)
     }
-    val alpha = if (enabled) 1f else 0.45f
+    // Turning on and off fades, never jumps.
+    val alpha by animateFloatAsState(
+        targetValue = if (enabled) 1f else 0.45f,
+        animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(200),
+        label = "key enabled",
+    )
     Box(
         modifier
             .heightIn(min = 48.dp)
@@ -65,7 +73,8 @@ fun PaperButton(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
+        // A key that changes its name ("Show" / "Hide") fades the old name out, then the new one in.
+        SwapText(
             text,
             style = MaterialTheme.typography.labelLarge,
             color = ink.copy(alpha = alpha),

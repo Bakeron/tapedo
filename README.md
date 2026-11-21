@@ -25,14 +25,13 @@ Wersja demonstracyjna działa w przeglądarce, bez mikrofonu i na wymyślonych k
 - **Praca na karteczce** - punkt albo zadanie odhacza się na karcie odręcznym przekreśleniem. Karteczkę można też edytować, udostępnić i usunąć z możliwością cofnięcia.
 - **Karteczka na cały ekran** - pisze się na niej od razu, na przykład na liście zakupów w sklepie. Przycisk „Dopisz głosem” dodaje nowe punkty albo tekst. Każda zmiana zapisuje się sama.
 - **Pauza jako nowy punkt** - przerwa w mówieniu zaczyna nowy punkt listy. Jej długość ustawia się od 0 do 10 sekund (domyślnie 2), a „Nigdy” robi z całego nagrania jeden punkt.
-- **Whisper jako opcja** - po „stop” Whisper (Groq, za darmo) przepisuje nagranie jeszcze raz, dokładniej niż telefon. Działa przy darmowym AI. Gdy Whisper zawiedzie, zostaje tekst z telefonu i widać powód.
-- **AI jako opcja** - bez AI rodzaj, priorytet, termin i godzinę wybierają proste reguły. Darmowe AI (Groq, OpenRouter, własny klucz) porządkuje każde nagranie samo. Płatny Claude działa tylko po dotknięciu „Dokładniej”, z dziennym limitem wydatków w dolarach i kwotą w złotych po kursie NBP. Oba rodzaje AI nigdy nie działają naraz. Przy błędzie AI notatkę i tak rozpisują reguły.
+- **AI jako opcja** - bez AI rodzaj, priorytet, termin i godzinę wybierają proste reguły. Darmowe AI (Groq, własny klucz) porządkuje każde nagranie samo. Płatny Claude działa tylko po dotknięciu „Dokładniej”, z dziennym limitem wydatków w dolarach i kwotą w złotych po kursie NBP. Oba rodzaje AI nigdy nie działają naraz. Przy błędzie AI notatkę i tak rozpisują reguły.
 - **Wygląd i dostępność** - jasny motyw „Papier” i ciemny „Panel”, język polski i angielski. Do tego wielkość tekstu, opisy dla czytnika ekranu, „Ogranicz animacje”, „Krzywe karteczki” (domyślnie wyłączone) i układ w poziomie.
 
 ## Prywatność
 
 - Notatki są tylko na telefonie, w bazie zaszyfrowanej SQLCipher (AES-256). Klucz do bazy chroni Android Keystore.
-- Tapedo nie zapisuje dźwięku, zostaje sam tekst. Przy włączonym Whisperze nagranie jest tylko w pamięci telefonu i po „stop” idzie do Groq. Wybór Groq dla Whispera w Ustawieniach jest zgodą, a domyślnie Whisper jest wyłączony.
+- Tapedo nie zapisuje dźwięku, zostaje sam tekst. Nagranie nigdy nie wychodzi z telefonu.
 - Rozpoznawanie mowy działa najpierw na telefonie. Przez internet (głos trafia wtedy do Google) działa dopiero po zgodzie „tym razem” albo „zawsze”, a w Ustawieniach można je wyłączyć na stałe. Na starszych Androidach system może sam użyć internetu i aplikacja o tym mówi.
 - Przy włączonym AI do dostawcy trafia tylko tekst notatki. Zasady każdego dostawcy aplikacja opisuje przed wklejeniem klucza.
 - Klucze API są zaszyfrowane i nigdy nie trafiają do logów. Kopie zapasowe aplikacji są wyłączone.
@@ -66,7 +65,7 @@ adb shell am start -n io.github.bakeron.tapedo/.MainActivity --es debug_transcri
 | Logika | Moduł `core` w czystym Kotlinie (bez Androida) | Model notatek, reguły i klienci AI są testowane na JVM w kilka sekund. Moduł jest gotowy na Kotlin Multiplatform. |
 | Baza | Room + SQLCipher | Zapytania sprawdzane przy kompilacji i cały plik zaszyfrowany |
 | Ustawienia | DataStore | Asynchronicznie, bez czytania dysku na wątku głównym |
-| AI | Klient Ktor, dostawcy (Groq, OpenRouter, Claude, a w kodzie też ukryci OpenAI i Gemini) za jednym interfejsem | Wzorzec „strategia”, więc dostawców da się wymieniać. Odpowiedzi JSON są sprawdzane. |
+| AI | Klient Ktor, dostawcy (Groq, Claude, a w kodzie też ukryci OpenAI i Gemini) za jednym interfejsem | Wzorzec „strategia”, więc dostawców da się wymieniać. Odpowiedzi JSON są sprawdzane. |
 | Połączenie części | Mały kontener pisany ręcznie | Mniej elementów niż Hilt przy aplikacji tej wielkości |
 
 ```
@@ -90,10 +89,10 @@ Kod i komentarze są po angielsku, a notatki i opisy commitów po polsku.
 
 Etap 1a, czyli rdzeń aplikacji, jest prawie gotowy.
 
-- **Zrobione** - nagrywanie, rozpoznawanie mowy na telefonie i przez internet, reguły bez AI, darmowe AI (Groq, OpenRouter) albo płatny Claude z limitem wydatków. Do tego okno po nagraniu, stos karteczek z edycją, odhaczaniem, udostępnianiem i cofaniem, zaszyfrowana baza, motywy, PL i EN, dostępność, ekran licencji, Whisper, pierwsze kroki, instrukcja i wersja demonstracyjna w przeglądarce.
+- **Zrobione** - nagrywanie, rozpoznawanie mowy na telefonie i przez internet, reguły bez AI, darmowe AI (Groq) albo płatny Claude z limitem wydatków. Do tego okno po nagraniu, stos karteczek z edycją, odhaczaniem, udostępnianiem i cofaniem, zaszyfrowana baza, motywy, PL i EN, dostępność, ekran licencji, pierwsze kroki, instrukcja i wersja demonstracyjna w przeglądarce.
 - **Do zrobienia** - podpisany APK w GitHub Releases i GIF z działania.
 
-W etapie 1b planowane są Whisper na telefonie (bez internetu), tryb prywatny, blokada aplikacji i widżet na ekran główny.
+W etapie 1b planowane są tryb prywatny, blokada aplikacji i widżet na ekran główny.
 
 ## Licencja
 
@@ -105,8 +104,8 @@ W etapie 1b planowane są Whisper na telefonie (bez internetu), tryb prywatny, b
 
 An Android voice recorder that turns a short spoken note into index cards, such as tasks with a due date, shopping lists grouped by shop section, and ideas. It works offline with simple rules and understands notes better with AI.
 
-- Speech recognition on the phone, with optional Whisper (Groq) for more exact text.
-- Optional AI, either free (Groq, OpenRouter, own key) or paid Claude with a daily spending limit.
+- Speech recognition on the phone (offline when the phone can), online only after the user agrees.
+- Optional AI, either free (Groq, own key) or paid Claude with a daily spending limit.
 - Notes stay on the phone in an encrypted database (SQLCipher, Android Keystore). No analytics and no crash reports.
 - Light and dark theme, Polish and English, screen reader labels and a "reduce motion" switch.
 

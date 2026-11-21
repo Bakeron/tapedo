@@ -1,5 +1,12 @@
 package io.github.bakeron.tapedo.ui.home
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -48,7 +55,8 @@ import io.github.bakeron.tapedo.ui.theme.TapedoTheme
  *
  * @param includeAuto false in the card editor - a saved card always has a concrete type.
  * @param bleed how far the row reaches out past its own bounds on both sides, up to the screen's edges - the
- *   tapes slide away there, not at the page margin (author 21.11.2026); they rest where they did before.
+ *   tapes slide away there, not at the page margin (author 21.11.2026).
+ * @param inset how far in from its own bounds the first and the last tape rest.
  */
 @Composable
 fun TypeTapeBar(
@@ -57,6 +65,7 @@ fun TypeTapeBar(
     modifier: Modifier = Modifier,
     includeAuto: Boolean = true,
     bleed: Dp = 0.dp,
+    inset: Dp = 16.dp,
 ) {
     val options: List<NoteType?> = (if (includeAuto) listOf(null) else emptyList()) + NoteType.entries
     val index = options.indexOf(selected).coerceAtLeast(0)
@@ -90,7 +99,7 @@ fun TypeTapeBar(
             }
             .selectableGroup(),
         state = state,
-        contentPadding = PaddingValues(horizontal = 16.dp + bleed),
+        contentPadding = PaddingValues(horizontal = inset + bleed),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -119,12 +128,18 @@ private fun TypeTape(type: NoteType?, text: String, selected: Boolean, tilt: Flo
             .padding(vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
+        // Picking a tape straightens it, inks it and lights its LED smoothly (author 21.11.2026).
+        val chosen by animateFloatAsState(
+            targetValue = if (selected) 1f else 0f,
+            animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(200),
+            label = "tape chosen",
+        )
         Row(
             Modifier
-                .rotate(if (selected) 0f else TapedoTheme.tilt(tilt))
-                .then(if (selected) Modifier.shadow(2.dp, shape) else Modifier)
-                .background(if (selected) scheme.primary else colors.card, shape)
-                .border(1.dp, if (selected) scheme.primary else scheme.outline, shape)
+                .rotate(TapedoTheme.tilt(tilt) * (1f - chosen))
+                .shadow(2.dp * chosen, shape)
+                .background(lerp(colors.card, scheme.primary, chosen), shape)
+                .border(1.dp, lerp(scheme.outline, scheme.primary, chosen), shape)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -134,24 +149,35 @@ private fun TypeTape(type: NoteType?, text: String, selected: Boolean, tilt: Flo
             Box(
                 Modifier
                     .size(10.dp)
-                    .border(1.5.dp, if (selected) scheme.onPrimary else colors.controlEdge, CircleShape)
+                    .border(1.5.dp, lerp(colors.controlEdge, scheme.onPrimary, chosen), CircleShape)
                     .padding(2.dp)
-                    .background(if (selected) colors.record else colors.rule, CircleShape),
+                    .background(lerp(colors.rule, colors.record, chosen), CircleShape),
             )
-            val ink = if (selected) scheme.onPrimary else scheme.onSurfaceVariant
+            val ink = lerp(scheme.onSurfaceVariant, scheme.onPrimary, chosen)
             // The same sign as on the strips in the card box ("auto" has none - it is not a kind).
             type?.let { TypeMark(it, ink, size = 15.dp) }
-            Text(
-                text = text.uppercase(),
-                style = MaterialTheme.typography.labelLarge.copy(
-                    letterSpacing = 1.6.sp,
-                    // Embossed letters only on the stuck-on tape.
-                    shadow = if (selected) Shadow(Color.Black.copy(alpha = 0.35f), Offset(0f, 1.5f), 0f) else null,
-                ),
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = ink,
-                maxLines = 1,
-            )
+            // Embossed bold letters only on the stuck-on tape - laid over the plain ones and crossfaded.
+            Box {
+                Text(
+                    text = text.uppercase(),
+                    style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 1.6.sp),
+                    fontWeight = FontWeight.Medium,
+                    color = ink,
+                    maxLines = 1,
+                    modifier = Modifier.graphicsLayer { alpha = 1f - chosen },
+                )
+                Text(
+                    text = text.uppercase(),
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        letterSpacing = 1.6.sp,
+                        shadow = Shadow(Color.Black.copy(alpha = 0.35f), Offset(0f, 1.5f), 0f),
+                    ),
+                    fontWeight = FontWeight.Bold,
+                    color = ink,
+                    maxLines = 1,
+                    modifier = Modifier.graphicsLayer { alpha = chosen }.clearAndSetSemantics { },
+                )
+            }
         }
     }
 }

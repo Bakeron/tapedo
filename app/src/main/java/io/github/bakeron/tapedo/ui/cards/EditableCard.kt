@@ -1,5 +1,18 @@
 package io.github.bakeron.tapedo.ui.cards
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -22,6 +35,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +51,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -47,13 +65,19 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.offset
+import androidx.compose.ui.layout.layout
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.ChecklistItem
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.model.Priority
 import io.github.bakeron.tapedo.core.model.ShoppingGroup
+import io.github.bakeron.tapedo.ui.components.Fold
+import io.github.bakeron.tapedo.ui.components.FoldValue
 import io.github.bakeron.tapedo.ui.components.LabelTape
+import io.github.bakeron.tapedo.ui.components.fadeSwap
 import io.github.bakeron.tapedo.ui.components.PairOrStack
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
@@ -63,6 +87,7 @@ import io.github.bakeron.tapedo.ui.home.TypeTapeBar
 import io.github.bakeron.tapedo.ui.home.tidy
 import io.github.bakeron.tapedo.ui.settings.priorityName
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
+import kotlinx.coroutines.delay
 
 /**
  * The card in the card view, written on directly (author 13.11.2026: reading in one place and writing in
@@ -78,6 +103,26 @@ fun EditableCard(
     modifier: Modifier = Modifier,
     voiceKey: (@Composable () -> Unit)? = null,
 ) {
+    // Another type is another paper: the old sheet fades out, then the new one fades in (author 21.11.2026).
+    val still = TapedoTheme.reduceMotion
+    AnimatedContent(
+        targetState = note.type,
+        modifier = modifier,
+        transitionSpec = { fadeSwap(still).let { if (still) it using null else it } },
+        contentAlignment = Alignment.TopCenter,
+        label = "card paper",
+    ) { shownType ->
+        CardSheet(if (shownType == note.type) note else note.copy(type = shownType), number, onChange, voiceKey)
+    }
+}
+
+@Composable
+private fun CardSheet(
+    note: Note,
+    number: Int?,
+    onChange: (Note) -> Unit,
+    voiceKey: (@Composable () -> Unit)?,
+) {
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val locale = appLocale()
@@ -87,13 +132,14 @@ fun EditableCard(
     // (author 14.11.2026) - the card keeps that room inside its own bounds. Straight tapes fit already.
     val tapeRoom = if (type != NoteType.IDEA && TapedoTheme.tilt(1f) != 0f) 14.dp else 0.dp
     // Centred: the receipt and the idea slip are narrower than the screen.
-    Box(modifier.fillMaxWidth().padding(top = tapeRoom), contentAlignment = Alignment.TopCenter) {
+    Box(Modifier.fillMaxWidth().padding(top = tapeRoom), contentAlignment = Alignment.TopCenter) {
         Box(Modifier.fillMaxWidth(paperWidth(type))) {
-            // Changing the type below changes the paper at once.
+            // The gap above each part sits inside it, so a part that folds away takes its gap along -
+            // a shared spacedBy gap would jump in or out at the end of the fold.
             CardPaper(
                 note,
                 Modifier.padding(top = 6.dp, end = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.Top,
             ) {
                 // The kind in small capitals, numbered like on the stack; date and time have their own lines below.
                 val kind = if (number != null && type != NoteType.EVENT) numberedName(type, number) else stringResource(typeNameRes(type))
@@ -103,16 +149,18 @@ fun EditableCard(
                     color = scheme.onSurfaceVariant,
                     modifier = Modifier.padding(end = 52.dp).semantics { heading() },
                 )
+                // Title and place wrap onto more lines instead of scrolling sideways (author 21.11.2026);
+                // still one line of meaning, so Enter makes a space.
                 PaperField(
                     label = stringResource(R.string.editor_field_title),
                     value = note.title,
-                    onValueChange = { onChange(note.copy(title = it)) },
+                    onValueChange = { onChange(note.copy(title = it.replace('\n', ' '))) },
                     textStyle = MaterialTheme.typography.titleLarge,
-                    singleLine = true,
+                    modifier = Modifier.padding(top = GAP),
                 )
                 // A list is its items - an empty "text" field above them only takes room.
                 // Text a list already has (e.g. from the AI) stays visible and editable.
-                if (!note.type.hasItems || note.body.isNotBlank()) {
+                Fold(!note.type.hasItems || note.body.isNotBlank()) {
                     PaperField(
                         label = stringResource(R.string.editor_field_body),
                         value = note.body,
@@ -121,35 +169,36 @@ fun EditableCard(
                         minLines = if (note.type.hasItems) 1 else 3,
                         // A note is written on lined paper.
                         ruled = note.type == NoteType.NOTE,
+                        modifier = Modifier.padding(top = GAP),
                     )
                 }
-                if (note.type.hasItems) {
-                    ItemsEditor(note, voiceKey) { onChange(note.copy(items = it)) }
+                Fold(note.type.hasItems) {
+                    Box(Modifier.padding(top = GAP)) { ItemsEditor(note, voiceKey) { onChange(note.copy(items = it)) } }
                 }
-                if (note.type == NoteType.EVENT) {
+                Fold(note.type == NoteType.EVENT) {
                     PaperField(
                         label = stringResource(R.string.editor_field_place),
                         value = note.place.orEmpty(),
-                        onValueChange = { onChange(note.copy(place = it)) },
+                        onValueChange = { onChange(note.copy(place = it.replace('\n', ' '))) },
                         textStyle = MaterialTheme.typography.bodyLarge,
-                        singleLine = true,
+                        modifier = Modifier.padding(top = GAP),
                     )
                 }
-                note.dueEpochDay?.let { day ->
+                FoldValue(note.dueEpochDay, Modifier.padding(top = GAP)) { day ->
                     Removable(
                         label = stringResource(R.string.editor_due, dueText(context, day, today, locale)),
                         removeLabel = stringResource(R.string.editor_remove_due),
                         onRemove = { onChange(note.copy(dueEpochDay = null)) },
                     )
                 }
-                note.timeMinutes?.let { minutes ->
+                FoldValue(note.timeMinutes, Modifier.padding(top = GAP)) { minutes ->
                     Removable(
                         label = stringResource(R.string.editor_time, clockTime(minutes)),
                         removeLabel = stringResource(R.string.editor_remove_time),
                         onRemove = { onChange(note.copy(timeMinutes = null)) },
                     )
                 }
-                if (note.type == NoteType.TASK) {
+                Fold(note.type == NoteType.TASK, Modifier.padding(top = GAP)) {
                     DoneToggle(note.done) { onChange(note.copy(done = it)) }
                 }
                 // Pressed on the bottom corner, like on the card in the box.
@@ -158,6 +207,7 @@ fun EditableCard(
                         stringResource(R.string.card_ai_stamp),
                         Modifier
                             .align(Alignment.End)
+                            .padding(top = GAP)
                             .semantics { contentDescription = context.getString(R.string.card_ai_desc) },
                     )
                 }
@@ -187,24 +237,37 @@ fun CardOptions(note: Note, onChange: (Note) -> Unit, onDelete: () -> Unit, modi
     val locale = appLocale()
     val today = rememberToday()
     var open by rememberSaveable { mutableStateOf(false) }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    Column(modifier) {
         PaperButton(
             stringResource(if (open) R.string.editor_options_hide else R.string.editor_options_show),
-            onClick = { open = !open },
+            onClick = {
+                // With the keyboard up the unfolding happened behind it and the key seemed to do nothing
+                // (author 21.11.2026) - the keyboard slides away first.
+                keyboard?.hide()
+                focus.clearFocus()
+                open = !open
+            },
             modifier = Modifier.fillMaxWidth(),
         )
-        if (!open) return@Column
+        // The type row reaches out to the screen's edges, but unfolding clips to the fold's own bounds: the fold
+        // reaches out as far, or the row's ends popped in only after the motion (author 21.11.2026).
+        Fold(open, Modifier.reachOut(TAPE_BLEED)) {
+        Column(Modifier.padding(horizontal = TAPE_BLEED).padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             LabelTape(stringResource(R.string.editor_field_type))
             TypeTapeBar(
                 selected = note.type,
                 onSelect = { type -> if (type != null) onChange(note.changeType(type)) },
                 includeAuto = false,
-                // The card screen's side margins (12 dp) and the options' own (4 dp).
-                bleed = 16.dp,
+                bleed = TAPE_BLEED,
+                // The first tape starts under the "Type" label, not further in (author 21.11.2026).
+                inset = 0.dp,
             )
         }
-        if (note.type != NoteType.IDEA) {
+        // Ideas have no priority: the selector folds away when the type turns into one.
+        Fold(note.type != NoteType.IDEA) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 LabelTape(stringResource(R.string.editor_field_priority))
                 SlideSelector(
@@ -225,6 +288,8 @@ fun CardOptions(note: Note, onChange: (Note) -> Unit, onDelete: () -> Unit, modi
                 onClick = onDelete,
                 style = PaperButtonStyle.DANGER,
             )
+        }
+        }
         }
     }
 }
@@ -252,6 +317,16 @@ internal fun Note.changeType(type: NoteType): Note {
         }
     }
     return copy(type = type)
+}
+
+/** The card screen's side margins (12 dp) and the options' own (4 dp) - how far the type row reaches out. */
+private val TAPE_BLEED = 16.dp
+
+/** Lays the content out [by] wider on both sides than the room it is given, overhanging it evenly. */
+private fun Modifier.reachOut(by: Dp): Modifier = layout { measurable, constraints ->
+    val out = by.roundToPx()
+    val placeable = measurable.measure(constraints.offset(horizontal = 2 * out))
+    layout(placeable.width - 2 * out, placeable.height) { placeable.place(-out, 0) }
 }
 
 /** How a ticked list item is written in the text of a card that has no items. */
@@ -317,11 +392,14 @@ private fun PaperField(
                         },
                     ) { inner() }
                     Spacer(Modifier.height(6.dp))
+                    val still = TapedoTheme.reduceMotion
+                    val lineHeight by animateDpAsState(if (focused) 2.dp else 1.dp, if (still) snap() else tween(200), label = "field line")
+                    val lineColor by animateColorAsState(if (focused) scheme.primary else scheme.outline, if (still) snap() else tween(200), label = "field ink")
                     Spacer(
                         Modifier
                             .fillMaxWidth()
-                            .height(if (focused) 2.dp else 1.dp)
-                            .background(if (focused) scheme.primary else scheme.outline),
+                            .height(lineHeight)
+                            .background(lineColor),
                     )
                 }
             },
@@ -340,6 +418,9 @@ private fun ItemsEditor(note: Note, voiceKey: (@Composable () -> Unit)?, onChang
     val shopping = note.type == NoteType.SHOPPING
     val scheme = MaterialTheme.colorScheme
     val locale = appLocale()
+    val still = TapedoTheme.reduceMotion
+    val latestItems by rememberUpdatedState(items)
+    val latestOnChange by rememberUpdatedState(onChange)
     // "Add item" puts the cursor on the new line, so typing can start at once.
     var focusIndex by remember { mutableStateOf<Int?>(null) }
     val newItem = remember { FocusRequester() }
@@ -349,21 +430,49 @@ private fun ItemsEditor(note: Note, voiceKey: (@Composable () -> Unit)?, onChang
             focusIndex = null
         }
     }
+    // Items have no ids, so the editor keeps its own key per line: a line that comes or goes folds in or out
+    // instead of the lines below it jumping (author 21.11.2026). The change itself reaches the card a frame
+    // later, through the view model - the keys follow it then.
+    val rows = remember { ItemRows() }
+    rows.follow(items.size)
+    var leaving by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(leaving) {
+        val key = leaving ?: return@LaunchedEffect
+        if (!still) delay(ITEM_FOLD_MS.toLong())
+        val at = rows.indexOf(key)
+        if (at >= 0 && at in latestItems.indices) {
+            rows.drop(key)
+            latestOnChange(latestItems.filterIndexed { j, _ -> j != at })
+        }
+        leaving = null
+    }
     Column {
         for ((group, inGroup) in groupedItems(note)) {
             if (group != null) {
-                Spacer(Modifier.height(14.dp))
-                Text(
-                    groupName(group).uppercase(locale),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp).semantics { heading() },
-                )
+                // A shop section folds away with its last item and folds in with its first.
+                key("group", group) {
+                    ItemFold(
+                        visible = inGroup.any { !rows.gone(rows.keyAt(it.index), leaving) },
+                        isNew = rows.isNewGroup(),
+                    ) {
+                        Column {
+                            Spacer(Modifier.height(14.dp))
+                            Text(
+                                groupName(group).uppercase(locale),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = scheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp).semantics { heading() },
+                            )
+                        }
+                    }
+                }
             }
-            for ((i, item) in inGroup) {
+            for ((i, item) in inGroup) key(rows.keyAt(i)) {
+                val rowKey = rows.keyAt(i)
                 val itemLabel = stringResource(R.string.editor_item_label, i + 1)
                 val rule = scheme.outlineVariant
+                ItemFold(visible = !rows.gone(rowKey, leaving), isNew = rows.isNew(rowKey)) {
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -391,23 +500,28 @@ private fun ItemsEditor(note: Note, voiceKey: (@Composable () -> Unit)?, onChang
                     ) { PencilBox(item.checked, scheme.onSurface) }
                     // A ticked item is struck through with the pencil line, drawn on and wiped off (author 21.11.2026).
                     var itemLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+                    // A long item wraps onto more lines instead of scrolling sideways out of view (author
+                    // 21.11.2026); a line break would split one item into a strange two-line one, so it is a space.
                     BasicTextField(
                         value = item.text,
                         onTextLayout = { itemLayout = it },
-                        onValueChange = { text -> onChange(items.mapIndexed { j, it -> if (j == i) it.copy(text = text) else it }) },
+                        onValueChange = { text ->
+                            val oneItem = text.replace('\n', ' ')
+                            onChange(items.mapIndexed { j, it -> if (j == i) it.copy(text = oneItem) else it })
+                        },
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
-                        singleLine = true,
                         cursorBrush = SolidColor(scheme.primary),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         modifier = Modifier
                             .weight(1f)
+                            .padding(vertical = 10.dp)
                             .then(if (i == items.lastIndex) Modifier.focusRequester(newItem) else Modifier)
                             .handStrike(item.checked, { itemLayout }, scheme.onSurface)
                             .semantics { contentDescription = itemLabel },
                     )
                     val removeLabel = stringResource(R.string.editor_remove_item, i + 1)
                     IconButton(
-                        onClick = { onChange(items.filterIndexed { j, _ -> j != i }) },
+                        onClick = { if (leaving == null) leaving = rowKey },
                         modifier = Modifier.size(44.dp).semantics { contentDescription = removeLabel },
                     ) {
                         Text(
@@ -417,6 +531,7 @@ private fun ItemsEditor(note: Note, voiceKey: (@Composable () -> Unit)?, onChang
                             modifier = Modifier.clearAndSetSemantics { },
                         )
                     }
+                }
                 }
             }
         }
@@ -432,6 +547,68 @@ private fun ItemsEditor(note: Note, voiceKey: (@Composable () -> Unit)?, onChang
             voiceKey?.invoke()
         }
     }
+}
+
+private const val ITEM_FOLD_MS = 200
+
+/** Room between the parts of the card. */
+private val GAP = 16.dp
+
+/**
+ * The editor's own key for each list line, kept in step with the card's items. A line added after the editor
+ * opened is "new" (it folds in); a removed line keeps its key until the shorter list arrives, so the line
+ * below does not take its place for a frame. Plain fields: read and changed only during composition.
+ */
+private class ItemRows {
+    private val keys = mutableListOf<Long>()
+    private val fresh = mutableSetOf<Long>()
+    private var next = 0L
+    private var frames = 0
+    private var dropping: Long? = null
+
+    fun follow(size: Int) {
+        frames++
+        dropping?.let { key ->
+            if (size == keys.size - 1) {
+                keys.remove(key)
+                dropping = null
+            }
+        }
+        while (keys.size < size) {
+            val key = next++
+            keys += key
+            if (frames > 1) fresh += key
+        }
+        while (keys.size > size) keys.removeAt(keys.lastIndex)
+    }
+
+    fun keyAt(index: Int): Long = keys[index]
+    fun indexOf(key: Long): Int = keys.indexOf(key)
+    fun isNew(key: Long): Boolean = key in fresh
+    fun isNewGroup(): Boolean = frames > 1
+
+    /** The line is gone from the card; its key goes when the card's shorter list comes back. */
+    fun drop(key: Long) {
+        dropping = key
+    }
+
+    fun gone(key: Long, leaving: Long?): Boolean = key == leaving || key == dropping
+}
+
+/** A list line or shop section that unfolds when it comes and folds away when it goes. */
+@Composable
+private fun ItemFold(visible: Boolean, isNew: Boolean, content: @Composable () -> Unit) {
+    val still = TapedoTheme.reduceMotion
+    // Target set at once, so a new line is laid out in its first frame (the cursor can go to it right away).
+    val state = remember { MutableTransitionState(!isNew || still).apply { targetState = visible } }
+    SideEffect { state.targetState = visible }
+    AnimatedVisibility(
+        visibleState = state,
+        enter = if (still) EnterTransition.None
+        else expandVertically(tween(ITEM_FOLD_MS), expandFrom = Alignment.Top) + fadeIn(tween(ITEM_FOLD_MS)),
+        exit = if (still) ExitTransition.None
+        else shrinkVertically(tween(ITEM_FOLD_MS), shrinkTowards = Alignment.Top) + fadeOut(tween(ITEM_FOLD_MS)),
+    ) { content() }
 }
 
 @Composable

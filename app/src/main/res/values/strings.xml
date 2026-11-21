@@ -89,16 +89,6 @@
     <string name="settings_theme_light">Papier</string>
     <string name="settings_theme_dark">Panel</string>
     <string name="settings_app_language">Język aplikacji / Language</string>
-    <string name="settings_whisper">Whisper - dokładniejsze przepisywanie</string>
-    <string name="settings_whisper_off">Wyłączony</string>
-    <string name="settings_whisper_hint">Po „stop” Whisper przepisuje nagranie jeszcze raz, dokładniej niż telefon. Podczas mówienia napisy dalej pokazuje telefon.</string>
-    <string name="settings_whisper_more">Whisper to model rozpoznawania mowy firmy OpenAI. Groq daje go za darmo w\u00A0dziennym limicie (stan 11.2026). Działa na Androidzie 13 i\u00A0nowszym. Nagranie jest tylko w\u00A0pamięci telefonu, nigdy na dysku. Gdy Whisper nie zadziała, zostaje tekst z\u00A0telefonu, a\u00A0okno po nagraniu mówi dlaczego.</string>
-    <string name="settings_whisper_data">Po każdym nagraniu dźwięk (bez odliczania i\u00A0bez ciszy na końcu) idzie do %1$s. Wybierając %1$s, zgadzasz się na to.</string>
-    <string name="settings_whisper_key_ok">Klucz %1$s jest zapisany i\u00A0to wystarczy. Przełącznik w\u00A0ramce %1$s wyżej nie jest potrzebny.</string>
-    <string name="settings_whisper_key_missing">Brakuje klucza %1$s. Wpisz go wyżej, w\u00A0ramce %1$s. Do tego czasu zostaje tekst z\u00A0telefonu.</string>
-    <string name="settings_whisper_moved">Dokładniejsze przepisywanie nagrania przez Whisper jest w\u00A0zakładce „AI”.</string>
-    <string name="settings_whisper_open_ai">Przejdź do zakładki AI</string>
-    <string name="settings_whisper_free_only">Dokładniejsze przepisywanie nagrania przez Whisper działa tylko przy darmowym AI (Groq). Żeby je włączyć, wybierz wyżej „Darmowe”.</string>
     <string name="settings_reduce_motion">Ogranicz animacje</string>
     <string name="settings_reduce_motion_hint">Karteczki i\u00A0przełączniki zmieniają się od razu, bez ruchu. Działa też samo, gdy animacje są wyłączone w\u00A0systemie.</string>
     <string name="settings_explain">Wyjaśnij</string>
@@ -110,7 +100,7 @@
     <string name="settings_tilted_hint">Karteczki, taśmy i\u00A0pieczątki leżą lekko krzywo, jak rzucone na biurko.</string>
     <string name="settings_off">Wyłączone</string>
     <string name="settings_on">Włączone</string>
-    <string name="settings_footer">Karteczki są zaszyfrowane i\u00A0zapisane tylko na tym telefonie. Tapedo nie zapisuje dźwięku, tylko sam tekst. Z\u00A0telefonu wychodzi tylko to, na co się zgodzisz: tekst notatki do wybranego dostawcy AI, głos do Google przy rozpoznawaniu przez internet i\u00A0nagranie do Whisper, gdy go włączysz.</string>
+    <string name="settings_footer">Karteczki są zaszyfrowane i\u00A0zapisane tylko na tym telefonie. Tapedo nie zapisuje dźwięku, tylko sam tekst. Z\u00A0telefonu wychodzi tylko to, na co się zgodzisz: tekst notatki do wybranego dostawcy AI i\u00A0głos do Google przy rozpoznawaniu przez internet. Nagranie nigdy nie wychodzi z\u00A0telefonu.</string>
     <string name="settings_licenses">Licencje open source</string>
     <string name="settings_about_what">Tapedo zamienia to, co mówisz, w\u00A0karteczki. Mogą to być notatki, zadania, listy, zakupy, wydarzenia i\u00A0pomysły. Nie ma tu konta, reklam ani serwera autora.</string>
     <string name="settings_contact">Kontakt z\u00A0autorem</string>
@@ -143,15 +133,14 @@
 
     <!-- AI -->
     <string name="ai_p_groq" translatable="false">Groq</string>
-    <string name="ai_p_openrouter" translatable="false">OpenRouter</string>
     <string name="ai_p_anthropic" translatable="false">Claude (Anthropic)</string>
     <string name="ai_p_openai" translatable="false">OpenAI</string>
     <string name="ai_p_gemini" translatable="false">Google Gemini</string>
     <string name="ai_intro">AI porządkuje nagranie na karteczce z\u00A0otwartej przekładki. Dzieli je na punkty, rozpoznaje terminy i\u00A0godziny i\u00A0poprawia przekręcone słowa. Bez AI robią to proste reguły, które rozpoznają godzinę po „o\u00A010”, priorytet po „pilne” i\u00A0termin po „jutro”. Reguły działają bez internetu, a\u00A0tekst notatki nie wychodzi z\u00A0telefonu.</string>
-    <string name="ai_queue">Możesz włączyć kilku darmowych dostawców. Tapedo pyta ich po kolei, w\u00A0kolejności z\u00A0tej listy. Gdy jeden wykorzysta dzienny limit albo odmówi (klucz, model, serwer), notatka idzie do kolejnego. Gdy nikt nie odpowie, notatkę rozpisują reguły bez AI.</string>
+    <string name="ai_queue">Gdy Groq wykorzysta dzienny limit, odmówi (klucz, model, serwer) albo nie ma internetu, notatkę rozpisują reguły bez AI, a w oknie po nagraniu możesz później dotknąć „Spróbuj jeszcze raz z AI”.</string>
     <string name="ai_mode">Jakie AI</string>
     <string name="ai_mode_free">Darmowe</string>
-    <string name="ai_mode_free_hint">Groq i\u00A0OpenRouter są słabsze od Claude. Same porządkują każde nagranie, a\u00A0gdy jeden dostawca odmówi, Tapedo pyta następnego.</string>
+    <string name="ai_mode_free_hint">Groq jest słabszy od Claude, ale sam porządkuje każde nagranie.</string>
     <string name="ai_mode_claude">Płatne - Claude</string>
     <string name="ai_mode_claude_hint">Wyraźnie dokładniejsze. Pieniądze idą tylko po Twoim dotknięciu, bo samo nic nie porządkuje. Dzienny limit wydatków ustawiasz sam.</string>
     <string name="ai_claude_only_click">Claude działa tylko po dotknięciu przycisku „Dokładniej - Claude” w\u00A0oknie po nagraniu. Samo, w\u00A0tle, nic nie wysyła. Nagranie najpierw rozpisują reguły bez AI.</string>
@@ -170,30 +159,24 @@
     <string name="ai_unfold">Pokaż</string>
     <string name="ai_fold">Ukryj</string>
     <string name="ai_p_groq_hint">Najlepszy z\u00A0darmowych. Jest przyzwoity i\u00A0bardzo szybki, ale gubi subtelności. Limit to ok. 1000 zapytań dziennie na model (11.2026).</string>
-    <string name="ai_p_openrouter_hint">Bardzo słaby i\u00A0zmyśla (dopisuje rzeczy, których nie było), więc nadaje się tylko na zapas. „openrouter/free” za każdym razem wybiera inny model, więc wyniki są nierówne. Limit to ok. 50 zapytań dziennie (11.2026).</string>
     <string name="ai_p_anthropic_hint">Najdokładniejszy. Polecany Claude Sonnet 5.5 kosztuje ok. 2-3 gr za minutę nagrania (11.2026). Opus 5.5 jest 2 razy droższy, a\u00A0do porządkowania notatek to przepłacanie. Tańszy Haiku częściej się myli.</string>
     <string name="ai_p_openai_hint">Domyślny gpt-6-luna jest tani, ale częściej się myli. Klucz pochodzi z\u00A0platformy OpenAI.</string>
     <string name="ai_p_gemini_hint">Domyślny Gemini Flash-Lite jest tani, ale częściej się myli. Darmowy plan Google dostaje tylko część kont i\u00A0projektów. Klucz pochodzi z\u00A0Google AI Studio.</string>
     <string name="ai_what_title">Co to jest</string>
     <string name="ai_privacy_title">Gdzie trafiają dane</string>
     <string name="ai_groq_what">To usługa, która bardzo szybko uruchamia otwarte modele AI. Rozpisuje notatkę na osobne zadania i\u00A0listy. Darmowy plan nie wymaga karty płatniczej, ale ma limit zapytań na minutę i\u00A0na dzień.</string>
-    <string name="ai_openrouter_what">To jedno konto do wielu modeli AI różnych firm. Rozpisuje notatkę na osobne zadania i\u00A0listy. Darmowe modele mają w\u00A0nazwie „:free” i\u00A0bez doładowania konta dają ok. 50 zapytań dziennie.</string>
     <string name="ai_anthropic_what">To modele AI Claude od firmy Anthropic. Rozpisują notatkę na osobne zadania i\u00A0listy i\u00A0dobrze rozumieją polski. Płaci się za zużycie, więc konto trzeba doładować. Z\u00A0Sonnet 5.5 to orientacyjnie 2-3 gr za minutę nagrania (11.2026).</string>
     <string name="ai_openai_what">To modele AI GPT od OpenAI. Rozpisują notatkę na osobne zadania i\u00A0listy. Płaci się za zużycie, więc konto trzeba doładować.</string>
     <string name="ai_gemini_what">To model AI od Google. Rozpisuje notatkę na osobne zadania i\u00A0listy i\u00A0poprawia przekręcone słowa. Darmowy plan Google dostaje tylko część kont i\u00A0projektów. Nowe projekty zwykle działają dopiero po podpięciu płatności, dlatego Gemini jest tu płatny i\u00A0ostatni na liście. Tylko dla osób pełnoletnich (18+).</string>
-    <string name="ai_groq_privacy">Do Groq (USA) trafia tylko tekst notatki, bez danych o\u00A0Tobie. Nagranie trafia tam tylko wtedy, gdy wybierzesz Groq dla Whisper. Według umowy Groq nie może używać go do trenowania modeli. Domyślnie nie przechowuje zapytań, ale przy awariach może trzymać logi do 30 dni. Można to wyłączyć w\u00A0panelu Groq (Data Controls, Zero Data Retention).</string>
-    <string name="ai_openrouter_privacy">Do OpenRouter (USA) trafia tylko tekst notatki, bez nagrania i\u00A0bez danych o\u00A0Tobie. OpenRouter sam nie zapisuje zapytań, jeśli nie włączysz tego na koncie, ale przekazuje je firmie, która uruchamia model. Przy darmowych modelach część z\u00A0tych firm może używać tekstu do trenowania. W\u00A0ustawieniach prywatności OpenRouter można wyłączyć takie modele. Nie dyktuj tam danych wrażliwych (stan 11.2026).</string>
+    <string name="ai_groq_privacy">Do Groq (USA) trafia tylko tekst notatki, bez danych o\u00A0Tobie. Według umowy Groq nie może używać go do trenowania modeli. Domyślnie nie przechowuje zapytań, ale przy awariach może trzymać logi do 30 dni. Można to wyłączyć w\u00A0panelu Groq (Data Controls, Zero Data Retention).</string>
     <string name="ai_anthropic_privacy">Do Anthropic (USA) trafia tylko tekst notatki, bez nagrania i\u00A0bez danych o\u00A0Tobie. Według warunków dla firm Anthropic nie trenuje modeli na danych z\u00A0API, a\u00A0zapytania kasuje automatycznie w\u00A0ciągu 30 dni. Dłużej trzyma tylko te oznaczone jako naruszenie zasad (stan 11.2026).</string>
-    <string name="ai_openai_privacy">Do OpenAI (USA) trafia tylko tekst notatki, bez danych o\u00A0Tobie. Nagranie trafia tam tylko wtedy, gdy wybierzesz OpenAI dla Whisper. Dane z\u00A0API nie służą do trenowania modeli, jeśli sam się na to nie zgodzisz. OpenAI trzyma je do 30 dni do wykrywania nadużyć (stan 11.2026).</string>
+    <string name="ai_openai_privacy">Do OpenAI (USA) trafia tylko tekst notatki, bez danych o\u00A0Tobie. Dane z\u00A0API nie służą do trenowania modeli, jeśli sam się na to nie zgodzisz. OpenAI trzyma je do 30 dni do wykrywania nadużyć (stan 11.2026).</string>
     <string name="ai_gemini_privacy">Do Google trafia tylko tekst notatki, bez nagrania i\u00A0bez danych o\u00A0Tobie. Na płatnym planie Google nie używa go do ulepszania swoich produktów, a\u00A0przechowuje przez ograniczony czas tylko do wykrywania nadużyć. Na darmowym planie (jeśli Twój projekt go ma) poza EOG, Szwajcarią i\u00A0Wielką Brytanią Google może używać tekstu i\u00A0dawać go do przeczytania ludziom. Wtedy nie dyktuj danych wrażliwych (stan 11.2026).</string>
     <string name="ai_how_key">Jak zdobyć klucz</string>
     <string name="ai_get_key">Załóż klucz</string>
     <string name="ai_how_groq_1">Dotknij „Załóż klucz”, a\u00A0otworzy się konsola Groq. Załóż konto (e-mail albo konto Google lub GitHub).</string>
     <string name="ai_how_groq_2">W\u00A0„API Keys” dotknij „Create API Key”, nadaj nazwę i\u00A0skopiuj klucz. Groq pokazuje go tylko raz.</string>
     <string name="ai_how_groq_3">Wklej klucz poniżej i\u00A0dotknij „Sprawdź połączenie”. Darmowy plan nie wymaga karty.</string>
-    <string name="ai_how_openrouter_1">Dotknij „Załóż klucz”, a\u00A0otworzy się OpenRouter. Załóż konto.</string>
-    <string name="ai_how_openrouter_2">W\u00A0„Keys” dotknij „Create Key”. W\u00A0„Credit limit” wybierz „Custom amount” i\u00A0wpisz 1. To tylko górna granica wydatków klucza. Bez doładowania konta nic nie zapłacisz, a\u00A0modele „:free” kosztują 0. Skopiuj klucz, bo pokazuje się tylko raz.</string>
-    <string name="ai_how_openrouter_3">Wybierz model z\u00A0„:free” w\u00A0nazwie, bo tylko takie są darmowe (bez doładowania ok. 50 zapytań dziennie). Wklej klucz poniżej i\u00A0dotknij „Sprawdź połączenie”.</string>
     <string name="ai_how_anthropic_1">Dotknij „Załóż klucz”, a\u00A0otworzy się konsola Claude. Załóż konto.</string>
     <string name="ai_how_anthropic_2">W\u00A0„Billing” doładuj konto, bo bez środków klucz nie działa.</string>
     <string name="ai_how_anthropic_3">W\u00A0„API keys” dotknij „Create Key”, skopiuj klucz (pokazuje się tylko raz), wklej poniżej i\u00A0dotknij „Sprawdź połączenie”.</string>
@@ -235,8 +218,8 @@
     <string name="ai_topup">Doładowanie konta Claude (w\u00A0$)</string>
     <string name="ai_topup_hint">To kwota ostatniego doładowania konta Claude w\u00A0dolarach, bo tak liczy Anthropic. Wpisz ją zaraz po doładowaniu, bo Tapedo liczy wydatki od dnia zapisu.</string>
     <string name="ai_topup_pln">Ok. %1$s zł (kurs %3$s zł za $). Wydatki są liczone od %2$s. Po kolejnym doładowaniu wpisz nową kwotę.</string>
-    <string name="ai_topup_wrong">Wpisz kwotę w\u00A0dolarach, np. 5 albo 20,50 (od 0,01 do 10 000).</string>
-    <string name="ai_spent">Wydane od %1$s: ok. %2$s z\u00A0%3$s, zostało ok. %4$s (ok. %5$s zł).</string>
+    <string name="ai_topup_wrong">Wpisz kwotę w\u00A0dolarach, np. 5 albo 20,50 (od 0,01 do 10\u00A0000).</string>
+    <string name="ai_spent">Wydane od %1$s: ok. %2$s z\u00A0%3$s, zostało ok. %4$s (ok. %5$s\u00A0zł).</string>
     <string name="ai_spent_periods">Na Claude dziś: %1$s, w\u00A0tym miesiącu: %2$s.</string>
     <string name="ai_spent_hint">Tapedo samo liczy to z\u00A0tokenów i\u00A0cennika Claude (stan 11.2026), więc to szacunek. Dokładne saldo jest w\u00A0konsoli Claude, w\u00A0„Billing”.</string>
     <string name="ai_low_funds">Z\u00A0doładowania Claude zostało ok. %1$s z\u00A0%2$s, czyli mniej niż 10%%. Doładuj konto, zanim Claude przestanie odpowiadać.</string>
@@ -247,16 +230,15 @@
     <string name="ai_limit_now">Dzienny limit wykorzystany: %1$s.</string>
     <string name="ai_limit_app">limit z\u00A0ustawień</string>
     <string name="ai_limit_provider">limit dostawcy</string>
-    <string name="ai_limit_all">Wszyscy włączeni dostawcy czekają do jutra. Do tego czasu notatki rozpisują reguły bez AI.</string>
-    <string name="ai_limit_next">Notatki idą do następnego dostawcy z\u00A0listy.</string>
-    <string name="ai_privacy">Do AI, które rozpisuje karteczki, trafia tylko tekst notatki. Nagranie, klucze, inne karteczki i\u00A0dane o\u00A0Tobie nigdy tam nie trafiają. Nagranie idzie tylko do Whisper (niżej), gdy go włączysz.</string>
+    <string name="ai_limit_all">Do jutra notatki rozpisują reguły bez AI.</string>
+    <string name="ai_privacy">Do AI, które rozpisuje karteczki, trafia tylko tekst notatki. Nagranie, klucze, inne karteczki i\u00A0dane o\u00A0Tobie nigdy tam nie trafiają.</string>
     <string name="ai_problem_key">klucz jest nieprawidłowy. Sprawdź, czy został skopiowany w\u00A0całości, albo utwórz nowy.</string>
     <string name="ai_problem_api_off">interfejs jest wyłączony w\u00A0projekcie dostawcy. Włącz go w\u00A0projekcie albo utwórz klucz w\u00A0nowym projekcie (zobacz „Jak zdobyć klucz”).</string>
-    <string name="ai_problem_no_free_tier">ten projekt Google nie ma darmowego planu. Gemini działa w\u00A0nim tylko po podpięciu płatności (aistudio.google.com/billing), a\u00A0nowy klucz w\u00A0tym samym projekcie nie pomoże. Za darmo zostają Groq i\u00A0OpenRouter.</string>
+    <string name="ai_problem_no_free_tier">ten projekt Google nie ma darmowego planu. Gemini działa w\u00A0nim tylko po podpięciu płatności (aistudio.google.com/billing), a\u00A0nowy klucz w\u00A0tym samym projekcie nie pomoże. Za darmo zostaje Groq.</string>
     <string name="ai_problem_verify">Google chce potwierdzenia projektu telefonem. Otwórz Google AI Studio („Załóż klucz”) i\u00A0zrób weryfikację albo włącz innego darmowego dostawcę.</string>
     <string name="ai_problem_denied">dostawca odmówił dostępu temu kontu albo projektowi. Zajrzyj na jego stronę (konto, płatności, powiadomienia na e-mail) albo włącz innego dostawcę.</string>
     <string name="ai_problem_model">model nie istnieje albo jest niedostępny dla tego konta. Wybierz inny darmowy model.</string>
-    <string name="ai_problem_busy">model jest chwilowo zajęty u\u00A0dostawcy, bo z\u00A0darmowego modelu korzysta naraz wiele osób albo minął limit na minutę. To nie jest dzienny limit. Tapedo zapyta go znowu przy następnej notatce. Możesz też wybrać inny darmowy model, a\u00A0przy OpenRouterze „openrouter/free” sam wybiera wolny.</string>
+    <string name="ai_problem_busy">model jest chwilowo zajęty u\u00A0dostawcy, bo z\u00A0darmowego modelu korzysta naraz wiele osób albo minął limit na minutę. To nie jest dzienny limit. Tapedo zapyta go znowu przy następnej notatce. Możesz też wybrać inny darmowy model.</string>
     <string name="ai_problem_limit">limit u\u00A0dostawcy jest wyczerpany. Tapedo zapyta znowu jutro albo od razu po zmianie modelu.</string>
     <string name="ai_problem_cap">dzienny limit z\u00A0ustawień jest wykorzystany. Tapedo zapyta znowu jutro.</string>
     <string name="ai_problem_budget">dzienny limit wydatków na Claude z\u00A0ustawień jest wykorzystany. Podnieś go w\u00A0Ustawieniach, w\u00A0zakładce „AI”, albo zapytaj jutro.</string>
@@ -265,8 +247,6 @@
     <string name="ai_problem_offline">nie ma połączenia albo dostawca nie odpowiada. Sprawdź internet.</string>
     <string name="ai_problem_answer">odpowiedź przyszła pusta albo niepełna. Spróbuj jeszcze raz albo wybierz inny model.</string>
     <string name="ai_problem_other">dostawca zgłosił błąd. Spróbuj później albo włącz innego dostawcę.</string>
-    <string name="ai_problem_no_audio">telefon nie dał Tapedo nagrania. Whisper działa na Androidzie 13 i\u00A0nowszym, gdy rozpoznawanie mowy w\u00A0telefonie przyjmuje nagranie Tapedo.</string>
-    <string name="ai_problem_too_long">nagranie jest za długie dla Whisper (najwyżej ok. 12 minut w\u00A0jednym nagraniu).</string>
     <string name="ai_problem_line">%1$s (%2$s): %3$s</string>
     <string name="ai_provider_answer">Odpowiedź dostawcy</string>
     <string name="review_ai_rules">Proste reguły rozpisały karteczki zamiast AI:</string>
@@ -276,8 +256,6 @@
     <string name="record_state">nagrywanie, %1$s z\u00A0%2$s</string>
     <string name="review_heard">Usłyszane</string>
     <string name="review_structuring">Rozpisuję na karteczki…</string>
-    <string name="review_retyping">Whisper przepisuje nagranie…</string>
-    <string name="review_whisper_failed">Whisper nie przepisał nagrania, więc został tekst z\u00A0telefonu:</string>
     <plurals name="review_count">
         <item quantity="one">Wyszła %d karteczka</item>
         <item quantity="few">Wyszły %d karteczki</item>
@@ -295,6 +273,18 @@
     <string name="review_refine_offer">Propozycja Claude</string>
     <string name="review_refine_accept">Zamień na te</string>
     <string name="review_refine_keep">Zostaw obecne</string>
+    <string name="review_retry">Spróbuj jeszcze raz z\u00A0AI</string>
+    <string name="review_retry_hint">Darmowe AI tym razem nie ułożyło karteczek, więc zrobiły to reguły. Te same słowa trafią jeszcze raz do darmowego AI. Obecne karteczki zostają, dopóki nie wybierzesz nowych.</string>
+    <string name="review_retry_working">AI układa karteczki…</string>
+    <string name="review_retry_failed">AI znowu nie ułożyło karteczek, więc obecne zostają.</string>
+    <string name="review_retry_offer">Propozycja AI</string>
+    <string name="card_refine_free">Dokładniej z\u00A0AI</string>
+    <string name="card_refine_free_hint">Tekst karteczki trafi do darmowego AI, które może trafniej rozpoznać rodzaj, datę i\u00A0godzinę albo podzielić tekst na kilka karteczek. Obecna karteczka zostaje, dopóki nie wybierzesz nowej.</string>
+    <string name="card_refine_hint">Tekst karteczki trafi do Claude Sonnet 5.5, który trafniej rozpoznaje rodzaj, datę i\u00A0godzinę albo dzieli tekst na kilka karteczek. Obecna karteczka zostaje, dopóki nie wybierzesz nowej.</string>
+    <string name="card_refine_free_failed">AI nie ułożyło karteczki, więc obecna zostaje.</string>
+    <string name="card_refine_failed">Claude nie ułożył karteczki, więc obecna zostaje.</string>
+    <string name="card_refine_accept_one">Zamień na tę</string>
+    <string name="card_refine_keep">Zostaw obecną</string>
     <string name="review_discard">Usuń</string>
     <string name="review_record_more">Nagraj dalej</string>
     <string name="review_more_failed">%s Karteczki są bez zmian.</string>

@@ -62,6 +62,12 @@ fun RecordButton(
     // Keyboard / switch access: a thick ring around the bezel shows where the focus is.
     val focused by interaction.collectIsFocusedAsState()
     val down = pressed || recording
+    // The glint dims as the key goes down and brightens as it comes up - with the key, not before it.
+    val glintAlpha by animateFloatAsState(
+        targetValue = if (down) 0.1f else 0.22f,
+        animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(180),
+        label = "glint",
+    )
     val reduceMotion = TapedoTheme.reduceMotion
 
     val elevation by animateDpAsState(
@@ -110,7 +116,7 @@ fun RecordButton(
                 // A glint in the upper part of the dome - on the dark panel the shadow is invisible,
                 // so the light shows it is a raised key. Dimmer while the key is held down.
                 .drawBehind {
-                    val glint = Color.White.copy(alpha = if (down) 0.1f else 0.22f)
+                    val glint = Color.White.copy(alpha = glintAlpha)
                     drawArc(
                         color = glint,
                         startAngle = 215f,

@@ -1,5 +1,7 @@
 package io.github.bakeron.tapedo.ui.cards
 
+import androidx.compose.animation.AnimatedContent
+import io.github.bakeron.tapedo.ui.components.fadeSwap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -19,6 +21,16 @@ import io.github.bakeron.tapedo.ui.theme.TapedoTheme
  */
 @Composable
 fun PriorityTape(priority: Priority, modifier: Modifier = Modifier, angle: Float = 38f) {
+    // Another priority is another tape: the old one fades off, then the new one on (author 21.11.2026).
+    val still = TapedoTheme.reduceMotion
+    AnimatedContent(targetState = priority, modifier = modifier, transitionSpec = { fadeSwap(still) }, label = "priority tape") {
+        TapePiece(it, angle)
+    }
+}
+
+@Composable
+private fun TapePiece(priority: Priority, angle: Float) {
+    val modifier = Modifier
     val colors = TapedoTheme.colors
     val fill = when (priority) {
         Priority.HIGH -> colors.tapeHigh

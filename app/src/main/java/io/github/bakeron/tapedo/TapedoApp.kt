@@ -8,8 +8,6 @@ import io.github.bakeron.tapedo.core.ai.NbpRates
 import io.github.bakeron.tapedo.core.ai.UsdRates
 import io.github.bakeron.tapedo.core.ai.NoteStructurer
 import io.github.bakeron.tapedo.core.ai.SecretStore
-import io.github.bakeron.tapedo.core.ai.HttpWhisper
-import io.github.bakeron.tapedo.core.ai.WhisperRetyper
 import io.github.bakeron.tapedo.core.ai.aiHttpClient
 import io.github.bakeron.tapedo.core.data.NoteRepository
 import io.github.bakeron.tapedo.core.settings.AppSettings
@@ -65,8 +63,6 @@ class AppContainer(private val app: Application) {
     val structurer: NoteStructurer by lazy { NoteStructurer(secrets, aiUsage, gateway) }
 
     val aiConnection: AiConnection by lazy { AiConnection(secrets, aiUsage, gateway) }
-
-    val whisper: WhisperRetyper by lazy { WhisperRetyper(secrets, HttpWhisper(http)) }
 
     val usdRates: UsdRates by lazy { NbpRates(http) }
 }

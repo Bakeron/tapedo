@@ -19,7 +19,6 @@ import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.SettingsStore
-import io.github.bakeron.tapedo.core.settings.WhisperProvider
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -77,8 +76,6 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val p
             }.toMap(),
             aiDailyLimit = p[AI_DAILY_LIMIT]?.takeIf { it in AppSettings.AI_DAILY_LIMITS } ?: d.aiDailyLimit,
             textScale = p[TEXT_SCALE]?.takeIf { it in AppSettings.TEXT_SCALES } ?: d.textScale,
-            // A hidden provider (OpenAI) is never asked - its Whisper counts as off.
-            whisper = WhisperProvider.entries.firstOrNull { it.name == p[WHISPER] && it.ai !in AiProvider.HIDDEN },
             tiltedPaper = p[TILTED_PAPER] ?: d.tiltedPaper,
             claudeTopUpCents = p[CLAUDE_TOP_UP]?.takeIf { it in 1..TopUpInput.MAX_CENTS },
             claudeTopUpDay = p[CLAUDE_TOP_UP_DAY]?.takeIf { it >= 0 },
@@ -112,7 +109,8 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val p
         }
         p[AI_DAILY_LIMIT] = s.aiDailyLimit
         p[TEXT_SCALE] = s.textScale
-        p[WHISPER] = s.whisper?.name ?: OFF
+        // Whisper was removed (author 21.11.2026) - its old choice is not kept around.
+        p.remove(OLD_WHISPER)
         p[TILTED_PAPER] = s.tiltedPaper
         s.claudeTopUpCents?.let { p[CLAUDE_TOP_UP] = it } ?: p.remove(CLAUDE_TOP_UP)
         s.claudeTopUpDay?.let { p[CLAUDE_TOP_UP_DAY] = it } ?: p.remove(CLAUDE_TOP_UP_DAY)
@@ -143,8 +141,7 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val p
         val AI_DAILY_LIMIT = intPreferencesKey("ai_daily_limit")
         fun modelKey(provider: AiProvider) = stringPreferencesKey("ai_model_${provider.id}")
         val TEXT_SCALE = floatPreferencesKey("text_scale")
-        val WHISPER = stringPreferencesKey("whisper")
-        const val OFF = "OFF"
+        val OLD_WHISPER = stringPreferencesKey("whisper")
         val TILTED_PAPER = booleanPreferencesKey("tilted_paper")
         val CLAUDE_TOP_UP = intPreferencesKey("claude_top_up_cents")
         val CLAUDE_TOP_UP_DAY = longPreferencesKey("claude_top_up_day")

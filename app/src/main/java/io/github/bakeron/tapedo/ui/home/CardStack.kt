@@ -1,5 +1,11 @@
 package io.github.bakeron.tapedo.ui.home
 
+import androidx.compose.animation.animateColorAsState
+import io.github.bakeron.tapedo.ui.components.fadeSwap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.lerp
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -15,6 +21,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,7 +62,10 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -207,11 +217,18 @@ fun CardStack(
                 item(key = "top") { top() }
                 when (stack) {
                     StackState.Loading -> Unit
-                    StackState.Failed -> item(key = "failed") { StackFailed(onRetry) }
+                    StackState.Failed -> item(key = "failed") {
+                        Box(if (reduceMotion) Modifier else Modifier.animateItem()) { StackFailed(onRetry) }
+                    }
                     is StackState.Loaded -> when {
-                        // An empty kind's divider: the dashed card says the red button fills it.
-                        shown.isEmpty() && query.isBlank() && pileTab != StackTab.DONE -> item(key = "empty") { EmptyCard() }
-                        shown.isEmpty() -> item(key = "none") { NothingFound(query) }
+                        // An empty kind's divider: the dashed card says the red button fills it. It fades in
+                        // after the last card is deleted (and out on "Undo") like the strips do.
+                        shown.isEmpty() && query.isBlank() && pileTab != StackTab.DONE -> item(key = "empty") {
+                            Box(if (reduceMotion) Modifier else Modifier.animateItem()) { EmptyCard() }
+                        }
+                        shown.isEmpty() -> item(key = "none") {
+                            Box(if (reduceMotion) Modifier else Modifier.animateItem()) { NothingFound(query) }
+                        }
                         else -> items(shown, key = { it.id }) { note ->
                             NoteStrip(
                                 note,
@@ -236,6 +253,7 @@ internal fun stackListStates(): Map<StackTab, LazyListState> = StackTab.entries.
 private const val PILE_OUT_MS = 110
 private const val PILE_IN_MS = 170
 private const val SEARCH_MS = 180
+private const val DIVIDER_LOOK_MS = 200
 
 /**
  * Card-box dividers: only the kind's drawn sign and the count, so all seven fit side by side. The chosen one
@@ -269,29 +287,54 @@ private fun DividerTabs(selected: StackTab, counts: Map<StackTab, Int>, onSelect
                     .semantics { contentDescription = desc },
                 contentAlignment = Alignment.BottomCenter,
             ) {
+                // The divider rises, darkens its ink and turns bold smoothly - never jumps (author 21.11.2026).
+                val still = TapedoTheme.reduceMotion
+                val chosen by animateFloatAsState(
+                    targetValue = if (isSelected) 1f else 0f,
+                    animationSpec = if (still) snap() else tween(DIVIDER_LOOK_MS),
+                    label = "divider chosen",
+                )
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .height(if (isSelected) 46.dp else 38.dp)
-                        .background(if (isSelected) colors.cardEdge else colors.card, shape)
-                        .then(if (isSelected) Modifier else Modifier.border(1.dp, colors.controlEdge, shape))
+                        .height(38.dp + 8.dp * chosen)
+                        .background(lerp(colors.card, colors.cardEdge, chosen), shape)
+                        .border(1.dp, colors.controlEdge.copy(alpha = colors.controlEdge.alpha * (1f - chosen)), shape)
                         .padding(horizontal = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
                 ) {
-                    val ink = if (isSelected) scheme.onSurface else scheme.onSurfaceVariant
-                    val size = if (isSelected) 20.dp else 17.dp
+                    val ink = lerp(scheme.onSurfaceVariant, scheme.onSurface, chosen)
+                    val size = 17.dp + 3.dp * chosen
                     val type = tab.type
                     if (type != null) TypeMark(type, ink, size = size) else DoneMark(ink, size = size)
-                    Text(
-                        count.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = ink,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.clearAndSetSemantics { },
-                    )
+                    // A new count fades in after the old one; bold and regular are crossfaded (no weight animation).
+                    AnimatedContent(
+                        targetState = count,
+                        transitionSpec = { fadeSwap(still) },
+                        label = "divider count",
+                    ) { shownCount ->
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                shownCount.toString(),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = ink,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.graphicsLayer { alpha = 1f - chosen }.clearAndSetSemantics { },
+                            )
+                            Text(
+                                shownCount.toString(),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = ink,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.graphicsLayer { alpha = chosen }.clearAndSetSemantics { },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -333,20 +376,34 @@ private fun SearchLine(query: String, onChange: (String) -> Unit, modifier: Modi
             modifier = Modifier.weight(1f).focusRequester(focus).semantics { contentDescription = label },
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) {
-                        Text(label, style = style, color = scheme.onSurfaceVariant)
+                    // The hint fades as the first letter comes, and back when the line is emptied.
+                    val hint by animateFloatAsState(
+                        targetValue = if (query.isEmpty()) 1f else 0f,
+                        animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(150),
+                        label = "search hint",
+                    )
+                    if (hint > 0f) {
+                        Text(label, style = style, color = scheme.onSurfaceVariant, modifier = Modifier.graphicsLayer { alpha = hint })
                     }
                     inner()
                 }
             },
         )
-        if (query.isNotEmpty()) {
-            val clear = stringResource(R.string.search_clear)
-            IconButton(onClick = { onChange("") }, modifier = Modifier.semantics { contentDescription = clear }) {
-                Text("×", style = MaterialTheme.typography.titleLarge, color = scheme.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics { })
+        // The clear key slides in with the first letter and out when the line is empty.
+        val still = TapedoTheme.reduceMotion
+        AnimatedContent(
+            targetState = query.isNotEmpty(),
+            transitionSpec = { fadeSwap(still).let { if (still) it using null else it } },
+            label = "search clear",
+        ) { typed ->
+            if (typed) {
+                val clear = stringResource(R.string.search_clear)
+                IconButton(onClick = { onChange("") }, modifier = Modifier.semantics { contentDescription = clear }) {
+                    Text("×", style = MaterialTheme.typography.titleLarge, color = scheme.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics { })
+                }
+            } else {
+                Spacer(Modifier.width(14.dp))
             }
-        } else {
-            Spacer(Modifier.width(14.dp))
         }
     }
 }
@@ -405,10 +462,15 @@ private fun NoteStrip(
                 Spacer(Modifier.width(4.dp))
             }
             Column(Modifier.weight(1f)) {
+                val titleInk by animateColorAsState(
+                    if (done) scheme.onSurfaceVariant else scheme.onSurface,
+                    if (TapedoTheme.reduceMotion) snap() else tween(200),
+                    label = "strip ink",
+                )
                 Text(
                     label,
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (done) scheme.onSurfaceVariant else scheme.onSurface,
+                    color = titleInk,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     onTextLayout = { layout = it },
@@ -438,12 +500,18 @@ private fun NoteStrip(
                         .clearAndSetSemantics { contentDescription = progress },
                 )
             }
-            Text(
-                "›",
-                style = MaterialTheme.typography.titleLarge,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 8.dp).clearAndSetSemantics { },
-            )
+            // Drawn, not the typewriter font's "›", which looked cut off (author 21.11.2026).
+            val chevron = scheme.onSurfaceVariant
+            // A little smaller than the "x" next to it - at 8 x 14 dp it outweighed it (author 21.11.2026).
+            Canvas(Modifier.padding(start = 11.dp, end = 3.dp).size(width = 6.dp, height = 11.dp)) {
+                val stroke = 1.75.dp.toPx()
+                val path = Path().apply {
+                    moveTo(stroke / 2, stroke / 2)
+                    lineTo(size.width - stroke / 2, size.height / 2)
+                    lineTo(stroke / 2, size.height - stroke / 2)
+                }
+                drawPath(path, chevron, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
             val deleteDesc = stringResource(R.string.strip_delete_desc, label)
             IconButton(onClick = onDelete, modifier = Modifier.semantics { contentDescription = deleteDesc }) {
                 Text("×", style = MaterialTheme.typography.titleLarge, color = scheme.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics { })

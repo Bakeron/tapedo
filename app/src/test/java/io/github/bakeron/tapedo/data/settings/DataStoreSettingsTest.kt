@@ -16,7 +16,6 @@ import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.settings.RecordingEnd
 import io.github.bakeron.tapedo.core.settings.ThemeMode
-import io.github.bakeron.tapedo.core.settings.WhisperProvider
 import java.io.File
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
@@ -73,7 +72,6 @@ class DataStoreSettingsTest {
             AiProvider.entries.map { d.copy(aiModels = mapOf(it to "model-${it.id}")) } +
             AppSettings.AI_DAILY_LIMITS.map { d.copy(aiDailyLimit = it) } +
             AppSettings.TEXT_SCALES.map { d.copy(textScale = it) } +
-            (WhisperProvider.entries.filter { it.ai !in AiProvider.HIDDEN } + null).map { d.copy(whisper = it) } +
             AiMode.entries.map { d.copy(aiMode = it) } +
             listOf(1, 250, null).map { d.copy(claudeDayCents = it) } +
             listOf(true, false).map { d.copy(tiltedPaper = it) } +
@@ -100,26 +98,32 @@ class DataStoreSettingsTest {
             listOf(
                 "ai_daily_limit", "ai_mode", "ai_providers", "claude_day_cents", "first_steps_seen", "max_recording_seconds", "note_type_choice", "online_speech",
                 "pause_seconds", "recording_end", "reduce_motion", "silence_seconds", "speech_language", "text_scale", "theme",
-                "tilted_paper", "whisper",
+                "tilted_paper",
             ),
             names,
         )
     }
 
     @Test
-    fun `before the free or paid choice, Claude alone turned on means paid Claude, and OpenAI's Whisper is off`() = runBlocking {
+    fun `before the free or paid choice, Claude alone turned on means paid Claude`() = runBlocking {
         val raw = dataStore()
         raw.edit { p ->
             p[stringPreferencesKey("ai_providers")] = "anthropic"
-            p[stringPreferencesKey("whisper")] = "OPENAI"
         }
         val s = DataStoreSettings(raw).settings.first()
         assertEquals(AiMode.CLAUDE, s.aiMode)
-        assertNull(s.whisper)
         assertEquals("the default daily limit is $1", 100, s.claudeDayCents)
 
         raw.edit { p -> p[stringPreferencesKey("ai_providers")] = "groq,anthropic" }
         assertEquals(AiMode.FREE, DataStoreSettings(raw).settings.first().aiMode)
+    }
+
+    @Test
+    fun `an old Whisper choice is dropped on the next save - Whisper was removed`() = runBlocking {
+        val raw = dataStore()
+        raw.edit { p -> p[stringPreferencesKey("whisper")] = "GROQ" }
+        DataStoreSettings(raw).update { it }
+        assertNull(raw.data.first()[stringPreferencesKey("whisper")])
     }
 
     @Test

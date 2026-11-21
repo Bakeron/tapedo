@@ -1,5 +1,9 @@
 package io.github.bakeron.tapedo.ui.components
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -127,14 +131,34 @@ fun <T> SlideSelector(
                             .background(led, CircleShape),
                     )
                     Spacer(Modifier.height(5.dp))
-                    Text(
-                        text = label(option),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) scheme.onSurface else scheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
+                    // Bold and regular laid over each other and crossfaded with the LED - a weight cannot be
+                    // animated, and a jump looked broken (author 21.11.2026).
+                    val chosen by animateFloatAsState(
+                        targetValue = if (isSelected) 1f else 0f,
+                        animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(LED_FADE_MS),
+                        label = "option chosen",
                     )
+                    val ink = lerp(scheme.onSurfaceVariant, scheme.onSurface, chosen)
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = label(option),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = ink,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            modifier = Modifier.graphicsLayer { alpha = 1f - chosen },
+                        )
+                        Text(
+                            text = label(option),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = ink,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            modifier = Modifier.graphicsLayer { alpha = chosen }.clearAndSetSemantics { },
+                        )
+                    }
                 }
             }
         }

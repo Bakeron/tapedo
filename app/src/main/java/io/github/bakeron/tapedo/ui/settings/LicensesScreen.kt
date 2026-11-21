@@ -1,5 +1,6 @@
 package io.github.bakeron.tapedo.ui.settings
 
+import io.github.bakeron.tapedo.ui.components.Fold
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
@@ -80,15 +81,18 @@ fun LicensesScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
             )
-            Text(
-                text,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colors.card, RoundedCornerShape(3.dp))
-                    .border(1.dp, colors.cardEdge, RoundedCornerShape(3.dp))
-                    .padding(14.dp),
-            )
+            // Read from the APK in the background - it unfolds when ready instead of popping in.
+            Fold(text.isNotEmpty()) {
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.card, RoundedCornerShape(3.dp))
+                        .border(1.dp, colors.cardEdge, RoundedCornerShape(3.dp))
+                        .padding(14.dp),
+                )
+            }
         }
     }
 }

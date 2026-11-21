@@ -12,18 +12,8 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 enum class OnlineSpeech { ASK, ALWAYS, NEVER }
 
 /**
- * Whisper types the recording again after "stop" - more exactly than the phone's recognizer, which still
- * shows the words live. Uses the AI key saved for [ai]. Models checked with the providers on 10.11.2026;
- * both give word times, so a pause can become a new list item, as with the phone's recognizer.
- */
-enum class WhisperProvider(val ai: AiProvider, val model: String) {
-    GROQ(AiProvider.GROQ, "whisper-large-v3-turbo"),
-    OPENAI(AiProvider.OPENAI, "whisper-1"),
-}
-
-/**
  * Free or paid AI - never both at once (author's shared AI rules, 13.11.2026, as in the job-offers board).
- * Free: Groq and OpenRouter write the cards after each recording on their own. Claude: paid, so it is asked
+ * Free: Groq writes the cards after each recording on their own. Claude: paid, so it is asked
  * only on a tap ("More exact" after a recording) - the rules write the cards first.
  */
 enum class AiMode { FREE, CLAUDE }
@@ -56,8 +46,6 @@ data class AppSettings(
     val aiDailyLimit: Int = 200,
     /** Text size in Tapedo, on top of the phone's own text size: 1 = as the phone has it. */
     val textScale: Float = 1f,
-    /** Whisper after each recording; null = off (the default - the audio then never leaves the phone). */
-    val whisper: WhisperProvider? = null,
     /** "Crooked paper": cards, tapes and stamps lie at a slight angle. Off by default (author 10.11.2026). */
     val tiltedPaper: Boolean = false,
     /** The last top-up of the Claude account in US cents (as Anthropic counts); null = not given. */
@@ -96,12 +84,6 @@ data class AppSettings(
     val pauseMillis: Long? get() = pauseSeconds.takeIf { it > 0 }?.let { it * 1000L }
 
     fun modelFor(provider: AiProvider): String = aiModels[provider]?.trim()?.ifEmpty { null } ?: provider.defaultModel
-
-    /**
-     * Whisper as really used: only in free mode - never free and paid AI at once (author 15.11.2026). In Claude
-     * mode the Groq frame is hidden, so its key could not even be typed. The choice itself is kept for going back.
-     */
-    val activeWhisper: WhisperProvider? get() = whisper.takeIf { aiMode == AiMode.FREE }
 
     /** Providers that write the cards after a recording on their own: the free ones turned on, and only in free mode. */
     val autoProviders: List<AiProvider>

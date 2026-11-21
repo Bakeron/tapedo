@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -113,9 +114,18 @@ fun Modifier.handStrike(struck: Boolean, layout: () -> TextLayoutResult?, color:
     }
 }
 
-/** A tick box drawn like a pencil square; ticked = a hand-drawn check mark (shape, not only colour). */
+/**
+ * A tick box drawn like a pencil square; ticked = a hand-drawn check mark (shape, not only colour). The mark is
+ * drawn stroke by stroke and wiped off backwards - never just there. With "reduce motion" it appears at once.
+ */
 @Composable
 fun PencilBox(checked: Boolean, ink: Color, modifier: Modifier = Modifier) {
+    val drawn by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(durationMillis = 200),
+        label = "tick",
+    )
+    val measure = remember { PathMeasure() }
     Canvas(modifier.size(20.dp)) {
         val w = size.width
         val stroke = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -127,13 +137,16 @@ fun PencilBox(checked: Boolean, ink: Color, modifier: Modifier = Modifier) {
             close()
         }
         drawPath(box, ink, style = stroke)
-        if (checked) {
+        if (drawn > 0f) {
             val tick = Path().apply {
                 moveTo(w * 0.22f, w * 0.52f)
                 lineTo(w * 0.44f, w * 0.74f)
                 lineTo(w * 0.86f, w * 0.18f)
             }
-            drawPath(tick, ink, style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            measure.setPath(tick, false)
+            val part = Path()
+            measure.getSegment(0f, measure.length * drawn, part, true)
+            drawPath(part, ink, style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }
 }

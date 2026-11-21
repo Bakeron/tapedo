@@ -1,5 +1,8 @@
 package io.github.bakeron.tapedo.ui.home
 
+import io.github.bakeron.tapedo.ui.components.SwapText
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.IconButtonDefaults
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -120,6 +123,7 @@ import io.github.bakeron.tapedo.ui.cards.kindNumbers
 import io.github.bakeron.tapedo.ui.cards.TypeMark
 import io.github.bakeron.tapedo.ui.components.Fold
 import io.github.bakeron.tapedo.ui.components.FoldValue
+import io.github.bakeron.tapedo.ui.components.fadeSwap
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
@@ -139,6 +143,7 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
     val actionFailed by viewModel.actionFailed.collectAsStateWithLifecycle()
     val lockedNotes by viewModel.lockedNotes.collectAsStateWithLifecycle()
     val appending by viewModel.appending.collectAsStateWithLifecycle()
+    val cardRefine by viewModel.cardRefine.collectAsStateWithLifecycle()
     val ownAudioRefused by viewModel.ownAudioRefused.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // No address in this build (e.g. built from GitHub without local.properties) - no report button.
@@ -268,6 +273,10 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onDismissError = viewModel::dismissError,
             onDismissActionFailed = viewModel::dismissActionFailed,
             onReport = report,
+            refine = cardRefine,
+            onRefine = viewModel::refineCard,
+            onAcceptRefine = viewModel::acceptCardRefine,
+            onKeepRefine = viewModel::keepCard,
         )
 
         target == HomeShown.REVIEW -> ReviewPanel(
@@ -542,10 +551,17 @@ fun HomeScreen(
                     )
                     val edge = TapedoTheme.colors.controlEdge
                     val sunk = TapedoTheme.colors.cardEdge
+                    // Greyed out while recording - faded, not switched (the button's own disabled colour jumps).
+                    val keyInk by animateFloatAsState(
+                        targetValue = if (isRecording) 0.38f else 1f,
+                        animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(SWAP_MS),
+                        label = "search key ink",
+                    )
                     IconButton(
                         onClick = onToggleSearch,
                         enabled = !isRecording,
-                        modifier = Modifier.drawBehind {
+                        colors = IconButtonDefaults.iconButtonColors(disabledContentColor = LocalContentColor.current),
+                        modifier = Modifier.graphicsLayer { alpha = keyInk }.drawBehind {
                             if (socket > 0f) {
                                 drawCircle(sunk.copy(alpha = socket), radius = 19.dp.toPx())
                                 drawCircle(edge.copy(alpha = socket), radius = 19.dp.toPx(), style = Stroke(1.dp.toPx()))
@@ -641,14 +657,21 @@ private fun RecordControls(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.End,
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        TypeMark(kind, MaterialTheme.colorScheme.onSurface, size = 16.dp)
-                        Text(
-                            name,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                    AnimatedContent(
+                        targetState = kind,
+                        transitionSpec = { fadeSwap(stillNow) },
+                        contentAlignment = Alignment.CenterEnd,
+                        label = "goes to divider",
+                    ) { shownKind ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            TypeMark(shownKind, MaterialTheme.colorScheme.onSurface, size = 16.dp)
+                            Text(
+                                stringResource(tabNameRes(StackTab.of(shownKind))),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
                 }
             }
@@ -737,11 +760,6 @@ private enum class UnderKey { NAME, CANCEL, COUNTER }
 
 private const val SWAP_MS = 220
 
-/** One thing fades into the next in place - at once with "reduce motion". */
-internal fun fadeSwap(still: Boolean): ContentTransform =
-    if (still) EnterTransition.None togetherWith ExitTransition.None
-    else fadeIn(tween(SWAP_MS)) togetherWith fadeOut(tween(SWAP_MS))
-
 /** While recording: the seismograph and the words as they are recognised. */
 @Composable
 private fun ListeningPanel(state: RecordingState.Active, modifier: Modifier) {
@@ -751,28 +769,37 @@ private fun ListeningPanel(state: RecordingState.Active, modifier: Modifier) {
         Spacer(Modifier.height(16.dp))
         // The microphone is not open yet, or the phone restarts its recognizer - words said now would be lost.
         Fold(!state.listening) {
-            Text(
+            SwapText(
                 stringResource(if (state.micOpened) R.string.record_wait else R.string.record_starting),
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                 color = TapedoTheme.colors.record,
+                contentAlignment = Alignment.CenterStart,
                 modifier = Modifier.padding(bottom = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
-        if (state.text.isEmpty()) {
-            // Only when really listening: a typed "Listening…" (announced once); the REC lamp blinks by the counter.
-            Fold(state.ready) { Text(
-                stringResource(R.string.record_listening),
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            ) }
-        } else {
-            // The growing text is not re-read on every word.
-            Text(
-                state.text,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
-            )
+        // "Listening…" fades out before the first words fade in.
+        val still = TapedoTheme.reduceMotion
+        AnimatedContent(
+            targetState = state.text.isEmpty(),
+            modifier = Modifier.weight(1f, fill = false),
+            transitionSpec = { fadeSwap(still) },
+            label = "words",
+        ) { waiting ->
+            if (waiting) {
+                // Only when really listening: a typed "Listening…" (announced once); the REC lamp blinks by the counter.
+                Fold(state.ready) { Text(
+                    stringResource(R.string.record_listening),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                ) }
+            } else {
+                // The growing text is not re-read on every word.
+                Text(
+                    state.text,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            }
         }
     }
 }
@@ -807,12 +834,20 @@ internal fun CountdownDial(countdown: Int, onCancel: () -> Unit, modifier: Modif
                 .border(3.dp, colors.record, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                countdown.toString(),
-                style = MaterialTheme.typography.displayLarge.copy(fontSize = digit, lineHeight = digit),
-                fontWeight = FontWeight.Bold,
-                color = colors.record,
-            )
+            // Each digit fades out before the next fades in.
+            val still = TapedoTheme.reduceMotion
+            AnimatedContent(
+                targetState = countdown,
+                transitionSpec = { fadeSwap(still) },
+                label = "countdown digit",
+            ) { shown ->
+                Text(
+                    shown.toString(),
+                    style = MaterialTheme.typography.displayLarge.copy(fontSize = digit, lineHeight = digit),
+                    fontWeight = FontWeight.Bold,
+                    color = colors.record,
+                )
+            }
         }
         Spacer(Modifier.height(14.dp))
         Text(

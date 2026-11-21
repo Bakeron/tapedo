@@ -6,7 +6,6 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
-import io.github.bakeron.tapedo.core.speech.RecordedAudio
 import java.io.IOException
 import kotlin.math.log10
 import kotlin.math.sqrt
@@ -15,8 +14,7 @@ import kotlin.math.sqrt
  * Tapedo's own microphone for the recognizer (Android 13+, RecognizerIntent.EXTRA_AUDIO_SOURCE): one
  * AudioRecord from "record" to "stop", so a recognizer that ends after every pause leaves no gap - each new
  * session is fed from where the last one ended (the author's phone lost words in those gaps, 08.11.2026).
- * The audio lives only in memory (the last [BUFFER_SECONDS] s) and is never saved. With [keepAll] (Whisper)
- * the whole recording is kept in memory too, up to [KEEP_MAX_BYTES], and handed over once at the end.
+ * The audio lives only in memory (the last [BUFFER_SECONDS] s) and is never saved or sent.
  *
  * Positions are byte offsets from the first recorded sample. Threads: one recorder, one feeder per session;
  * the public methods are called on the main thread.
@@ -25,15 +23,9 @@ class ContinuousMic(
     /** Audio of the countdown is not used - the recording starts at "go". */
     private val skipMs: Long,
     private val onLevel: (Float) -> Unit,
-    private val keepAll: Boolean = false,
 ) {
     private val lock = Object()
     private val ring = ByteArray(BUFFER_BYTES)
-
-    // Guarded by [lock]: the whole recording from the first sample, in the chunks it came in (no copying as it grows).
-    private val kept = ArrayList<ByteArray>()
-    private var keptBytes = 0L
-    private var keptOverflow = false
 
     // Guarded by [lock].
     private var written = 0L
@@ -113,15 +105,6 @@ class ContinuousMic(
                         off += len
                     }
                     written += n
-                    if (keepAll && !keptOverflow) {
-                        if (keptBytes + n > KEEP_MAX_BYTES) {
-                            keptOverflow = true
-                            kept.clear()
-                        } else {
-                            kept += chunk.copyOf(n)
-                            keptBytes += n
-                        }
-                    }
                     lock.notifyAll()
                     if (written >= endPos) return
                 }
@@ -204,33 +187,6 @@ class ContinuousMic(
 
     fun stopPos(): Long = synchronized(lock) { endPos }
 
-    /**
-     * The recording from "go" to "stop" (countdown left out), when [keepAll]; null when nothing was recorded.
-     * Outgrown the memory limit: an empty, incomplete one - Whisper is then skipped with a reason.
-     */
-    fun recorded(): RecordedAudio? {
-        if (!keepAll) return null
-        synchronized(lock) { return keptAudio() }
-    }
-
-    /** Called with [lock] held. */
-    private fun keptAudio(): RecordedAudio? {
-        if (keptOverflow) return RecordedAudio(ByteArray(0), RATE, complete = false)
-        val from = startPos
-        val to = minOf(written, endPos, keptBytes)
-        if (to <= from) return null
-        val out = ByteArray((to - from).toInt())
-        var pos = 0L
-        for (c in kept) {
-            val start = maxOf(from, pos)
-            val end = minOf(to, pos + c.size)
-            if (end > start) System.arraycopy(c, (start - pos).toInt(), out, (start - from).toInt(), (end - start).toInt())
-            pos += c.size
-            if (pos >= to) break
-        }
-        return RecordedAudio(out, RATE)
-    }
-
     fun close() {
         endSession()
         synchronized(lock) {
@@ -261,9 +217,6 @@ class ContinuousMic(
         private const val BYTES_PER_SECOND = RATE * 2
         private const val BUFFER_SECONDS = 30
         private const val BUFFER_BYTES = BYTES_PER_SECOND * BUFFER_SECONDS
-
-        /** About 13 min - more than Whisper takes in one file anyway (25 MB), so nothing more is held. */
-        private const val KEEP_MAX_BYTES = 25L * 1024 * 1024
 
         /** 40 ms - the seismograph gets a level 25 times a second. */
         private const val CHUNK_BYTES = BYTES_PER_SECOND / 25

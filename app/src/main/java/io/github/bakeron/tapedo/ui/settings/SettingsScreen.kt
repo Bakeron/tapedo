@@ -3,6 +3,7 @@ package io.github.bakeron.tapedo.ui.settings
 import android.os.Build
 import android.speech.SpeechRecognizer
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -77,20 +78,16 @@ import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.NoteType
 import io.github.bakeron.tapedo.core.model.Priority
 import io.github.bakeron.tapedo.core.report.Problem
-import io.github.bakeron.tapedo.core.settings.AiMode
-import io.github.bakeron.tapedo.core.settings.AiProvider
 import io.github.bakeron.tapedo.core.settings.AppSettings
 import io.github.bakeron.tapedo.core.settings.OnlineSpeech
 import io.github.bakeron.tapedo.core.settings.RecordingEnd
 import io.github.bakeron.tapedo.core.settings.ThemeMode
-import io.github.bakeron.tapedo.core.settings.WhisperProvider
 import io.github.bakeron.tapedo.core.speech.ListeningMode
 import io.github.bakeron.tapedo.locale.AppLanguage
 import io.github.bakeron.tapedo.report.ReportMail
 import io.github.bakeron.tapedo.ui.cards.RuledText
 import io.github.bakeron.tapedo.ui.components.CounterSlider
 import io.github.bakeron.tapedo.ui.components.Fold
-import io.github.bakeron.tapedo.ui.components.FoldValue
 import io.github.bakeron.tapedo.ui.components.LabelTape
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.SlideSelector
@@ -132,7 +129,6 @@ fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLicens
             onOpenLicenses = onOpenLicenses,
             saveFailed = saveFailed,
             listeningMode = listeningMode,
-            savedKeys = ai.filterValues { p -> p.keySuffix != null }.keys,
             aiSection = { AiSection(it, ai, actions, usdRate) },
         )
     }
@@ -146,8 +142,6 @@ fun SettingsScreen(
     onOpenLicenses: () -> Unit = {},
     saveFailed: Boolean = false,
     listeningMode: ListeningMode = ListeningMode.UNKNOWN,
-    /** Providers with a saved key - Whisper uses the same key. */
-    savedKeys: Set<AiProvider> = emptySet(),
     aiSection: @Composable ColumnScope.() -> Unit = {},
 ) {
     Column(
@@ -162,7 +156,7 @@ fun SettingsScreen(
             }
             Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall)
         }
-        if (saveFailed) {
+        Fold(saveFailed) {
             Text(
                 stringResource(R.string.settings_save_failed),
                 style = MaterialTheme.typography.bodyMedium,
@@ -337,68 +331,12 @@ fun SettingsScreen(
                                     Modifier.padding(bottom = 10.dp),
                                 )
                             }
-                            Rule()
-                            // Whisper is AI, so it lives on the "AI" divider (author 11.11.2026); a pointer stays here.
-                            RuledText(
-                                stringResource(R.string.settings_whisper_moved),
-                                MaterialTheme.typography.bodySmall,
-                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                TapedoTheme.colors.rule,
-                                Modifier.padding(top = 10.dp),
-                            )
-                            PaperButton(
-                                stringResource(R.string.settings_whisper_open_ai),
-                                onClick = { tab = SettingsTab.AI },
-                                modifier = Modifier.padding(top = 8.dp, bottom = 10.dp),
-                            )
                         }
 
                     }
 
                     SettingsTab.AI -> {
                         Section(null, content = aiSection)
-                        // Whisper needs the free Groq key, so with paid Claude it is only named, never both at once.
-                        if (settings.aiMode == AiMode.CLAUDE) Section(null) {
-                            RuledText(
-                                stringResource(R.string.settings_whisper_free_only),
-                                MaterialTheme.typography.bodySmall,
-                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                TapedoTheme.colors.rule,
-                                Modifier.padding(vertical = 10.dp),
-                            )
-                        } else Section(null) {
-                            Setting(
-                                title = stringResource(R.string.settings_whisper),
-                                hint = stringResource(R.string.settings_whisper_hint),
-                                more = stringResource(R.string.settings_whisper_more),
-                            ) {
-                                SlideSelector(
-                                    options = WHISPER_OPTIONS,
-                                    selected = settings.whisper,
-                                    label = { w -> if (w == null) stringResource(R.string.settings_whisper_off) else providerName(w.ai) },
-                                    onSelect = { v -> onChange { it.copy(whisper = v) } },
-                                )
-                            }
-                            // Picking a provider is the consent: where the audio goes and whether the key is there, said right away.
-                            FoldValue(settings.whisper) { w ->
-                                val name = providerName(w.ai)
-                                val hasKey = w.ai in savedKeys
-                                Column(Modifier.padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    RuledText(
-                                        stringResource(R.string.settings_whisper_data, name),
-                                        MaterialTheme.typography.bodySmall,
-                                        MaterialTheme.colorScheme.onSurface,
-                                        TapedoTheme.colors.rule,
-                                    )
-                                    RuledText(
-                                        stringResource(if (hasKey) R.string.settings_whisper_key_ok else R.string.settings_whisper_key_missing, name),
-                                        MaterialTheme.typography.bodySmall,
-                                        MaterialTheme.colorScheme.onSurfaceVariant,
-                                        TapedoTheme.colors.rule,
-                                    )
-                                }
-                            }
-                        }
                     }
 
                     SettingsTab.LOOK -> Section(null) {
@@ -539,25 +477,44 @@ private fun SettingsTabs(selected: SettingsTab, onSelect: (SettingsTab) -> Unit)
                     .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(tab) }),
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                Text(
-                    stringResource(tab.title),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isSelected) scheme.onSurface else scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier
-                        .background(if (isSelected) colors.cardEdge else colors.card, shape)
-                        .then(if (isSelected) Modifier else Modifier.border(1.dp, colors.controlEdge, shape))
-                        .padding(horizontal = 16.dp, vertical = if (isSelected) 14.dp else 10.dp),
-                )
+                // Rising, colour, edge and bold all move together (author 21.11.2026: the jump looked broken).
+                val still = TapedoTheme.reduceMotion
+                val chosen by animateFloatAsState(if (isSelected) 1f else 0f, if (still) snap() else tween(TAB_LOOK_MS), label = "tab chosen")
+                Box(
+                    Modifier
+                        .background(lerp(colors.card, colors.cardEdge, chosen), shape)
+                        .border(1.dp, colors.controlEdge.copy(alpha = colors.controlEdge.alpha * (1f - chosen)), shape)
+                        .padding(horizontal = 16.dp, vertical = 10.dp + 4.dp * chosen),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // Bold and regular laid over each other and crossfaded - a weight cannot be animated.
+                    val name = stringResource(tab.title)
+                    val ink = lerp(scheme.onSurfaceVariant, scheme.onSurface, chosen)
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = ink,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.graphicsLayer { alpha = 1f - chosen },
+                    )
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = ink,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.graphicsLayer { alpha = chosen }.clearAndSetSemantics { },
+                    )
+                }
             }
         }
     }
 }
 
-/** Whisper off first - it is the default, and the audio then never leaves the phone. */
-private val WHISPER_OPTIONS: List<WhisperProvider?> = listOf(null) + WhisperProvider.entries.filter { it.ai !in AiProvider.HIDDEN }
+private const val TAB_LOOK_MS = 200
 
 /**
  * A section is one index card with a label-maker heading stuck across its top edge - or without one,
@@ -649,7 +606,10 @@ private fun ExplainNote(title: String, expanded: Boolean, onClick: () -> Unit) {
             animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(220),
             label = "explain word",
         )
-        for ((word, alpha) in listOf(explain to 1f - shownHide, hide to shownHide)) {
+        // One word out, then the other in - never both half-visible at once (author 21.11.2026).
+        val out = (1f - 2f * shownHide).coerceAtLeast(0f)
+        val inn = (2f * shownHide - 1f).coerceAtLeast(0f)
+        for ((word, alpha) in listOf(explain to out, hide to inn)) {
             Text(
                 word,
                 style = style,

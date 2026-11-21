@@ -24,7 +24,17 @@ class KeystoreSecretStore(
 
     private fun file(provider: AiProvider) = AtomicFile(File(dir, "key_${provider.name.lowercase()}.bin"))
 
+    /** A key of a provider the app no longer has must not stay on the phone - deleted on first use of the store. */
+    @Volatile private var swept = false
+
+    private fun sweepRemoved() {
+        if (swept) return
+        swept = true
+        AiProvider.REMOVED_IDS.forEach { AtomicFile(File(dir, "key_$it.bin")).delete() }
+    }
+
     override suspend fun apiKey(provider: AiProvider): String? = withContext(Dispatchers.IO) {
+        sweepRemoved()
         // A failure other than a lost key survives the retries and is thrown: the key is still there.
         try {
             retryTemporary {
@@ -42,6 +52,7 @@ class KeystoreSecretStore(
     }
 
     override suspend fun setApiKey(provider: AiProvider, key: String?) = withContext(Dispatchers.IO) {
+        sweepRemoved()
         val f = file(provider)
         val clean = key?.trim()
         if (clean.isNullOrEmpty()) f.delete() else f.writeAtomically(cipher.encrypt(clean.toByteArray(Charsets.UTF_8)))
