@@ -463,6 +463,9 @@ private fun SettingsTabs(selected: SettingsTab, onSelect: (SettingsTab) -> Unit)
     val colors = TapedoTheme.colors
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)
+    // Every tab as tall as a chosen one: with bigger text a chosen tab is over 48 dp, and half-way through a
+    // switch both were lower - the row shrank and the whole page bobbed up and back (author 21.11.2026).
+    val tabHeight = maxOf(48.dp, with(LocalDensity.current) { MaterialTheme.typography.labelLarge.lineHeight.toDp() } + 28.dp)
     Row(
         Modifier
             .fillMaxWidth()
@@ -477,7 +480,7 @@ private fun SettingsTabs(selected: SettingsTab, onSelect: (SettingsTab) -> Unit)
             // The whole 48 dp is the touch target; the visible divider is lower when not chosen.
             Box(
                 Modifier
-                    .heightIn(min = 48.dp)
+                    .height(tabHeight)
                     .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(tab) }),
                 contentAlignment = Alignment.BottomCenter,
             ) {
