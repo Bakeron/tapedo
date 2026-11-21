@@ -7,6 +7,8 @@ import json
 import re
 import shutil
 import sys
+
+import demo_stamp
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -57,6 +59,8 @@ def main() -> int:
     for font in (RES / "font").glob("*.ttf"):
         shutil.copyfile(font, fonts / font.name)
     print(f"strings: {len(pl)} pl, {len(en)} en; fonts copied")
+    # New strings.js = new link hash, or visitors keep the old file (see demo_stamp.py).
+    demo_stamp.main()
     return 0
 
 
