@@ -136,11 +136,11 @@
     <string name="ai_p_anthropic" translatable="false">Claude (Anthropic)</string>
     <string name="ai_p_openai" translatable="false">OpenAI</string>
     <string name="ai_p_gemini" translatable="false">Google Gemini</string>
-    <string name="ai_intro">AI porządkuje nagranie na karteczce z\u00A0otwartej przekładki. Dzieli je na punkty, rozpoznaje terminy i\u00A0godziny i\u00A0poprawia przekręcone słowa. Bez AI robią to proste reguły, które rozpoznają godzinę po „o\u00A010”, priorytet po „pilne” i\u00A0termin po „jutro”. Reguły działają bez internetu, a\u00A0tekst notatki nie wychodzi z\u00A0telefonu.</string>
-    <string name="ai_queue">Gdy Groq wykorzysta dzienny limit, odmówi (klucz, model, serwer) albo nie ma internetu, notatkę rozpisują reguły bez AI, a w oknie po nagraniu możesz później dotknąć „Spróbuj jeszcze raz z AI”.</string>
+    <string name="ai_intro">Po dotknięciu „Dokładniej” AI porządkuje karteczkę od nowa. Dzieli tekst na punkty, rozpoznaje terminy i\u00A0godziny i\u00A0poprawia przekręcone słowa. Każde nagranie najpierw rozpisują proste reguły, które rozpoznają godzinę po „o\u00A010”, priorytet po „pilne” i\u00A0termin po „jutro”. Reguły działają bez internetu, a\u00A0tekst notatki nie wychodzi wtedy z\u00A0telefonu.</string>
+    <string name="ai_queue">Groq działa tylko po dotknięciu „Dokładniej z\u00A0AI” w\u00A0oknie po nagraniu albo pod karteczką. Samo, w\u00A0tle, nic nie wysyła. Gdy Groq wykorzysta dzienny limit, odmówi (klucz, model, serwer) albo nie ma internetu, karteczki zostają bez zmian, a\u00A0pod przyciskiem widać powód.</string>
     <string name="ai_mode">Jakie AI</string>
     <string name="ai_mode_free">Darmowe</string>
-    <string name="ai_mode_free_hint">Groq jest słabszy od Claude, ale sam porządkuje każde nagranie.</string>
+    <string name="ai_mode_free_hint">Groq jest słabszy od Claude, ale nic nie kosztuje. Też działa tylko po Twoim dotknięciu.</string>
     <string name="ai_mode_claude">Płatne - Claude</string>
     <string name="ai_mode_claude_hint">Wyraźnie dokładniejsze. Pieniądze idą tylko po Twoim dotknięciu, bo samo nic nie porządkuje. Dzienny limit wydatków ustawiasz sam.</string>
     <string name="ai_claude_only_click">Claude działa tylko po dotknięciu przycisku „Dokładniej - Claude” w\u00A0oknie po nagraniu. Samo, w\u00A0tle, nic nie wysyła. Nagranie najpierw rozpisują reguły bez AI.</string>
@@ -249,7 +249,6 @@
     <string name="ai_problem_other">dostawca zgłosił błąd. Spróbuj później albo włącz innego dostawcę.</string>
     <string name="ai_problem_line">%1$s (%2$s): %3$s</string>
     <string name="ai_provider_answer">Odpowiedź dostawcy</string>
-    <string name="review_ai_rules">Proste reguły rozpisały karteczki zamiast AI:</string>
 
     <!-- Review window (after a recording) -->
     <string name="home_dismiss">Zamknij</string>
@@ -273,14 +272,15 @@
     <string name="review_refine_offer">Propozycja Claude</string>
     <string name="review_refine_accept">Zamień na te</string>
     <string name="review_refine_keep">Zostaw obecne</string>
-    <string name="review_retry">Spróbuj jeszcze raz z\u00A0AI</string>
-    <string name="review_retry_hint">Darmowe AI tym razem nie ułożyło karteczek, więc zrobiły to reguły. Te same słowa trafią jeszcze raz do darmowego AI. Obecne karteczki zostają, dopóki nie wybierzesz nowych.</string>
+    <string name="review_retry">Dokładniej z\u00A0AI</string>
+    <string name="review_retry_hint">Te same słowa trafią do darmowego AI, które trafniej dzieli na karteczki i\u00A0rozpoznaje rodzaje. Obecne karteczki zostają, dopóki nie wybierzesz nowych.</string>
     <string name="review_retry_working">AI układa karteczki…</string>
-    <string name="review_retry_failed">AI znowu nie ułożyło karteczek, więc obecne zostają.</string>
+    <string name="review_retry_failed">AI nie ułożyło karteczek, więc obecne zostają.</string>
     <string name="review_retry_offer">Propozycja AI</string>
     <string name="card_refine_free">Dokładniej z\u00A0AI</string>
-    <string name="card_refine_free_hint">Tekst karteczki trafi do darmowego AI, które może trafniej rozpoznać rodzaj, datę i\u00A0godzinę albo podzielić tekst na kilka karteczek. Obecna karteczka zostaje, dopóki nie wybierzesz nowej.</string>
-    <string name="card_refine_hint">Tekst karteczki trafi do Claude Sonnet 5.5, który trafniej rozpoznaje rodzaj, datę i\u00A0godzinę albo dzieli tekst na kilka karteczek. Obecna karteczka zostaje, dopóki nie wybierzesz nowej.</string>
+    <string name="card_refine_free_hint">Tekst karteczki trafi do darmowego AI, które może trafniej rozpoznać datę, godzinę i\u00A0punkty. Z\u00A0zaznaczoną kratką może też zmienić rodzaj albo podzielić tekst na kilka karteczek. Obecna karteczka zostaje, dopóki nie wybierzesz nowej.</string>
+    <string name="card_refine_hint">Tekst karteczki trafi do Claude Sonnet 5.5, który trafniej rozpoznaje datę, godzinę i\u00A0punkty. Z\u00A0zaznaczoną kratką może też zmienić rodzaj albo podzielić tekst na kilka karteczek. Obecna karteczka zostaje, dopóki nie wybierzesz nowej.</string>
+    <string name="card_refine_other_kinds">Może zmienić rodzaj i\u00A0podzielić</string>
     <string name="card_refine_free_failed">AI nie ułożyło karteczki, więc obecna zostaje.</string>
     <string name="card_refine_failed">Claude nie ułożył karteczki, więc obecna zostaje.</string>
     <string name="card_refine_accept_one">Zamień na tę</string>
@@ -301,6 +301,7 @@
     <string name="stack_moved_show">Pokaż</string>
     <string name="home_record_into">Nagranie trafi do: %s</string>
     <string name="home_record_into_label">Trafi do</string>
+    <string name="home_record_auto">Samo pozna</string>
     <string name="stack_undo">Cofnij</string>
     <string name="strip_close">Zamknij komunikat</string>
     <string name="strip_delete_desc">Usuń „%s”</string>
@@ -336,8 +337,6 @@
     <string name="card_not_done">do zrobienia</string>
     <string name="card_item_checked">odhaczone</string>
     <string name="card_item_unchecked">nieodhaczone</string>
-    <string name="card_ai_stamp" translatable="false">AI</string>
-    <string name="card_ai_desc">Rozpisane przez AI</string>
     <string name="card_preview">Podgląd</string>
     <string name="card_preview_open">Pokaż podgląd karteczki</string>
     <string name="card_preview_close">Zamknij podgląd</string>

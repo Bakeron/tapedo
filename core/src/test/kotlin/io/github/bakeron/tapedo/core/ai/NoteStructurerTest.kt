@@ -55,53 +55,54 @@ class NoteStructurerTest {
     private fun TestScope.structurer(gateway: Gateway, usage: AiUsage = MemoryAiUsage(), secrets: SecretStore = Secrets(allKeys)) =
         NoteStructurer(secrets, usage, gateway, testScheduler.timeSource)
 
-    private suspend fun NoteStructurer.run(settings: AppSettings) =
-        structure("kup mleko", settings, null, ListTitles(), today, 0L)
+    /** The cards of a recording - always the rules. */
+    private fun NoteStructurer.run() = structure("kup mleko", null, ListTitles(), today, 0L)
+
+    /** "More exact" - the only way any AI is asked (author 26.11.2026). */
+    private suspend fun NoteStructurer.ask(settings: AppSettings) = refine("kup mleko", settings, null, today, 0L)
+
+    private val Refined.reason get() = (this as Refined.Failed).problem
 
     private fun on(vararg p: AiProvider, limit: Int = 200) = AppSettings(aiProviders = p.toSet(), aiDailyLimit = limit)
 
     private val claude = AppSettings(aiMode = AiMode.CLAUDE)
 
     @Test
-    fun `no provider turned on - the rules, without any message`() = runTest {
-        val gateway = Gateway(emptyMap())
-        val result = structurer(gateway).run(AppSettings())
-        assertTrue(result.problems.isEmpty())
+    fun `a recording is cut by the rules - no AI is asked on its own, free or paid`() = runTest {
+        val gateway = Gateway(mapOf(GROQ to { cards }, ANTHROPIC to { cards }))
+        val result = structurer(gateway).run()
         assertFalse(result.notes.single().byAi)
+        assertEquals("rules wrote it", null, result.by)
         assertTrue(gateway.asked.isEmpty())
     }
 
     @Test
-    fun `a provider's limit gives the note to the rules and rests the provider until tomorrow`() = runTest {
+    fun `a provider's limit fails the tap and rests the provider until tomorrow`() = runTest {
         val usage = MemoryAiUsage()
         val gateway = Gateway(mapOf(GROQ to fails(Problem.LIMIT, "Rate limit reached")))
         val s = structurer(gateway, usage)
 
-        val first = s.run(on(GROQ))
-        assertFalse(first.notes.single().byAi)
-        assertEquals(listOf(AiProblem(GROQ, GROQ.defaultModel, Problem.LIMIT, "Rate limit reached")), first.problems)
+        assertEquals(AiProblem(GROQ, GROQ.defaultModel, Problem.LIMIT, "Rate limit reached"), s.ask(on(GROQ)).reason)
         assertTrue(usage.limitHit(GROQ, today))
 
-        // The next note does not ask Groq at all today.
-        assertEquals(Problem.LIMIT, s.run(on(GROQ)).problems.single().problem)
+        // The next tap does not ask Groq at all today.
+        assertEquals(Problem.LIMIT, s.ask(on(GROQ)).reason.problem)
         assertEquals(listOf(GROQ), gateway.asked)
         // ...and tomorrow it does.
         assertFalse(usage.limitHit(GROQ, today + 1))
     }
 
     @Test
-    fun `a busy model gives the note to the rules without resting the provider until tomorrow`() = runTest {
+    fun `a busy model fails the tap without resting the provider until tomorrow`() = runTest {
         val usage = MemoryAiUsage()
         val gateway = Gateway(mapOf(GROQ to fails(Problem.BUSY, "rate-limited upstream")))
         val s = structurer(gateway, usage)
 
-        val first = s.run(on(GROQ))
-        assertFalse(first.notes.single().byAi)
-        assertEquals(Problem.BUSY, first.problems.single().problem)
+        assertEquals(Problem.BUSY, s.ask(on(GROQ)).reason.problem)
         assertFalse(usage.limitHit(GROQ, today))
 
-        // The next note asks Groq again.
-        s.run(on(GROQ))
+        // The next tap asks Groq again.
+        s.ask(on(GROQ))
         assertEquals(listOf(GROQ, GROQ), gateway.asked)
     }
 
@@ -112,55 +113,47 @@ class NoteStructurerTest {
             mapOf(GROQ to { if (groqCalls++ == 0) throw AiException(Problem.BUSY, "TPM. Please try again in 2.5s.") else cards }),
         )
         val start = testScheduler.currentTime
-        val shortResult = structurer(short).run(on(GROQ))
-        assertTrue(shortResult.notes.single().byAi)
+        assertTrue(structurer(short).ask(on(GROQ)) is Refined.Cards)
         assertEquals(listOf(GROQ, GROQ), short.asked)
         assertTrue(testScheduler.currentTime - start >= 2_500)
 
         val long = Gateway(mapOf(GROQ to fails(Problem.BUSY, "TPM. Please try again in 40s.")))
         val before = testScheduler.currentTime
-        assertFalse(structurer(long).run(on(GROQ)).notes.single().byAi)
+        assertTrue(structurer(long).ask(on(GROQ)) is Refined.Failed)
         assertEquals(listOf(GROQ), long.asked)
         assertTrue(testScheduler.currentTime - before < 40_000)
     }
 
     @Test
-    fun `a wrong key gives the note to the rules, and the provider is asked again with the next note`() = runTest {
+    fun `a wrong key fails the tap, and the provider is asked again on the next one`() = runTest {
         val gateway = Gateway(mapOf(GROQ to fails(Problem.KEY)))
         val s = structurer(gateway)
-        val result = s.run(on(GROQ))
-        assertFalse(result.notes.single().byAi)
-        assertEquals(listOf(Problem.KEY), result.problems.map { it.problem })
-        s.run(on(GROQ))
+        assertEquals(Problem.KEY, s.ask(on(GROQ)).reason.problem)
+        s.ask(on(GROQ))
         assertEquals(listOf(GROQ, GROQ), gateway.asked)
     }
 
     @Test
-    fun `a failing provider gives the rules and the reason`() = runTest {
+    fun `a failing provider gives the reason`() = runTest {
         val gateway = Gateway(mapOf(GROQ to fails(Problem.MODEL)))
-        val result = structurer(gateway).run(on(GROQ))
-        assertFalse(result.notes.single().byAi)
-        assertEquals(listOf("Mleko"), result.notes.single().items.map { it.text })
-        assertEquals(listOf(GROQ to Problem.MODEL), result.problems.map { it.provider to it.problem })
+        val reason = structurer(gateway).ask(on(GROQ)).reason
+        assertEquals(GROQ to Problem.MODEL, reason.provider to reason.problem)
     }
 
     @Test
-    fun `no connection - the rules at once, and the call does not count`() = runTest {
+    fun `no connection fails at once, and the call does not count`() = runTest {
         val gateway = Gateway(mapOf(GROQ to fails(Problem.OFFLINE)))
         val usage = MemoryAiUsage()
-        val result = structurer(gateway, usage).run(on(GROQ))
-        assertFalse(result.notes.single().byAi)
+        assertEquals(Problem.OFFLINE, structurer(gateway, usage).ask(on(GROQ)).reason.problem)
         assertEquals(listOf(GROQ), gateway.asked)
         assertEquals("a call that never arrived does not count", 0, usage.callsToday(GROQ, today))
     }
 
     @Test
-    fun `a broken answer - this note from the rules, counted once`() = runTest {
+    fun `a broken answer fails the tap, counted once`() = runTest {
         val gateway = Gateway(mapOf(GROQ to { "Sorry, I can't do JSON today." }))
         val usage = MemoryAiUsage()
-        val result = structurer(gateway, usage).run(on(GROQ))
-        assertFalse(result.notes.single().byAi)
-        assertEquals(Problem.ANSWER, result.problems.single().problem)
+        assertEquals(Problem.ANSWER, structurer(gateway, usage).ask(on(GROQ)).reason.problem)
         assertEquals(1, usage.callsToday(GROQ, today))
     }
 
@@ -169,19 +162,18 @@ class NoteStructurerTest {
         val usage = MemoryAiUsage()
         repeat(2) { usage.addCall(GROQ, today) }
         val gateway = Gateway(mapOf(GROQ to { cards }))
-        val result = structurer(gateway, usage).run(on(GROQ, limit = 2))
+        val refined = structurer(gateway, usage).ask(on(GROQ, limit = 2))
         assertTrue(gateway.asked.isEmpty())
-        assertEquals(Problem.CAP, result.problems.single().problem)
+        assertEquals(Problem.CAP, refined.reason.problem)
     }
 
     @Test
     fun `no key or an unreadable key is reported and nobody is asked`() = runTest {
         val gateway = Gateway(mapOf(GROQ to { cards }))
-        val none = structurer(gateway, secrets = Secrets(emptyMap())).run(on(GROQ))
-        val unreadable = structurer(gateway, secrets = Secrets(mapOf(GROQ to "k"), unreadable = setOf(GROQ))).run(on(GROQ))
-        assertFalse(none.notes.single().byAi)
-        assertEquals(listOf(Problem.NO_KEY), none.problems.map { it.problem })
-        assertEquals(listOf(Problem.KEY_UNREADABLE), unreadable.problems.map { it.problem })
+        val none = structurer(gateway, secrets = Secrets(emptyMap())).ask(on(GROQ))
+        val unreadable = structurer(gateway, secrets = Secrets(mapOf(GROQ to "k"), unreadable = setOf(GROQ))).ask(on(GROQ))
+        assertEquals(Problem.NO_KEY, none.reason.problem)
+        assertEquals(Problem.KEY_UNREADABLE, unreadable.reason.problem)
         assertTrue(gateway.asked.isEmpty())
     }
 
@@ -189,18 +181,18 @@ class NoteStructurerTest {
     fun `an empty model field means the default model, a typed one is used as written`() = runTest {
         val gateway = Gateway(mapOf(GROQ to { cards }))
         val s = structurer(gateway)
-        s.run(on(GROQ).copy(aiModels = mapOf(GROQ to "  ")))
-        s.run(on(GROQ).copy(aiModels = mapOf(GROQ to "llama-3.1-8b-instant")))
+        s.ask(on(GROQ).copy(aiModels = mapOf(GROQ to "  ")))
+        s.ask(on(GROQ).copy(aiModels = mapOf(GROQ to "llama-3.1-8b-instant")))
         assertEquals(listOf(GROQ.defaultModel, "llama-3.1-8b-instant"), gateway.models)
     }
 
     @Test
-    fun `two notes in a row wait for the provider's pause`() = runTest {
+    fun `two taps in a row wait for the provider's pause`() = runTest {
         val gateway = Gateway(mapOf(GROQ to { cards }))
         val s = structurer(gateway)
-        s.run(on(GROQ))
+        s.ask(on(GROQ))
         val before = currentTime
-        s.run(on(GROQ))
+        s.ask(on(GROQ))
         assertEquals(GROQ.pauseMillis, currentTime - before)
     }
 
@@ -231,17 +223,8 @@ class NoteStructurerTest {
 
     @Test
     fun `a card with no priority said gets low - the green tape`() = runTest {
-        val result = structurer(Gateway(emptyMap())).structure(
-            "zadzwonić do mamy", AppSettings(), null, ListTitles(), today, 0L,
-        )
+        val result = structurer(Gateway(emptyMap())).structure("zadzwonić do mamy", null, ListTitles(), today, 0L)
         assertEquals(Priority.LOW, result.notes.single().priority)
-    }
-
-    @Test
-    fun `the result says which provider wrote the cards - none for the rules`() = runTest {
-        val gateway = Gateway(mapOf(GROQ to { cards }))
-        assertEquals(GROQ, structurer(gateway).run(on(GROQ)).by)
-        assertEquals(null, structurer(Gateway(emptyMap())).run(AppSettings()).by)
     }
 
     @Test
@@ -279,7 +262,7 @@ class NoteStructurerTest {
     }
 
     @Test
-    fun `in free mode trying again asks the free provider, and a failure gives the reason, never the rules`() = runTest {
+    fun `in free mode more exact asks the free provider, and a failure gives the reason, never the rules`() = runTest {
         val gateway = Gateway(mapOf(GROQ to { cards }))
         val refined = structurer(gateway).refine("kup mleko", on(GROQ), null, today, 0L)
         assertEquals(GROQ, (refined as Refined.Cards).by)
@@ -308,20 +291,11 @@ class NoteStructurerTest {
     }
 
     @Test
-    fun `paid Claude never writes the cards on its own - the rules do, nobody is asked`() = runTest {
-        val gateway = Gateway(mapOf(GROQ to { cards }, ANTHROPIC to { cards }))
-        val result = structurer(gateway).run(claude.copy(aiProviders = setOf(GROQ, ANTHROPIC)))
-        assertFalse(result.notes.single().byAi)
-        assertTrue(result.problems.isEmpty())
-        assertTrue(gateway.asked.isEmpty())
-    }
-
-    @Test
     fun `free mode asks only the free providers - paid and hidden ones are skipped`() = runTest {
         val gateway = Gateway(mapOf(GROQ to fails(Problem.KEY), ANTHROPIC to { cards }, GEMINI to { cards }))
-        val result = structurer(gateway).run(on(GROQ, ANTHROPIC, GEMINI))
+        val refined = structurer(gateway).ask(on(GROQ, ANTHROPIC, GEMINI))
         assertEquals(listOf(GROQ), gateway.asked)
-        assertFalse(result.notes.single().byAi)
+        assertEquals(Problem.KEY, refined.reason.problem)
     }
 
     @Test

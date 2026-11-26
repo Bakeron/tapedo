@@ -188,18 +188,23 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
     // Screen off or another app: write what is open now - the phone may close Tapedo in the background.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onBackground() }
 
-    // The open divider is the kind of the next recording (kept in the settings); "Done" only shows the done
-    // cards - a recording started there goes to the last kind, which opens again.
+    // The open divider is the kind of the next recording (kept in the settings); a recording started on "Done"
+    // has no kind - the rules or the AI sort it into cards of any kind (author 26.11.2026).
     var onDone by rememberSaveable { mutableStateOf(false) }
     val kind = settings?.noteTypeChoice ?: NoteType.NOTE
     val tab = if (onDone) StackTab.DONE else StackTab.of(kind)
+    SideEffect { viewModel.recordAuto = onDone }
 
     var debugUsed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(debugTranscript, settings != null) {
         // Wait for settings, so the chosen type and AI provider apply; use the text once.
         if (debugTranscript != null && settings != null && !debugUsed) {
             debugUsed = true
-            viewModel.onTranscript(debugTranscript)
+            // "auto:" in front: as if recorded on the "Done" divider - the only way to the window after recording
+            // for one card, which the emulator cannot record.
+            val auto = debugTranscript.startsWith("auto:")
+            if (auto) onDone = true
+            viewModel.onTranscript(debugTranscript.removePrefix("auto:"), auto = auto)
         }
     }
 
@@ -277,6 +282,7 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
             onRefine = viewModel::refineCard,
             onAcceptRefine = viewModel::acceptCardRefine,
             onKeepRefine = viewModel::keepCard,
+            onRefineOtherKinds = viewModel::setRefineOtherKinds,
         )
 
         target == HomeShown.REVIEW -> ReviewPanel(
@@ -301,10 +307,8 @@ fun HomeRoute(viewModel: HomeViewModel, onOpenSettings: () -> Unit, debugTranscr
                 t.type?.let(viewModel::chooseType)
             },
             kind = kind,
-            onStartRecording = {
-                onDone = false
-                viewModel.startRecording()
-            },
+            auto = onDone,
+            onStartRecording = { viewModel.startRecording() },
             onStopRecording = viewModel::stopRecording,
             onMicDenied = viewModel::micDenied,
             onOpenSettings = onOpenSettings,
@@ -386,8 +390,10 @@ fun HomeScreen(
     recording: RecordingState,
     stack: StackState,
     onSelectTab: (StackTab) -> Unit,
-    /** The kind the next recording becomes - also while "Done" is open. */
+    /** The kind the next recording becomes. */
     kind: NoteType,
+    /** "Done" is open: the next recording has no kind of its own ("Goes to: by itself"). */
+    auto: Boolean = false,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
     onMicDenied: () -> Unit,
@@ -523,7 +529,7 @@ fun HomeScreen(
           }
         }
     }
-    val controls = @Composable { _: ColumnScope -> RecordControls(recording, kind, pauseSeconds, onRecordKey) }
+    val controls = @Composable { _: ColumnScope -> RecordControls(recording, kind.takeUnless { auto }, pauseSeconds, onRecordKey) }
 
     BoxWithConstraints(
         Modifier
@@ -616,7 +622,8 @@ fun HomeScreen(
 @Composable
 private fun RecordControls(
     recording: RecordingState,
-    kind: NoteType,
+    /** Null: "by itself" - no kind chosen. */
+    kind: NoteType?,
     pauseSeconds: Int,
     onRecordKey: () -> Unit,
 ) {
@@ -640,7 +647,7 @@ private fun RecordControls(
                 label = "goes to",
             )
             run {
-                val name = stringResource(tabNameRes(StackTab.of(kind)))
+                val name = stringResource(kind?.let { tabNameRes(StackTab.of(it)) } ?: R.string.home_record_auto)
                 val into = stringResource(R.string.home_record_into, name)
                 Column(
                     Modifier
@@ -664,9 +671,9 @@ private fun RecordControls(
                         label = "goes to divider",
                     ) { shownKind ->
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TypeMark(shownKind, MaterialTheme.colorScheme.onSurface, size = 16.dp)
+                            if (shownKind != null) TypeMark(shownKind, MaterialTheme.colorScheme.onSurface, size = 16.dp)
                             Text(
-                                stringResource(tabNameRes(StackTab.of(shownKind))),
+                                stringResource(shownKind?.let { tabNameRes(StackTab.of(it)) } ?: R.string.home_record_auto),
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -734,7 +741,7 @@ private fun RecordControls(
                     if (pauseSeconds > 0) stringResource(R.string.home_pause_rule, pauseSeconds) else stringResource(R.string.home_pause_off)
                 NoteType.EVENT -> stringResource(R.string.home_hint_event)
                 NoteType.TASK -> stringResource(R.string.home_hint_task)
-                NoteType.NOTE, NoteType.IDEA -> ""
+                NoteType.NOTE, NoteType.IDEA, null -> ""
             }
             AnimatedContent(
                 targetState = hint,

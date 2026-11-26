@@ -66,11 +66,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * The card as it looks on the stack, whole and read-only (author 21.11.2026: a nicer view without the editing
- * fields), over the card view. "Share as image" sends exactly this picture - e.g. to WhatsApp.
+ * The card as it looks on the stack, whole and without the editing fields (author 21.11.2026: a nicer view), over
+ * the card view - only the list's boxes can be ticked (author 26.11.2026). "Share as image" sends exactly this
+ * picture - e.g. to WhatsApp.
  */
 @Composable
-fun CardPreview(visible: Boolean, note: Note, number: Int?, onClose: () -> Unit) {
+fun CardPreview(visible: Boolean, note: Note, number: Int?, onClose: () -> Unit, onChange: (Note) -> Unit = {}) {
     val still = TapedoTheme.reduceMotion
     AnimatedVisibility(
         visible = visible,
@@ -120,7 +121,19 @@ fun CardPreview(visible: Boolean, note: Note, number: Int?, onClose: () -> Unit)
                         .background(scheme.background)
                         .padding(horizontal = 16.dp, vertical = 20.dp),
                 ) {
-                    IndexCard(shown, compact = false, preview = true, number = number)
+                    IndexCard(
+                        shown,
+                        compact = false,
+                        preview = true,
+                        number = number,
+                        onToggleItem = { i ->
+                            // The preview leaves out empty lines - the tick goes to the same item on the card.
+                            val at = note.items.indices.filter { note.items[it].text.isNotBlank() }.getOrNull(i)
+                            if (at != null) {
+                                onChange(note.copy(items = note.items.mapIndexed { j, it -> if (j == at) it.copy(checked = !it.checked) else it }))
+                            }
+                        },
+                    )
                 }
             }
             PaperButton(

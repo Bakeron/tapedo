@@ -25,7 +25,7 @@ Wersja demonstracyjna działa w przeglądarce, bez mikrofonu i na wymyślonych k
 - **Praca na karteczce** - punkt albo zadanie odhacza się na karcie odręcznym przekreśleniem. Karteczkę można też edytować, udostępnić i usunąć z możliwością cofnięcia.
 - **Karteczka na cały ekran** - pisze się na niej od razu, na przykład na liście zakupów w sklepie. Przycisk „Dopisz głosem” dodaje nowe punkty albo tekst. Każda zmiana zapisuje się sama.
 - **Pauza jako nowy punkt** - przerwa w mówieniu zaczyna nowy punkt listy. Jej długość ustawia się od 0 do 10 sekund (domyślnie 2), a „Nigdy” robi z całego nagrania jeden punkt.
-- **AI jako opcja** - bez AI rodzaj, priorytet, termin i godzinę wybierają proste reguły. Darmowe AI (Groq, własny klucz) porządkuje każde nagranie samo. Płatny Claude działa tylko po dotknięciu „Dokładniej”, z dziennym limitem wydatków w dolarach i kwotą w złotych po kursie NBP. Oba rodzaje AI nigdy nie działają naraz. Przy błędzie AI notatkę i tak rozpisują reguły.
+- **AI jako opcja** - każde nagranie najpierw rozpisują proste reguły: rodzaj, priorytet, termin i godzinę. AI działa tylko po dotknięciu „Dokładniej”, nigdy samo. Do wyboru jest darmowe AI (Groq, własny klucz) albo płatny Claude z dziennym limitem wydatków w dolarach i kwotą w złotych po kursie NBP. Oba rodzaje AI nigdy nie działają naraz. Przy błędzie AI karteczki zostają takie, jakie były, a pod przyciskiem widać powód.
 - **Wygląd i dostępność** - jasny motyw „Papier” i ciemny „Panel”, język polski i angielski. Do tego wielkość tekstu, opisy dla czytnika ekranu, „Ogranicz animacje”, „Krzywe karteczki” (domyślnie wyłączone) i układ w poziomie.
 
 ## Prywatność

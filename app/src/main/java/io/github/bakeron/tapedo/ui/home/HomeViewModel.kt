@@ -7,7 +7,6 @@ import io.github.bakeron.tapedo.core.ai.NoteStructurer
 import io.github.bakeron.tapedo.core.ai.Problem
 import io.github.bakeron.tapedo.core.ai.Refined
 import io.github.bakeron.tapedo.core.ai.LowFunds
-import io.github.bakeron.tapedo.core.ai.StructureResult
 import io.github.bakeron.tapedo.core.ai.asDictation
 import io.github.bakeron.tapedo.core.data.NoteRepository
 import io.github.bakeron.tapedo.core.model.ChecklistItem
@@ -81,8 +80,6 @@ sealed interface RecordingState {
     data class Review(
         val transcript: String,
         val cards: List<Note>,
-        /** AI was turned on but every provider failed - the rules wrote these cards; each reason is listed. */
-        val aiProblems: List<AiProblem> = emptyList(),
         /** Some cards could not be written - they are only on screen until "try again" works. */
         val saveFailed: Boolean = false,
         /** "Record more" heard nothing usable (or could not start) - the cards are unchanged. */
@@ -95,14 +92,14 @@ sealed interface RecordingState {
         val type: NoteType? = null,
         /**
          * Which AI the button under rule-written cards asks: [AiMode.CLAUDE] ("More exact", paid Claude chosen and
-         * its key saved - the only way Claude is asked) or [AiMode.FREE] ("Try AI again", a free provider is on but
-         * failed - author 21.11.2026); null = no button.
+         * its key saved - the only way Claude is asked) or [AiMode.FREE] ("More exact with AI", a free provider is
+         * on - the only way it is asked, author 26.11.2026); null = no button.
          */
         val refineMode: AiMode? = null,
         val refine: Refine? = null,
     ) : RecordingState
 
-    /** "More exact" / "Try AI again": the AI is writing the cards again, offers its cards, or could not. */
+    /** "More exact": the AI is writing the cards again, offers its cards, or could not. */
     sealed interface Refine {
         data object Working : Refine
         data class Offer(val cards: List<Note>, val by: AiProvider = AiProvider.ANTHROPIC) : Refine
@@ -130,6 +127,11 @@ data class CardRefine(
     val state: RecordingState.Refine? = null,
     /** Claude answered and less than 10% of the top-up is left. */
     val lowFunds: LowFunds? = null,
+    /**
+     * The box "May change the type and split" (author 26.11.2026): off - one card of the same type comes back;
+     * on - the AI may make it another type or several cards. Off each time a card is opened.
+     */
+    val otherKinds: Boolean = false,
 )
 
 /** A tick moved [note] to the [to] divider - said on a strip, with a button to look there. */
@@ -152,10 +154,6 @@ sealed interface Editing {
     data class Saved(override val note: Note) : Editing
 }
 
-/** Reasons are shown only when the rules had to write the cards - a provider that took over hides the others. */
-private fun StructureResult.rulesProblems(): List<AiProblem>? =
-    if (notes.any { it.byAi }) null else problems.ifEmpty { null }
-
 /** Home screen: type choice, recording, the review window after it and the card stack. */
 class HomeViewModel(
     private val store: SettingsStore,
@@ -173,6 +171,15 @@ class HomeViewModel(
 
     /** Default list titles in the app language - set by the screen, which can read resources. */
     var listTitles: ListTitles = ListTitles()
+
+    /**
+     * The "Done" divider is open: the next recording has no type of its own - "Goes to: by itself" (author
+     * 26.11.2026). The rules or the AI cut it into cards of any types, each to its own divider. Set by the screen.
+     */
+    var recordAuto: Boolean = false
+
+    /** [recordAuto] as it was when the recording started. */
+    private var sessionAuto = false
 
     val settings: StateFlow<AppSettings?> = store.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -205,7 +212,7 @@ class HomeViewModel(
     /** The review window put aside while the user adds by voice to one of its cards - it comes back after. */
     private var held: RecordingState.Review? = null
 
-    /** "More exact" for the card open in the card view; null = no button (the AI wrote it, or no AI to ask). */
+    /** "More exact" for the card open in the card view; null = no button (no AI to ask). */
     private val _cardRefine = MutableStateFlow<CardRefine?>(null)
     val cardRefine: StateFlow<CardRefine?> = _cardRefine.asStateFlow()
     private var cardRefining: Job? = null
@@ -312,6 +319,7 @@ class HomeViewModel(
         val s = settings.value ?: AppSettings()
         val allowOnline = allowOnlineOnce || s.onlineSpeech == OnlineSpeech.ALWAYS
         val limit = s.maxRecordingSeconds
+        if (appendTo == null) sessionAuto = recordAuto
         // "On silence" is counted here, not by the recognizer - its own pause is far too short to think.
         val silence = if (s.recordingEnd == RecordingEnd.SILENCE) SilenceCountdown(s.silenceSeconds * 1000L) else null
         _recording.value = RecordingState.Active(0, limit, "", emptyList(), 0, countdown = countdownLeft(0))
@@ -452,16 +460,14 @@ class HomeViewModel(
         }
         _recording.value = RecordingState.Structuring(transcript)
         viewModelScope.launch {
-            val (added, result) = spokenItems(spoken, review.cards[listIndex].type)
+            val added = spokenItems(spoken, review.cards[listIndex].type)
             val cards = review.cards.mapIndexed { i, card -> if (i == listIndex) card.copy(items = card.items + added) else card }
             _recording.value = persist(
                 review.copy(
                     transcript = transcript,
                     cards = cards,
-                    aiProblems = result?.rulesProblems() ?: review.aiProblems,
-                    lowFunds = result?.lowFunds ?: review.lowFunds,
-                    // Claude's cards with items added by someone else are worth asking Claude again.
-                    by = review.by?.takeIf { it == result?.by },
+                    // Claude's cards with items added by the rules are worth asking Claude again.
+                    by = null,
                 ),
             )
         }
@@ -479,7 +485,7 @@ class HomeViewModel(
 
     /**
      * "More exact" (the author's decision 11.11.2026): the whole dictation once more to Claude Sonnet; in free mode
-     * "Try AI again" to the free providers. The cards on screen stay saved until the user takes the new ones -
+     * to the free providers. The cards on screen stay saved until the user takes the new ones -
      * they may be worse, and the AI may not answer at all.
      */
     fun refine() {
@@ -497,7 +503,7 @@ class HomeViewModel(
         }
     }
 
-    /** One "More exact" / "Try AI again" question; anything unexpected is a failure, never a crash. */
+    /** One "More exact" question; anything unexpected is a failure, never a crash. */
     private suspend fun askRefine(text: String, s: AppSettings, type: NoteType?, cardType: NoteType? = null): Refined = try {
         structurer.refine(text, s, type, todayEpochDay(), nowMillis(), cardType)
     } catch (e: CancellationException) {
@@ -543,7 +549,7 @@ class HomeViewModel(
         viewModelScope.launch {
             try {
                 val saved = persist(
-                    review.copy(cards = offer.cards, aiProblems = emptyList(), by = offer.by, refine = null, moreFailed = null),
+                    review.copy(cards = offer.cards, by = offer.by, refine = null, moreFailed = null),
                 )
                 if (saved.saveFailed) {
                     // The old cards are still saved: keep them, offer Claude's again; written ones go back out.
@@ -559,13 +565,12 @@ class HomeViewModel(
         }
     }
 
-    /** Items said for a list of [type], split and grouped like a new list (rules or the chosen AI); never empty. */
-    private suspend fun spokenItems(spoken: String, type: NoteType): Pair<List<ChecklistItem>, StructureResult?> {
+    /** Items said for a list of [type], split and grouped like a new list by the rules; never empty. */
+    private suspend fun spokenItems(spoken: String, type: NoteType): List<ChecklistItem> {
         val s = settings.value ?: AppSettings()
         val result = try {
             structurer.structure(
                 transcript = spoken,
-                settings = s,
                 chosenType = type,
                 listTitles = listTitles,
                 todayEpochDay = todayEpochDay(),
@@ -578,7 +583,7 @@ class HomeViewModel(
         }
         val group = type.fallbackGroup()
         val items = result?.notes?.flatMap { it.items }.orEmpty().ifEmpty { listOf(ChecklistItem(spoken, group = group)) }
-        return (if (s.pauseMillis == null) items.asOneItem(group) else items) to result
+        return if (s.pauseMillis == null) items.asOneItem(group) else items
     }
 
     /** The user refused the microphone permission. */
@@ -597,8 +602,9 @@ class HomeViewModel(
     /**
      * Cuts what was said into cards (rules or AI), writes them to the database at once and opens the review window.
      * @param replacing saved cards of the same dictation that the new cards take the place of ("record more").
+     * @param auto no type - "by itself"; a recording takes it from the divider it was started on.
      */
-    fun onTranscript(text: String, replacing: List<Note> = emptyList()) {
+    fun onTranscript(text: String, replacing: List<Note> = emptyList(), auto: Boolean = sessionAuto) {
         val transcript = text.trim()
         if (transcript.isEmpty()) {
             _recording.value = RecordingState.Failed(SpeechError.NO_SPEECH)
@@ -608,12 +614,11 @@ class HomeViewModel(
         viewModelScope.launch {
             val s = settings.value ?: AppSettings()
             val now = nowMillis()
-            // No "auto" on the home screen any more: an old "auto" choice opens the notes divider.
-            val type = s.noteTypeChoice ?: NoteType.NOTE
+            // An old "auto" choice opens the notes divider; only "Done" records with no type (see [recordAuto]).
+            val type = if (auto) null else s.noteTypeChoice ?: NoteType.NOTE
             val result = try {
                 structurer.structure(
                     transcript = transcript,
-                    settings = s,
                     chosenType = type,
                     listTitles = listTitles,
                     todayEpochDay = todayEpochDay(),
@@ -632,20 +637,28 @@ class HomeViewModel(
                         title = firstWords(transcript),
                         body = transcript,
                         // Like any new card: the open divider's kind (a list without items stays a note), low priority.
-                        type = if (type.hasItems) NoteType.NOTE else type,
+                        type = if (type == null || type.hasItems) NoteType.NOTE else type,
                         priority = AppSettings.NEW_CARD_PRIORITY,
                         createdAtMillis = now,
                     ),
                 )
             val review = persist(
                 RecordingState.Review(
-                    transcript, cards, result?.rulesProblems().orEmpty(),
+                    transcript, cards,
                     lowFunds = result?.lowFunds,
                     by = result?.by,
                     type = type,
                     refineMode = refineMode(s),
                 ),
             )
+            // One card recorded on a kind's divider opens at once, like an old card from the stack (author
+            // 26.11.2026); several cards, "by itself" or a failed save keep the window after recording.
+            val single = review.cards.singleOrNull()
+            if (single != null && type != null && replacing.isEmpty() && !review.saveFailed) {
+                _recording.value = RecordingState.Idle
+                openCard(single, review.lowFunds)
+                return@launch
+            }
             _recording.value = review
             // The old cards go only once the new ones are safely written.
             if (!review.saveFailed) replacing.filter { it.id != 0L }.forEach { old -> write { notes.delete(old.id) } }
@@ -711,7 +724,7 @@ class HomeViewModel(
             try {
                 fun current(): Note? = _editing.value?.note?.takeIf { it.id == id }
                 val type = (current() ?: notes.get(id))?.type ?: return@launch
-                val added = if (type.hasItems) spokenItems(spoken, type).first else emptyList()
+                val added = if (type.hasItems) spokenItems(spoken, type) else emptyList()
                 val open = current()
                 val note = open ?: notes.get(id) ?: return@launch
                 val updated = when {
@@ -785,15 +798,18 @@ class HomeViewModel(
         review.cards.getOrNull(index)?.let { _editing.value = Editing.Draft(index, it) }
     }
 
-    /** A card of the stack, in the card view. */
-    fun openCard(note: Note) {
+    /**
+     * A card of the stack (or the one card just recorded), in the card view.
+     * @param lowFunds Claude wrote the card just now and less than 10% of the top-up is left.
+     */
+    fun openCard(note: Note, lowFunds: LowFunds? = null) {
         openedDone = note.isDone()
         _editing.value = Editing.Saved(note)
         closeCardRefine()
-        if (note.byAi) return
+        // Also on cards the AI wrote (author 26.11.2026): one answer taken never blocks asking again.
         cardRefining = viewModelScope.launch {
             val mode = refineMode(settings.value ?: AppSettings()) ?: return@launch
-            if (_editing.value?.note?.id == note.id) _cardRefine.value = CardRefine(mode)
+            if (_editing.value?.note?.id == note.id) _cardRefine.value = CardRefine(mode, lowFunds = lowFunds)
         }
     }
 
@@ -809,12 +825,18 @@ class HomeViewModel(
         val s = settings.value ?: AppSettings()
         val id = open.note.id
         cardRefining = viewModelScope.launch {
-            // No fixed type: the AI may see a list in a note, or two things in one card - but it hears what the
-            // card is now, so a neat event does not come back as a note.
-            val refined = askRefine(open.note.tidy().asDictation(), s, null, open.note.type)
+            // With the box ticked no fixed type: the AI may see a list in a note, or two things in one card - but it
+            // hears what the card is now, so a neat event does not come back as a note. Unticked: one card, same type.
+            val type = open.note.type
+            val refined = askRefine(open.note.tidy().asDictation(), s, type.takeUnless { asking.otherKinds }, type)
             if (_editing.value?.note?.id != id) return@launch
             _cardRefine.update { it?.copy(state = refined.asRefine(s), lowFunds = refined.lowFunds ?: it.lowFunds) }
         }
+    }
+
+    /** The box next to "More exact": may the AI change the card's type and split it. */
+    fun setRefineOtherKinds(on: Boolean) {
+        _cardRefine.update { it?.copy(otherKinds = on) }
     }
 
     /** "Keep mine": the AI's offer goes, the card stays as it is. */
@@ -834,8 +856,6 @@ class HomeViewModel(
         saving = true
         autosave?.cancel()
         val old = open.note
-        // No "AI" stamp on cards the user asked the AI to improve (author 21.11.2026) - the stamp marks cards the
-        // AI laid out on its own. Opened again, such a card offers "More exact" again.
         val cards = offer.cards.map { it.copy(byAi = false) }
         viewModelScope.launch {
             try {
@@ -844,8 +864,8 @@ class HomeViewModel(
                     // A failed write keeps the old card and the offer - "Use this" can be tapped again.
                     if (!write { notes.save(card) }) return@launch
                     show(card)
-                    // The offer is taken - the button goes until the card is opened again.
-                    closeCardRefine()
+                    // The offer is taken - the button stays for another try (author 26.11.2026).
+                    _cardRefine.update { it?.copy(state = null) }
                     return@launch
                 }
                 val written = mutableListOf<Long>()
@@ -859,6 +879,16 @@ class HomeViewModel(
                 write { notes.delete(old.id) }
                 _editing.value = null
                 closeCardRefine()
+                // Several cards: the window after recording shows them, like after a recording (author 26.11.2026).
+                if (_recording.value == RecordingState.Idle) {
+                    val ids = written.reversed()
+                    _recording.value = RecordingState.Review(
+                        transcript = old.tidy().asDictation(),
+                        cards = cards.mapIndexed { i, card -> card.copy(id = ids[i]) },
+                        by = offer.by,
+                        refineMode = refineMode(settings.value ?: AppSettings()),
+                    )
+                }
             } finally {
                 saving = false
             }

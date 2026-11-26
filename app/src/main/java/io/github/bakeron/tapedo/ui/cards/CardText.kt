@@ -86,6 +86,21 @@ fun titleIsKindName(note: Note, kindNames: List<String>): Boolean {
     return kindNames.any { it.equals(title, ignoreCase = true) }
 }
 
+/** What a card of [type] is called when it has no title of its own: "Lista punktów", "Lista", "Zakupy". */
+@Composable
+fun kindNames(type: NoteType): List<String> = listOf(
+    stringResource(typeNameRes(type)),
+    stringResource(R.string.default_checklist_title),
+    stringResource(R.string.default_shopping_title),
+)
+
+/**
+ * A list named by the user (or the AI), not just "Lista" - it shows its name instead of "Lista 2"
+ * (author 26.11.2026). A list whose name was cleared goes back to its number.
+ */
+fun hasOwnListName(note: Note, kindNames: List<String>): Boolean =
+    note.type == NoteType.CHECKLIST && note.title.isNotBlank() && !titleIsKindName(note, kindNames)
+
 @Composable
 fun groupName(group: ShoppingGroup?): String = stringResource(groupNameRes(group))
 

@@ -2,8 +2,6 @@ package io.github.bakeron.tapedo.ui.home
 
 import io.github.bakeron.tapedo.core.ai.AiAnswer
 import io.github.bakeron.tapedo.core.ai.AiChat
-import io.github.bakeron.tapedo.core.ai.AiException
-import io.github.bakeron.tapedo.core.ai.Problem
 import io.github.bakeron.tapedo.core.ai.AiGateway
 import io.github.bakeron.tapedo.core.ai.MemoryAiUsage
 import io.github.bakeron.tapedo.core.ai.NoteStructurer
@@ -132,10 +130,25 @@ class HomeViewModelTest {
 
     private val noOfflinePack = { flowOf<SpeechEvent>(SpeechEvent.Failed(SpeechError.OFFLINE_UNAVAILABLE)) }
 
+    /** What the default recognizer hears next, one recording each; empty = nothing. */
+    private val said = ArrayDeque<String>()
+
+    /**
+     * A recording on the "Done" divider - "by itself", with no type (author 26.11.2026). Since one card recorded on a
+     * kind's divider opens straight in the card view, this (or several cards) is how a recording reaches the review
+     * window. Needs the default recognizer.
+     */
+    private fun TestScope.recordByItself(vm: HomeViewModel, text: String) {
+        vm.recordAuto = true
+        said += text
+        vm.startRecording()
+        runCurrent()
+    }
+
     /** The screen collects settings and the stack while visible - without that, the view model reads none. */
     private fun TestScope.viewModel(
         store: FakeStore,
-        speech: FakeSpeech = FakeSpeech { flowOf() },
+        speech: FakeSpeech = FakeSpeech { said.removeFirstOrNull()?.let { flowOf(SpeechEvent.Done(it)) } ?: flowOf() },
         notes: FakeNotes = FakeNotes(),
         notice: FakeNotice = FakeNotice(),
         // Most tests time the recording itself - the "3, 2, 1" has its own test.
@@ -381,7 +394,7 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `a recording is saved the moment it ends, and Done only closes the window`() = runTest(dispatcher) {
+    fun `one card recorded on a kind's divider is saved at once and opens in the card view`() = runTest(dispatcher) {
         // A list left in the review window was lost when the phone closed the app in the background.
         val notes = FakeNotes()
         val speech = FakeSpeech { flowOf(SpeechEvent.Done("kupić mleko i chleb")) }
@@ -389,22 +402,39 @@ class HomeViewModelTest {
 
         vm.startRecording()
         runCurrent()
+        assertEquals("no review window for one card (author 26.11.2026)", RecordingState.Idle, vm.recording.value)
+        val open = vm.editing.value as Editing.Saved
+        assertEquals(NoteType.SHOPPING, open.note.type)
+        assertEquals(listOf(open.note), notes.rows.value.values.toList())
+
+        vm.finishEditing()
+        runCurrent()
+        assertEquals(null, vm.editing.value)
+        assertEquals(1, (vm.stack.value as StackState.Loaded).notes.size)
+    }
+
+    @Test
+    fun `a recording by itself is saved the moment it ends, and Done only closes the window`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        val vm = viewModel(FakeStore(AppSettings(noteTypeChoice = NoteType.SHOPPING)), notes = notes)
+
+        recordByItself(vm, "Kupić mleko. Zadzwonić do mamy.")
         val review = vm.recording.value as RecordingState.Review
-        assertEquals(NoteType.SHOPPING, review.cards.single().type)
-        assertEquals(listOf(NoteType.SHOPPING), notes.rows.value.values.map { it.type })
+        assertEquals("no type: the rules pick one for each card", null, review.type)
+        assertEquals(review.cards.map { it.id }.toSet(), notes.rows.value.keys)
+        assertEquals(null, vm.editing.value)
 
         vm.saveReview()
         runCurrent()
         assertEquals(RecordingState.Idle, vm.recording.value)
-        assertEquals(1, (vm.stack.value as StackState.Loaded).notes.size)
+        assertEquals(review.cards.size, (vm.stack.value as StackState.Loaded).notes.size)
     }
 
     @Test
     fun `delete in the review window takes the saved recording back out`() = runTest(dispatcher) {
         val notes = FakeNotes()
         val vm = viewModel(FakeStore(AppSettings(noteTypeChoice = NoteType.SHOPPING)), notes = notes)
-        vm.onTranscript("Zakupy: jajka, pomidory oraz kawa.")
-        runCurrent()
+        recordByItself(vm, "Zakupy: jajka, pomidory oraz kawa.")
         assertEquals(listOf(NoteType.SHOPPING), notes.rows.value.values.map { it.type })
 
         vm.discardReview()
@@ -413,8 +443,7 @@ class HomeViewModelTest {
         assertEquals(RecordingState.Idle, vm.recording.value)
 
         // "Delete" on the card itself does the same.
-        vm.onTranscript("Kawa i cukier")
-        runCurrent()
+        recordByItself(vm, "Kawa i cukier")
         assertEquals(1, notes.rows.value.size)
         vm.removeCard(0)
         runCurrent()
@@ -428,7 +457,7 @@ class HomeViewModelTest {
         val vm = viewModel(FakeStore(AppSettings(noteTypeChoice = NoteType.SHOPPING, pauseSeconds = 0)), notes = notes)
         vm.onTranscript("Zakupy: jajka, pomidory oraz kawa.")
         runCurrent()
-        assertEquals(1, (vm.recording.value as RecordingState.Review).cards.single().items.size)
+        assertEquals(1, vm.editing.value!!.note.items.size)
     }
 
     @Test
@@ -437,14 +466,33 @@ class HomeViewModelTest {
         val vm = viewModel(store)
         vm.onTranscript("kupić mleko o 10")
         runCurrent()
-        assertEquals(NoteType.NOTE, (vm.recording.value as RecordingState.Review).cards.single().type)
-        vm.saveReview()
+        assertEquals(NoteType.NOTE, vm.editing.value!!.note.type)
+        vm.finishEditing()
 
         vm.chooseType(NoteType.EVENT)
         runCurrent()
         vm.onTranscript("kupić mleko o 10")
         runCurrent()
-        assertEquals(NoteType.EVENT, (vm.recording.value as RecordingState.Review).cards.single().type)
+        assertEquals(NoteType.EVENT, vm.editing.value!!.note.type)
+    }
+
+    @Test
+    fun `the Done divider records by itself, and leaving it records a kind again`() = runTest(dispatcher) {
+        val vm = viewModel(FakeStore(AppSettings(noteTypeChoice = NoteType.SHOPPING)))
+        recordByItself(vm, "Kupić mleko. Zadzwonić do mamy.")
+        val review = vm.recording.value as RecordingState.Review
+        assertEquals(null, review.type)
+        assertTrue("the rules cut it at the full stops", review.cards.size >= 2)
+        vm.saveReview()
+        runCurrent()
+
+        // Back on a kind's divider: the next recording is of that kind again.
+        vm.recordAuto = false
+        said += "Kupić chleb. Zadzwonić do taty."
+        vm.startRecording()
+        runCurrent()
+        assertEquals(RecordingState.Idle, vm.recording.value)
+        assertEquals(NoteType.SHOPPING, vm.editing.value!!.note.type)
     }
 
     @Test
@@ -454,7 +502,7 @@ class HomeViewModelTest {
         vm.onTranscript("kupić mleko")
         runCurrent()
 
-        vm.editDraft(0)
+        // One card opens straight in the card view.
         val draft = vm.editing.value!!.note
         vm.changeEditing(draft.copy(items = draft.items + ChecklistItem("Marchewki")))
         vm.onBackground()
@@ -497,8 +545,7 @@ class HomeViewModelTest {
     @Test
     fun `an edited draft replaces its card, and a cleared title is filled from the text`() = runTest(dispatcher) {
         val vm = viewModel(FakeStore(AppSettings()))
-        vm.onTranscript("zadzwonić do hydraulika")
-        runCurrent()
+        recordByItself(vm, "zadzwonić do hydraulika")
 
         vm.editDraft(0)
         val draft = vm.editing.value!!.note
@@ -614,6 +661,7 @@ class HomeViewModelTest {
         val speech = FakeSpeech { flowOf(SpeechEvent.Done(said.removeFirst())) }
         val notes = FakeNotes()
         val vm = viewModel(FakeStore(AppSettings(noteTypeChoice = NoteType.SHOPPING)), speech, notes)
+        vm.recordAuto = true
 
         vm.startRecording()
         runCurrent()
@@ -653,6 +701,7 @@ class HomeViewModelTest {
         val speech = FakeSpeech { flowOf(SpeechEvent.Done(said.removeFirst())) }
         val notes = FakeNotes()
         val vm = viewModel(FakeStore(AppSettings(noteTypeChoice = NoteType.SHOPPING)), speech, notes)
+        vm.recordAuto = true
 
         vm.startRecording()
         runCurrent()
@@ -677,6 +726,7 @@ class HomeViewModelTest {
         val speech = FakeSpeech { flowOf(SpeechEvent.Done(said.removeFirst())) }
         val notes = FakeNotes()
         val vm = viewModel(FakeStore(AppSettings(noteTypeChoice = NoteType.TASK)), speech, notes)
+        vm.recordAuto = true
 
         vm.startRecording()
         runCurrent()
@@ -698,6 +748,7 @@ class HomeViewModelTest {
             if (calls == 1) flowOf(SpeechEvent.Done("Zadzwonić do mamy w niedzielę")) else flowOf(SpeechEvent.Failed(SpeechError.NO_SPEECH))
         }
         val vm = viewModel(FakeStore(AppSettings()), speech)
+        vm.recordAuto = true
 
         vm.startRecording()
         runCurrent()
@@ -772,8 +823,7 @@ class HomeViewModelTest {
     @Test
     fun `free AI chosen - no more exact, even with a Claude key`() = runTest(dispatcher) {
         val vm = claudeViewModel(FakeNotes(), AiMode.FREE)
-        vm.onTranscript("kupić mleko")
-        runCurrent()
+        recordByItself(vm, "kupić mleko")
         assertEquals(null, (vm.recording.value as RecordingState.Review).refineMode)
     }
 
@@ -781,8 +831,7 @@ class HomeViewModelTest {
     fun `more exact offers Claude's cards and swaps them in only when taken`() = runTest(dispatcher) {
         val notes = FakeNotes()
         val vm = claudeViewModel(notes)
-        vm.onTranscript("kupić mleko i umówić dentystę")
-        runCurrent()
+        recordByItself(vm, "kupić mleko i umówić dentystę")
         val review = vm.recording.value as RecordingState.Review
         assertEquals("a Claude key is saved and the rules wrote the cards", AiMode.CLAUDE, review.refineMode)
         assertEquals(null, review.by)
@@ -791,26 +840,25 @@ class HomeViewModelTest {
         vm.refine()
         runCurrent()
         val offer = (vm.recording.value as RecordingState.Review).refine as RecordingState.Refine.Offer
-        // A type was picked for the recording, so Claude writes one card of it, as the free models do.
-        assertEquals(listOf("Mleko"), offer.cards.map { it.title })
+        // Recorded by itself, so no type is forced and Claude may cut it into cards of different types.
+        assertEquals(listOf("Mleko", "Dentysta"), offer.cards.map { it.title })
         assertEquals("nothing changes before the user picks", old.toSet(), notes.rows.value.keys)
 
         vm.acceptRefined()
         runCurrent()
         val after = vm.recording.value as RecordingState.Review
-        assertEquals(listOf("Mleko"), after.cards.map { it.title })
-        assertTrue(after.cards.single().byAi)
+        assertEquals(listOf("Mleko", "Dentysta"), after.cards.map { it.title })
+        assertTrue(after.cards.all { it.byAi })
         assertEquals(AiProvider.ANTHROPIC, after.by)
         assertEquals(null, after.refine)
-        assertEquals(setOf(after.cards.single().id), notes.rows.value.keys)
+        assertEquals(after.cards.map { it.id }.toSet(), notes.rows.value.keys)
     }
 
     @Test
     fun `keep mine drops Claude's offer and the cards stay`() = runTest(dispatcher) {
         val notes = FakeNotes()
         val vm = claudeViewModel(notes)
-        vm.onTranscript("kupić mleko")
-        runCurrent()
+        recordByItself(vm, "kupić mleko")
         val cards = (vm.recording.value as RecordingState.Review).cards
         vm.refine()
         runCurrent()
@@ -824,18 +872,17 @@ class HomeViewModelTest {
     @Test
     fun `without a Claude key there is no more exact`() = runTest(dispatcher) {
         val vm = viewModel(FakeStore(AppSettings()))
-        vm.onTranscript("kupić mleko")
-        runCurrent()
+        recordByItself(vm, "kupić mleko")
         assertEquals(null, (vm.recording.value as RecordingState.Review).refineMode)
     }
 
     @Test
-    fun `free AI that failed offers trying again, and its cards replace the rules' only when taken`() = runTest(dispatcher) {
+    fun `free AI is asked only by more exact, and its cards replace the rules' only when taken`() = runTest(dispatcher) {
         val notes = FakeNotes()
         var calls = 0
         val groq = object : AiGateway {
             override fun chat(provider: AiProvider, model: String, key: String) = AiChat { _, _, _ ->
-                if (calls++ == 0) throw AiException(Problem.OFFLINE)
+                calls++
                 AiAnswer("""{"cards":[{"title":"Mleko","type":"shopping","items":[{"text":"Mleko"}]}]}""", model)
             }
             override suspend fun freeModels(provider: AiProvider, key: String?) = emptyList<String>()
@@ -848,10 +895,10 @@ class HomeViewModelTest {
             FakeStore(AppSettings(aiProviders = setOf(AiProvider.GROQ))), notes = notes,
             structurer = NoteStructurer(keys, MemoryAiUsage(), groq, testScheduler.timeSource),
         )
-        vm.onTranscript("kupić mleko")
-        runCurrent()
+        recordByItself(vm, "kupić mleko")
         val review = vm.recording.value as RecordingState.Review
-        assertEquals("Groq was offline, so the rules wrote the cards", null, review.by)
+        assertEquals("the rules wrote the cards", null, review.by)
+        assertEquals("nothing goes to the AI on its own (author 26.11.2026)", 0, calls)
         assertEquals(AiMode.FREE, review.refineMode)
         val old = review.cards.map { it.id }
 
@@ -872,8 +919,7 @@ class HomeViewModelTest {
     fun `a failed save of Claude's cards keeps the old ones`() = runTest(dispatcher) {
         val notes = FakeNotes()
         val vm = claudeViewModel(notes)
-        vm.onTranscript("kupić mleko")
-        runCurrent()
+        recordByItself(vm, "kupić mleko")
         val old = (vm.recording.value as RecordingState.Review).cards
         vm.refine()
         runCurrent()
@@ -903,19 +949,44 @@ class HomeViewModelTest {
         vm.openCard(old)
         runCurrent()
         assertEquals(AiMode.CLAUDE, vm.cardRefine.value?.mode)
+        assertEquals("the box is off each time a card opens", false, vm.cardRefine.value?.otherKinds)
 
+        vm.setRefineOtherKinds(true)
         vm.refineCard()
         runCurrent()
         val offer = vm.cardRefine.value?.state as RecordingState.Refine.Offer
-        assertEquals("no type is forced, so the AI may split the card", listOf("Mleko", "Dentysta"), offer.cards.map { it.title })
+        assertEquals("the box is ticked, so the AI may split the card", listOf("Mleko", "Dentysta"), offer.cards.map { it.title })
         assertEquals("nothing changes before the user picks", setOf(old.id), notes.rows.value.keys)
 
         vm.acceptCardRefine()
         runCurrent()
-        assertEquals("several cards: the view closes onto the stack", null, vm.editing.value)
+        assertEquals("several cards: the card view closes", null, vm.editing.value)
         assertEquals(null, vm.cardRefine.value)
         assertFalse("the old card is gone", old.id in notes.rows.value.keys)
         assertEquals(setOf("Mleko", "Dentysta"), notes.rows.value.values.map { it.title }.toSet())
+        // ... and the window after recording shows them (author 26.11.2026).
+        val review = vm.recording.value as RecordingState.Review
+        assertEquals(notes.rows.value.keys, review.cards.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `with the box off more exact gives one card of the same type`() = runTest(dispatcher) {
+        val notes = FakeNotes()
+        val vm = claudeViewModel(notes)
+        val old = notes.rulesCard()
+        vm.openCard(old)
+        runCurrent()
+
+        vm.refineCard()
+        runCurrent()
+        val offer = vm.cardRefine.value?.state as RecordingState.Refine.Offer
+        assertEquals(listOf(NoteType.NOTE), offer.cards.map { it.type })
+
+        vm.acceptCardRefine()
+        runCurrent()
+        assertEquals("one card stays in the card view, in place", old.id, vm.editing.value?.note?.id)
+        assertEquals(RecordingState.Idle, vm.recording.value)
+        assertEquals(setOf(old.id), notes.rows.value.keys)
     }
 
     @Test
@@ -944,7 +1015,7 @@ class HomeViewModelTest {
         assertEquals(old.createdAtMillis, now?.createdAtMillis)
         assertEquals(Priority.HIGH, now?.priority)
         assertEquals("asked for by the user - no AI stamp", false, now?.byAi)
-        assertEquals("the offer is taken - no button", null, vm.cardRefine.value)
+        assertEquals("the offer is taken - the button stays for another try", CardRefine(AiMode.CLAUDE), vm.cardRefine.value)
         assertEquals(setOf(old.id), notes.rows.value.keys)
         assertEquals("Dentysta", notes.rows.value[old.id]?.title)
     }
@@ -965,12 +1036,12 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `no more exact for a card the AI wrote, or with no AI to ask`() = runTest(dispatcher) {
+    fun `more exact also for a card the AI wrote, none with no AI to ask`() = runTest(dispatcher) {
         val notes = FakeNotes()
         val vm = claudeViewModel(notes)
         vm.openCard(notes.rulesCard().copy(byAi = true))
         runCurrent()
-        assertEquals(null, vm.cardRefine.value)
+        assertEquals(CardRefine(AiMode.CLAUDE), vm.cardRefine.value)
 
         val plain = viewModel(FakeStore(AppSettings()), notes = notes)
         plain.openCard(notes.rulesCard())
@@ -985,6 +1056,7 @@ class HomeViewModelTest {
         val old = notes.rulesCard()
         vm.openCard(old)
         runCurrent()
+        vm.setRefineOtherKinds(true)
         vm.refineCard()
         runCurrent()
         notes.failOnSave = 3 // save 1 was the old card; the AI's second card is save 3 and fails

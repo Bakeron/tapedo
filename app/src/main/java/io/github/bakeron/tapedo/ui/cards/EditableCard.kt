@@ -7,6 +7,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -46,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -81,7 +83,6 @@ import io.github.bakeron.tapedo.ui.components.fadeSwap
 import io.github.bakeron.tapedo.ui.components.PairOrStack
 import io.github.bakeron.tapedo.ui.components.PaperButton
 import io.github.bakeron.tapedo.ui.components.PaperButtonStyle
-import io.github.bakeron.tapedo.ui.components.RubberStamp
 import io.github.bakeron.tapedo.ui.components.SlideSelector
 import io.github.bakeron.tapedo.ui.home.TypeTapeBar
 import io.github.bakeron.tapedo.ui.home.tidy
@@ -92,7 +93,7 @@ import kotlinx.coroutines.delay
 /**
  * The card in the card view, written on directly (author 13.11.2026: reading in one place and writing in
  * another was chaos): its kind on top ("Zadanie 3"), the title, text or items to tick, add and remove,
- * place, date, time and "done", on the paper of its kind with the priority tape and the AI stamp.
+ * place, date, time and "done", on the paper of its kind with the priority tape (no "AI" mark - author 26.11.2026).
  * Every change goes to [onChange] at once. A list shows [voiceKey] ("Add by voice") next to "Add item".
  */
 @Composable
@@ -142,22 +143,29 @@ private fun CardSheet(
                 verticalArrangement = Arrangement.Top,
             ) {
                 // The kind in small capitals, numbered like on the stack; date and time have their own lines below.
+                // A list has no such header: its number is the title field's hint instead (author 26.11.2026).
                 val kind = if (number != null && type != NoteType.EVENT) numberedName(type, number) else stringResource(typeNameRes(type))
-                Text(
-                    kind.uppercase(locale),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(end = 52.dp).semantics { heading() },
-                )
+                val listTitle = type == NoteType.CHECKLIST
+                if (!listTitle) {
+                    Text(
+                        kind.uppercase(locale),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = 52.dp, bottom = GAP).semantics { heading() },
+                    )
+                }
                 // Title and place wrap onto more lines instead of scrolling sideways (author 21.11.2026);
                 // still one line of meaning, so Enter makes a space.
-                PaperField(
-                    label = stringResource(R.string.editor_field_title),
-                    value = note.title,
-                    onValueChange = { onChange(note.copy(title = it.replace('\n', ' '))) },
-                    textStyle = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(top = GAP),
-                )
+                if (listTitle) {
+                    ListTitleField(note, if (number != null) kind else stringResource(R.string.default_checklist_title), onChange)
+                } else {
+                    PaperField(
+                        label = stringResource(R.string.editor_field_title),
+                        value = note.title,
+                        onValueChange = { onChange(note.copy(title = it.replace('\n', ' '))) },
+                        textStyle = MaterialTheme.typography.titleLarge,
+                    )
+                }
                 // A list is its items - an empty "text" field above them only takes room.
                 // Text a list already has (e.g. from the AI) stays visible and editable.
                 Fold(!note.type.hasItems || note.body.isNotBlank()) {
@@ -200,16 +208,6 @@ private fun CardSheet(
                 }
                 Fold(note.type == NoteType.TASK, Modifier.padding(top = GAP)) {
                     DoneToggle(note.done) { onChange(note.copy(done = it)) }
-                }
-                // Pressed on the bottom corner, like on the card in the box.
-                if (note.byAi) {
-                    RubberStamp(
-                        stringResource(R.string.card_ai_stamp),
-                        Modifier
-                            .align(Alignment.End)
-                            .padding(top = GAP)
-                            .semantics { contentDescription = context.getString(R.string.card_ai_desc) },
-                    )
                 }
             }
             // Ideas have no priority, so no tape.
@@ -339,6 +337,42 @@ private fun Modifier.reachOut(by: Dp): Modifier = layout { measurable, constrain
 /** How a ticked list item is written in the text of a card that has no items. */
 private const val TICKED = "✓ "
 
+/**
+ * A list's own name, with its number as the hint ("Lista 2") while it has none (author 26.11.2026). The card
+ * keeps the plain kind name then, so the stack numbers it; a typed name shows everywhere instead.
+ */
+@Composable
+private fun ListTitleField(note: Note, numbered: String, onChange: (Note) -> Unit) {
+    val names = kindNames(note.type)
+    val plain = stringResource(R.string.default_checklist_title)
+    fun stored(text: String) = text.replace('\n', ' ').ifBlank { plain }
+    fun shown() = if (hasOwnListName(note, names)) note.title else ""
+    var text by remember(note.id) { mutableStateOf(shown()) }
+    // Titles this field wrote itself. The card comes back a frame late while typing, so an older one of these is
+    // not news - taking it as a title from outside ate the last letters of fast typing.
+    val mine = remember(note.id) { mutableSetOf(note.title) }
+    // A title set from outside (the AI's version taken) comes into the field.
+    LaunchedEffect(note.title) {
+        if (note.title !in mine) {
+            text = shown()
+            mine.clear()
+            mine += note.title
+        }
+    }
+    PaperField(
+        label = stringResource(R.string.editor_field_title),
+        value = text,
+        onValueChange = {
+            text = it.replace('\n', ' ')
+            val title = stored(it)
+            mine += title
+            onChange(note.copy(title = title))
+        },
+        textStyle = MaterialTheme.typography.titleLarge,
+        placeholder = numbered,
+    )
+}
+
 /** A label and a line to write on - no boxed Material field. The line thickens while typing. */
 @Composable
 private fun PaperField(
@@ -350,6 +384,8 @@ private fun PaperField(
     minLines: Int = 1,
     ruled: Boolean = false,
     modifier: Modifier = Modifier,
+    /** Shown faded while the field is empty; it fades out with the first letter. */
+    placeholder: String? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val rule = TapedoTheme.colors.rule
@@ -397,7 +433,24 @@ private fun PaperField(
                         } else {
                             Modifier
                         },
-                    ) { inner() }
+                    ) {
+                        if (placeholder != null) {
+                            val hint by animateFloatAsState(
+                                targetValue = if (value.isEmpty()) 1f else 0f,
+                                animationSpec = if (TapedoTheme.reduceMotion) snap() else tween(200),
+                                label = "field hint",
+                            )
+                            if (hint > 0f) {
+                                Text(
+                                    placeholder,
+                                    style = textStyle,
+                                    color = scheme.onSurfaceVariant,
+                                    modifier = Modifier.graphicsLayer { alpha = hint }.clearAndSetSemantics { },
+                                )
+                            }
+                        }
+                        inner()
+                    }
                     Spacer(Modifier.height(6.dp))
                     val still = TapedoTheme.reduceMotion
                     val lineHeight by animateDpAsState(if (focused) 2.dp else 1.dp, if (still) snap() else tween(200), label = "field line")

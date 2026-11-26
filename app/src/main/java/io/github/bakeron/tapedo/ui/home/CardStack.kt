@@ -96,6 +96,8 @@ import io.github.bakeron.tapedo.ui.cards.TypeTapeMark
 import io.github.bakeron.tapedo.ui.cards.appLocale
 import io.github.bakeron.tapedo.ui.cards.handStrike
 import io.github.bakeron.tapedo.ui.cards.isDone
+import io.github.bakeron.tapedo.ui.cards.hasOwnListName
+import io.github.bakeron.tapedo.ui.cards.kindNames
 import io.github.bakeron.tapedo.ui.cards.kindNumbers
 import io.github.bakeron.tapedo.ui.cards.matches
 import io.github.bakeron.tapedo.ui.cards.metaLine
@@ -429,8 +431,9 @@ private fun NoteStrip(
     val shape = RoundedCornerShape(3.dp)
     val done = note.isDone()
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    // "Zakupy 1", "Zadanie 2" in the order recorded (author 10.11.2026); an event keeps its own title.
-    val numbered = number != null && note.type != NoteType.EVENT
+    // "Zakupy 1", "Zadanie 2" in the order recorded (author 10.11.2026); an event keeps its own title, and so
+    // does a list the user named (author 26.11.2026).
+    val numbered = number != null && note.type != NoteType.EVENT && !hasOwnListName(note, kindNames(note.type))
     val label = number?.takeIf { numbered }?.let { numberedName(note.type, it) } ?: note.title
 
     // A crooked priority tape sticks out about 9 dp above the strip. The strip's fade in and out (after "Undo",

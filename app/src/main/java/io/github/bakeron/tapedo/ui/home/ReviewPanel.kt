@@ -26,16 +26,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -71,7 +68,7 @@ import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 import kotlinx.coroutines.delay
 
 /**
- * The window after a recording: what was heard comes out of the typewriter letter by letter,
+ * The window after a recording (several cards, or "by itself"): what was heard comes out of the typewriter letter by letter,
  * then it is cut into cards that drop in one by one. They are already saved when they appear;
  * "Done" or back closes the window, "Delete" takes the recording back out.
  * "Record more" keeps dictating into the same cards (e.g. the rest of a shopping list at the fridge).
@@ -135,179 +132,174 @@ fun ReviewPanel(
         }
     }
 
-    Column(
+    val list = rememberLazyListState()
+    // The AI's cards come in below the others - brought into view, without a ride when motion is reduced.
+    LaunchedEffect(refine is RecordingState.Refine.Offer) {
+        if (refine !is RecordingState.Refine.Offer) return@LaunchedEffect
+        val at = HEAD_ITEMS + (review?.cards?.size ?: 0)
+        if (reduceMotion) list.scrollToItem(at) else list.animateScrollToItem(at)
+    }
+    // The whole window scrolls as one, top to bottom (author 26.11.2026): a long recording reads in full, not in a
+    // small box over the cards.
+    LazyColumn(
         Modifier
             .fillMaxSize()
             .background(scheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing),
+        state = list,
+        contentPadding = PaddingValues(bottom = 12.dp),
     ) {
-        LabelTape(stringResource(R.string.review_heard), Modifier.padding(start = 20.dp, top = 16.dp))
+        item(key = "head") {
+            Column {
+                LabelTape(stringResource(R.string.review_heard), Modifier.padding(start = 20.dp, top = 16.dp))
 
-        // The typed sheet: a strip of paper with ruled lines. Screen readers get the full text at once.
-        val sheet = RoundedCornerShape(2.dp)
-        Text(
-            transcript.take(typed),
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .fillMaxWidth()
-                .heightIn(max = 180.dp)
-                .background(colors.card, sheet)
-                .border(1.dp, colors.cardEdge, sheet)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 14.dp, vertical = 6.dp)
-                .clearAndSetSemantics { contentDescription = transcript },
-        )
-
-        // Status line, read out as it changes: writing, how many cards, or why the AI did not help.
-        val status = when {
-            review == null -> stringResource(R.string.review_structuring)
-            else -> pluralStringResource(R.plurals.review_count, review.cards.size, review.cards.size)
-        }
-        SwapText(
-            status,
-            style = MaterialTheme.typography.titleMedium,
-            contentAlignment = Alignment.CenterStart,
-            modifier = Modifier
-                .padding(horizontal = 20.dp, vertical = 4.dp)
-                .semantics { liveRegion = LiveRegionMode.Polite },
-        )
-        Fold(review != null && !review.saveFailed) {
-            Text(
-                stringResource(R.string.review_saved),
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-        }
-        FoldValue(review?.lowFunds) { LowFundsWarning(it, Modifier.padding(horizontal = 20.dp)) }
-        FoldValue(review?.aiProblems?.takeIf { it.isNotEmpty() }) { problems ->
-            // Every provider that failed and what to do - the same words as in Settings.
-            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // The typed sheet: a strip of paper. Screen readers get the full text at once.
+                val sheet = RoundedCornerShape(2.dp)
                 Text(
-                    stringResource(R.string.review_ai_rules),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
+                    transcript.take(typed),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth()
+                        .background(colors.card, sheet)
+                        .border(1.dp, colors.cardEdge, sheet)
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .clearAndSetSemantics { contentDescription = transcript },
                 )
-                problems.forEach { ProblemView(it) }
+
+                // Status line, read out as it changes: writing, how many cards, or why the AI did not help.
+                val status = when {
+                    review == null -> stringResource(R.string.review_structuring)
+                    else -> pluralStringResource(R.plurals.review_count, review.cards.size, review.cards.size)
+                }
+                SwapText(
+                    status,
+                    style = MaterialTheme.typography.titleMedium,
+                    contentAlignment = Alignment.CenterStart,
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp, vertical = 4.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                )
+                Fold(review != null && !review.saveFailed) {
+                    Text(
+                        stringResource(R.string.review_saved),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                    )
+                }
+                FoldValue(review?.lowFunds) { LowFundsWarning(it, Modifier.padding(horizontal = 20.dp)) }
             }
         }
-
-        val list = rememberLazyListState()
-        // Claude's cards come in below the others - brought into view, without a ride when motion is reduced.
-        LaunchedEffect(refine is RecordingState.Refine.Offer) {
-            if (refine !is RecordingState.Refine.Offer) return@LaunchedEffect
-            val at = review?.cards?.size ?: 0
-            if (reduceMotion) list.scrollToItem(at) else list.animateScrollToItem(at)
-        }
-        LazyColumn(
-            Modifier.weight(1f).fillMaxWidth(),
-            state = list,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            val cards = review?.cards.orEmpty()
-            itemsIndexed(cards, key = { i, c -> "$i-${c.title}" }) { i, card ->
-                // "Delete card" closes the gap smoothly instead of the cards below jumping up.
-                AnimatedVisibility(
-                    visible = i < revealed,
-                    modifier = if (reduceMotion) Modifier else Modifier.animateItem(),
-                    enter = if (reduceMotion) EnterTransition.None
-                    else slideInVertically(tween(260)) { -it / 3 } + fadeIn(tween(200)),
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        // A tap opens the same card view as on the stack - no separate "Edit" (author 13.11.2026).
-                        IndexCard(
-                            card,
-                            compact = false,
-                            tilt = if (i % 2 == 0) -0.6f else 0.5f,
-                            // The same whole card as in the card view - no title that only repeats the text.
-                            preview = true,
-                            onClick = { onEdit(i) },
-                            onClickLabel = stringResource(R.string.stack_open_card),
-                        )
-                        PaperButton(stringResource(R.string.review_remove_card), onClick = { onRemove(i) }, style = PaperButtonStyle.DANGER)
-                    }
+        val cards = review?.cards.orEmpty()
+        itemsIndexed(cards, key = { i, c -> "$i-${c.title}" }) { i, card ->
+            // "Delete card" closes the gap smoothly instead of the cards below jumping up.
+            AnimatedVisibility(
+                visible = i < revealed,
+                modifier = (if (reduceMotion) Modifier else Modifier.animateItem())
+                    .padding(start = 16.dp, end = 16.dp, top = if (i == 0) 12.dp else 18.dp),
+                enter = if (reduceMotion) EnterTransition.None
+                else slideInVertically(tween(260)) { -it / 3 } + fadeIn(tween(200)),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // A tap opens the same card view as on the stack - no separate "Edit" (author 13.11.2026).
+                    IndexCard(
+                        card,
+                        compact = false,
+                        tilt = if (i % 2 == 0) -0.6f else 0.5f,
+                        // The same whole card as in the card view - no title that only repeats the text.
+                        preview = true,
+                        onClick = { onEdit(i) },
+                        onClickLabel = stringResource(R.string.stack_open_card),
+                    )
+                    PaperButton(stringResource(R.string.review_remove_card), onClick = { onRemove(i) }, style = PaperButtonStyle.DANGER)
                 }
             }
-            // "More exact" (Claude key) or "Try AI again" (free AI that failed): only when the rules wrote these
-            // cards, once they are all in.
-            val refineMode = review?.refineMode
-            if (review != null && refineMode != null && review.by == null && revealed >= cards.size) {
-                item(key = "refine") {
-                    RefineBlock(
-                        review.refine, RefineTexts.review(free = refineMode == AiMode.FREE), onRefine, onAcceptRefined, onKeepCards,
-                        if (reduceMotion) Modifier else Modifier.animateItem(),
+        }
+        // "More exact" (Claude key or free AI): once the cards are all in - also after an
+        // answer was taken (author 26.11.2026).
+        val refineMode = review?.refineMode
+        if (review != null && refineMode != null && revealed >= cards.size) {
+            item(key = "refine") {
+                RefineBlock(
+                    review.refine, RefineTexts.review(free = refineMode == AiMode.FREE), onRefine, onAcceptRefined, onKeepCards,
+                    (if (reduceMotion) Modifier else Modifier.animateItem()).padding(start = 16.dp, end = 16.dp, top = 18.dp),
+                )
+            }
+        }
+
+        item(key = "keys") {
+            Column(if (reduceMotion) Modifier else Modifier.animateItem()) {
+                Fold(review?.saveFailed == true) {
+                    Text(
+                        stringResource(R.string.review_save_failed),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.record,
+                        modifier = Modifier
+                            .padding(start = 20.dp, end = 20.dp, top = 12.dp)
+                            .semantics { liveRegion = LiveRegionMode.Assertive },
+                    )
+                }
+                FoldValue(review?.moreFailed) { error ->
+                    Text(
+                        stringResource(R.string.review_more_failed, speechErrorText(error)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.record,
+                        modifier = Modifier
+                            .padding(start = 20.dp, end = 20.dp, top = 12.dp)
+                            .semantics { liveRegion = LiveRegionMode.Assertive },
+                    )
+                }
+                PaperButton(
+                    stringResource(R.string.review_record_more),
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            onRecordMore()
+                        } else {
+                            askMic.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                    enabled = review != null,
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 24.dp),
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    // Throwing away a whole dictation takes two taps - two separate ones: a quick double tap
+                    // (a shaky finger) would otherwise arm and confirm at once, and there is no undo here.
+                    var confirmDiscard by rememberSaveable(transcript) { mutableStateOf(false) }
+                    var armedAt by remember { mutableLongStateOf(0L) }
+                    PaperButton(
+                        stringResource(if (confirmDiscard) R.string.review_discard_confirm else R.string.review_discard),
+                        onClick = {
+                            val now = SystemClock.uptimeMillis()
+                            if (!confirmDiscard) {
+                                confirmDiscard = true
+                                armedAt = now
+                            } else if (now - armedAt >= DISCARD_CONFIRM_GAP_MS) {
+                                onDiscard()
+                            }
+                        },
+                        style = PaperButtonStyle.DANGER,
+                        enabled = review != null,
+                    )
+                    PaperButton(
+                        if (review?.saveFailed == true) stringResource(R.string.review_save_retry)
+                        else stringResource(R.string.editor_done),
+                        onClick = onSave,
+                        style = PaperButtonStyle.FILLED,
+                        enabled = review != null,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
         }
-
-        Fold(review?.saveFailed == true) {
-            Text(
-                stringResource(R.string.review_save_failed),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.record,
-                modifier = Modifier
-                    .padding(horizontal = 20.dp, vertical = 4.dp)
-                    .semantics { liveRegion = LiveRegionMode.Assertive },
-            )
-        }
-        FoldValue(review?.moreFailed) { error ->
-            Text(
-                stringResource(R.string.review_more_failed, speechErrorText(error)),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.record,
-                modifier = Modifier
-                    .padding(horizontal = 20.dp, vertical = 4.dp)
-                    .semantics { liveRegion = LiveRegionMode.Assertive },
-            )
-        }
-        PaperButton(
-            stringResource(R.string.review_record_more),
-            onClick = {
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    onRecordMore()
-                } else {
-                    askMic.launch(Manifest.permission.RECORD_AUDIO)
-                }
-            },
-            enabled = review != null,
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp),
-        )
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            // Throwing away a whole dictation takes two taps - two separate ones: a quick double tap
-            // (a shaky finger) would otherwise arm and confirm at once, and there is no undo here.
-            var confirmDiscard by rememberSaveable(transcript) { mutableStateOf(false) }
-            var armedAt by remember { mutableLongStateOf(0L) }
-            PaperButton(
-                stringResource(if (confirmDiscard) R.string.review_discard_confirm else R.string.review_discard),
-                onClick = {
-                    val now = SystemClock.uptimeMillis()
-                    if (!confirmDiscard) {
-                        confirmDiscard = true
-                        armedAt = now
-                    } else if (now - armedAt >= DISCARD_CONFIRM_GAP_MS) {
-                        onDiscard()
-                    }
-                },
-                style = PaperButtonStyle.DANGER,
-                enabled = review != null,
-            )
-            PaperButton(
-                if (review?.saveFailed == true) stringResource(R.string.review_save_retry)
-                else stringResource(R.string.editor_done),
-                onClick = onSave,
-                style = PaperButtonStyle.FILLED,
-                enabled = review != null,
-                modifier = Modifier.weight(1f),
-            )
-        }
     }
 }
+
+/** Items in the window before the first card - the heard text and the status. */
+private const val HEAD_ITEMS = 1
 
 /** The words of [RefineBlock]: after a recording, or under one card in the card view. */
 internal class RefineTexts(
@@ -348,7 +340,7 @@ internal class RefineTexts(
 }
 
 /**
- * "More exact" (or, with free AI, "Try AI again") under the cards: the button, then the AI's cards to take or
+ * "More exact" (Claude or free AI) under the cards: the button, then the AI's cards to take or
  * leave. The old cards stay saved above until "Use these" - the AI may be worse, so the user compares first.
  */
 @Composable
@@ -359,6 +351,8 @@ internal fun RefineBlock(
     onAccept: () -> Unit,
     onKeep: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Under the button, e.g. the card view's "May change the type and split" box. */
+    extra: (@Composable () -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val still = TapedoTheme.reduceMotion
@@ -394,6 +388,7 @@ internal fun RefineBlock(
             enabled = !working,
             modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         )
+        extra?.invoke()
         Text(
             stringResource(texts.hint),
             style = MaterialTheme.typography.bodySmall,

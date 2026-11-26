@@ -116,11 +116,11 @@
     <string name="default_shopping_title">Shopping</string>
     <string name="default_checklist_title">List</string>
 
-    <string name="ai_intro">AI tidies the recording into a card behind the open divider. It splits it into items, spots dates and times and fixes misheard words. Without AI, simple rules spot a time after “at 10”, priority after “urgent” and a due date after “tomorrow”. The rules work offline and the note text never leaves the phone.</string>
-    <string name="ai_queue">When Groq uses up its daily limit, refuses (key, model, server) or there is no internet, the no-AI rules structure the note, and in the window after the recording you can tap “Try AI again” later.</string>
+    <string name="ai_intro">After a tap on “More exact” the AI tidies the card again. It splits the text into items, spots dates and times and fixes misheard words. Every recording is first written by simple rules, which spot a time after “at 10”, priority after “urgent” and a due date after “tomorrow”. The rules work offline and then the note text never leaves the phone.</string>
+    <string name="ai_queue">Groq works only when you tap “More exact with AI” in the window after a recording or under a card. Nothing is sent by itself in the background. When Groq uses up its daily limit, refuses (key, model, server) or there is no internet, the cards stay as they are and the reason shows under the button.</string>
     <string name="ai_mode">Which AI</string>
     <string name="ai_mode_free">Free</string>
-    <string name="ai_mode_free_hint">Groq is weaker than Claude, but it tidies every recording by itself.</string>
+    <string name="ai_mode_free_hint">Groq is weaker than Claude, but free. It too works only when you tap.</string>
     <string name="ai_mode_claude">Paid - Claude</string>
     <string name="ai_mode_claude_hint">Clearly more accurate. Money is spent only when you tap, as nothing is tidied by itself. You set the daily spending limit yourself.</string>
     <string name="ai_claude_only_click">Claude works only when you tap “More exact - Claude” in the window after a recording. Nothing is sent by itself in the background. The no-AI rules write the cards first.</string>
@@ -229,7 +229,6 @@
     <string name="ai_problem_other">the provider reported an error. Try later or turn on another provider.</string>
     <string name="ai_problem_line">%1$s (%2$s): %3$s</string>
     <string name="ai_provider_answer">Provider’s answer</string>
-    <string name="review_ai_rules">Simple rules wrote these cards instead of the AI:</string>
 
     <!-- Review window (after a recording) -->
     <string name="home_dismiss">Close</string>
@@ -251,14 +250,15 @@
     <string name="review_refine_offer">Claude’s suggestion</string>
     <string name="review_refine_accept">Use these</string>
     <string name="review_refine_keep">Keep mine</string>
-    <string name="review_retry">Try AI again</string>
-    <string name="review_retry_hint">The free AI did not write the cards this time, so the rules did. The same words go once more to the free AI. The cards you have stay until you pick the new ones.</string>
+    <string name="review_retry">More exact with AI</string>
+    <string name="review_retry_hint">The same words go to the free AI, which splits them into cards and spots the types more accurately. The cards you have stay until you pick the new ones.</string>
     <string name="review_retry_working">The AI is writing the cards…</string>
-    <string name="review_retry_failed">The AI did not write the cards again, so the ones you have stay.</string>
+    <string name="review_retry_failed">The AI did not write the cards, so the ones you have stay.</string>
     <string name="review_retry_offer">AI’s suggestion</string>
     <string name="card_refine_free">More exact with AI</string>
-    <string name="card_refine_free_hint">The card’s text goes to the free AI, which may spot the type, date and hour better or split the text into several cards. This card stays until you pick the new one.</string>
-    <string name="card_refine_hint">The card’s text goes to Claude Sonnet 5.5, which spots the type, date and hour better or splits the text into several cards. This card stays until you pick the new one.</string>
+    <string name="card_refine_free_hint">The card’s text goes to the free AI, which may spot the date, hour and items better. With the box ticked it may also change the type or split the text into several cards. This card stays until you pick the new one.</string>
+    <string name="card_refine_hint">The card’s text goes to Claude Sonnet 5.5, which spots the date, hour and items better. With the box ticked it may also change the type or split the text into several cards. This card stays until you pick the new one.</string>
+    <string name="card_refine_other_kinds">May change the type and split</string>
     <string name="card_refine_free_failed">The AI did not write the card, so this one stays.</string>
     <string name="card_refine_failed">Claude did not write the card, so this one stays.</string>
     <string name="card_refine_accept_one">Use this one</string>
@@ -279,6 +279,7 @@
     <string name="stack_moved_show">Show</string>
     <string name="home_record_into">The recording goes to: %s</string>
     <string name="home_record_into_label">Goes to</string>
+    <string name="home_record_auto">Sorts itself</string>
     <string name="stack_undo">Undo</string>
     <string name="strip_close">Close message</string>
     <string name="strip_delete_desc">Delete “%s”</string>
@@ -312,7 +313,6 @@
     <string name="card_not_done">to do</string>
     <string name="card_item_checked">ticked</string>
     <string name="card_item_unchecked">not ticked</string>
-    <string name="card_ai_desc">Written by AI</string>
     <string name="card_preview">Preview</string>
     <string name="card_preview_open">Show card preview</string>
     <string name="card_preview_close">Close preview</string>

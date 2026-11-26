@@ -26,15 +26,13 @@ interface SecretStore {
 
 data class StructureResult(
     val notes: List<Note>,
-    /** Every provider that could not write the cards, and why - also when the next one took over. */
-    val problems: List<AiProblem> = emptyList(),
     /** Claude answered and less than 10% of the top-up is left - said after the recording. */
     val lowFunds: LowFunds? = null,
     /** The provider that wrote the cards; null when the rules did. */
     val by: AiProvider? = null,
 )
 
-/** The answer to "More exact" / "Try AI again": the AI's cards to offer, or why there are none (the old cards stay). */
+/** The answer to "More exact": the AI's cards to offer, or why there are none (the old cards stay). */
 sealed interface Refined {
     data class Cards(val notes: List<Note>, val lowFunds: LowFunds?, val by: AiProvider = AiProvider.ANTHROPIC) : Refined
     data class Failed(val problem: AiProblem, val lowFunds: LowFunds? = null) : Refined
@@ -55,13 +53,12 @@ fun Note.asDictation(): String = buildList {
 }.filter { it.isNotEmpty() }.joinToString("\n")
 
 /**
- * AI or rules. AI is optional: with no provider on, no key, no internet or every limit used the app still
- * works - the rules take over and the user is told why. Providers are asked one after another, in the order
- * of [AiProvider.entries]; each note is one call:
- * - the provider's own limit: it rests until tomorrow, the note goes to the next one;
- * - wrong key, API off, no free plan, no such model: the note goes to the next one, this one is asked
- *   again with the next note;
- * - no connection, a broken or refused answer, another error: the rules write this note at once.
+ * Rules after every recording, AI only on a button (author 26.11.2026: nothing goes to the AI on its own - it
+ * costs tokens). [structure] is the rules; [refine] asks the AI the user picked. In free mode the providers
+ * are asked one after another, in the order of [AiProvider.entries]; each tap is one call:
+ * - the provider's own limit: it rests until tomorrow, the next one is asked;
+ * - wrong key, API off, no free plan, no such model: the next one is asked, this one again on the next tap;
+ * - no connection, a broken or refused answer, another error: the tap fails with the reason.
  */
 class NoteStructurer(
     private val secrets: SecretStore,
@@ -71,25 +68,17 @@ class NoteStructurer(
 ) {
     private val lastCall = mutableMapOf<AiProvider, TimeMark>()
 
-    suspend fun structure(
+    /** The cards of a recording - always the rules; no AI is asked on its own, free or paid. */
+    fun structure(
         transcript: String,
-        settings: AppSettings,
-        /** Type picked on the home screen (or the list being added to), or null for "auto". */
+        /** Type picked on the home screen (or the list being added to), or null for "by itself". */
         chosenType: NoteType?,
         listTitles: ListTitles,
         todayEpochDay: Long,
         nowMillis: Long,
-    ): StructureResult {
-        val problems = mutableListOf<AiProblem>()
-        val rules = { StructureResult(RuleBasedStructurer(AppSettings.NEW_CARD_PRIORITY, listTitles).structure(transcript, todayEpochDay, nowMillis, chosenType), problems.toList()) }
-        // Paid Claude never runs on its own: in Claude mode the rules write the cards, "More exact" asks Claude.
-        val providers = settings.autoProviders
-        if (providers.isEmpty() || transcript.isBlank()) return rules()
-
-        val request = StructureRequest(transcript, todayEpochDay, nowMillis, AppSettings.NEW_CARD_PRIORITY, chosenType)
-        val (notes, by) = freeCards(request, settings, todayEpochDay, problems) ?: return rules()
-        return StructureResult(notes, problems.toList(), by = by)
-    }
+    ): StructureResult = StructureResult(
+        RuleBasedStructurer(AppSettings.NEW_CARD_PRIORITY, listTitles).structure(transcript, todayEpochDay, nowMillis, chosenType),
+    )
 
     /**
      * The free providers in turn, as described on the class; the cards and who wrote them, or null when none
@@ -155,8 +144,8 @@ class NoteStructurer(
      * In Claude mode "More exact" after a recording that the rules wrote: the same words once more to
      * Claude Sonnet (paid, about 2-3 grosze), whatever Claude model the settings name - a cheaper model
      * would not be more exact. This tap is the only way Claude is asked; the daily spending limit is checked
-     * first. In free mode "Try AI again" after the free AI failed: the free providers in turn, as after a
-     * recording (author 21.11.2026). No rules here - on any failure the old cards simply stay.
+     * first. In free mode "More exact with AI": the free providers in turn, as described on the class - the only
+     * way they are asked (author 26.11.2026). No rules here - on any failure the old cards simply stay.
      */
     suspend fun refine(
         transcript: String,

@@ -7,6 +7,15 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedContent
 import android.Manifest
+import android.os.Build
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.delay
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -48,10 +57,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -69,6 +75,9 @@ import io.github.bakeron.tapedo.core.settings.AiMode
 import io.github.bakeron.tapedo.ui.settings.LowFundsWarning
 import io.github.bakeron.tapedo.ui.cards.CardOptions
 import io.github.bakeron.tapedo.ui.cards.EditableCard
+import io.github.bakeron.tapedo.ui.cards.PencilBox
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import io.github.bakeron.tapedo.ui.components.Fold
 import io.github.bakeron.tapedo.ui.components.FoldValue
 import io.github.bakeron.tapedo.ui.components.PaperButton
@@ -105,6 +114,7 @@ fun CardScreen(
     onRefine: () -> Unit = {},
     onAcceptRefine: () -> Unit = {},
     onKeepRefine: () -> Unit = {},
+    onRefineOtherKinds: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -136,20 +146,21 @@ fun CardScreen(
 
     val listCard = note.type.hasItems
     val scroll = rememberScrollState()
-    // Where the voice block lies in the scrolled column - a long card scrolls down to it when recording starts.
-    val voice = remember { floatArrayOf(0f, 0f) } // top, bottom (px)
-    val margin = with(LocalDensity.current) { 16.dp.toPx() }
+    // "Add by voice" (author 26.11.2026): what is under the card folds away and the view slides down to the card's
+    // end, where the words will go; once recording, the panel at the bottom grows and the view keeps to the end.
+    val live = active != null && !counting
     LaunchedEffect(active != null) {
         if (active == null) return@LaunchedEffect
-        // On a list the block only appears now - wait one frame so its place below is measured.
-        withFrameNanos { }
-        val viewport = scroll.viewportSize.toFloat()
-        val target = when {
-            voice[1] > scroll.value + viewport -> (voice[1] - viewport + margin).toInt()
-            voice[0] < scroll.value -> (voice[0] - margin).toInt()
-            else -> return@LaunchedEffect
-        }.coerceIn(0, scroll.maxValue)
-        if (reduceMotion) scroll.scrollTo(target) else scroll.animateScrollTo(target)
+        if (!reduceMotion) delay(FOLD_MS)
+        if (reduceMotion) scroll.scrollTo(scroll.maxValue) else scroll.animateScrollTo(scroll.maxValue)
+    }
+    LaunchedEffect(live) {
+        if (!live) return@LaunchedEffect
+        val start = withFrameNanos { it }
+        do {
+            val now = withFrameNanos { it }
+            if (scroll.value < scroll.maxValue) scroll.scrollTo(scroll.maxValue)
+        } while (!reduceMotion && now - start < PANEL_FOLLOW_NS)
     }
     // "Show settings" unfolded below the screen's edge and seemed to do nothing (author 21.11.2026): the view
     // follows the unfolding down, frame by frame, also while the keyboard slides away.
@@ -222,112 +233,72 @@ fun CardScreen(
                     }
 
                     // The black "Add by voice" key: on a list next to "Add item" inside the card (author 14.11.2026),
-                    // on a text card under it, with the hint.
+                    // on a text card under it, with the hint. While recording the red key at the bottom stops.
                     val voiceKey: @Composable () -> Unit = {
                         PaperButton(
-                            stringResource(
-                                when {
-                                    // During "3, 2, 1" nothing is recorded yet - the key says plainly that it cancels.
-                                    counting -> R.string.record_cancel
-                                    active != null -> R.string.preview_add_stop
-                                    else -> R.string.preview_add_voice
-                                },
-                            ),
+                            stringResource(R.string.preview_add_voice),
                             onClick = onRecordKey,
                             style = PaperButtonStyle.FILLED,
                             // A card whose first save failed has nothing in the database to add to yet.
-                            enabled = !appending && note.id != 0L,
+                            enabled = active == null && !appending && note.id != 0L,
                             modifier = if (listCard) Modifier else Modifier.fillMaxWidth().heightIn(min = 52.dp),
                         )
                     }
-                    EditableCard(note, number, onChange, voiceKey = if (listCard) voiceKey else null)
+                    // Blurred under "3, 2, 1" - the countdown is what to look at; sharp again for the words.
+                    val haze by animateFloatAsState(
+                        targetValue = if (counting) 1f else 0f,
+                        animationSpec = if (reduceMotion) snap() else tween(FOLD_MS.toInt()),
+                        label = "card haze",
+                    )
+                    EditableCard(
+                        note, number, onChange,
+                        modifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            Modifier.blur(8.dp * haze)
+                        } else {
+                            Modifier.graphicsLayer { alpha = 1f - 0.6f * haze }
+                        },
+                        voiceKey = if (listCard) voiceKey else null,
+                    )
 
-                    // Under the card: the live line and words while recording; "adding" after it; the hint and the key
-                    // on a text card. An idle list has nothing here, so no empty gap - it folds away.
-                    active?.let { SpeakNowCue(it) }
-                    val lastActive = remember { arrayOfNulls<RecordingState.Active>(1) }
-                    if (active != null) lastActive[0] = active
-                    Fold(active != null || appending || !listCard) {
+                    // Under a text card the hint and the key; "adding" after a recording. All of it, "More exact" and
+                    // the settings fold away while recording (author 26.11.2026) and come back after.
+                    Fold(active == null && (appending || !listCard)) {
                         Column(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(top = GAP)
-                                .padding(horizontal = 4.dp)
-                                .onPlaced {
-                                    voice[0] = it.positionInParent().y
-                                    voice[1] = voice[0] + it.size.height
-                                },
+                                .padding(horizontal = 4.dp),
                         ) {
-                            // The seismograph and the hint fade one into the other, never both at once.
-                            AnimatedContent(
-                                targetState = active != null,
-                                transitionSpec = { fadeSwap(reduceMotion) },
-                                label = "under the card",
-                            ) { live ->
-                                val shown = if (live) active ?: lastActive[0] else null
-                                if (shown != null) {
-                                    Column {
-                                        Seismograph(shown.levels, shown.sampleCount, SEISMOGRAPH_SAMPLES, penUp = !shown.ready)
-                                        // After the countdown and before the microphone listens: "starting", so no words
-                                        // are said into a closed mic.
-                                        val status = if (shown.countdown == 0 && !shown.listening) {
-                                            stringResource(if (shown.micOpened) R.string.record_wait else R.string.record_starting)
-                                        } else {
-                                            null
-                                        }
-                                        FoldValue(status) { text ->
-                                            SwapText(
-                                                text,
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = TapedoTheme.colors.record,
-                                                contentAlignment = Alignment.CenterStart,
-                                                modifier = Modifier.padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
-                                            )
-                                        }
-                                        Fold(shown.text.isNotEmpty() || shown.ready) {
-                                            val ink by animateColorAsState(
-                                                if (shown.text.isEmpty()) scheme.onSurfaceVariant else scheme.onSurface,
-                                                if (reduceMotion) snap() else tween(200),
-                                                label = "words ink",
-                                            )
-                                            Text(
-                                                shown.text.ifEmpty { stringResource(R.string.record_listening) },
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = ink,
-                                                maxLines = 3,
-                                                modifier = Modifier
-                                                    .padding(top = 8.dp)
-                                                    .then(if (shown.text.isEmpty()) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier),
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    SwapText(
-                                        stringResource(if (appending) R.string.preview_adding else R.string.preview_add_hint_text),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = scheme.onSurfaceVariant,
-                                        contentAlignment = Alignment.CenterStart,
-                                        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-                                    )
-                                }
-                            }
+                            SwapText(
+                                stringResource(if (appending) R.string.preview_adding else R.string.preview_add_hint_text),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = scheme.onSurfaceVariant,
+                                contentAlignment = Alignment.CenterStart,
+                                modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+                            )
                             if (!listCard) Box(Modifier.padding(top = 8.dp)) { voiceKey() }
                         }
                     }
-
-                    // "More exact" for a card the rules wrote (author 21.11.2026): the AI's version waits for a yes.
-                    FoldValue(refine?.takeIf { !note.byAi }, Modifier.padding(top = GAP).padding(horizontal = 4.dp)) { r ->
+                    Fold(active == null) {
                         Column {
-                            FoldValue(r.lowFunds) { LowFundsWarning(it, Modifier.padding(bottom = 8.dp)) }
-                            RefineBlock(r.state, RefineTexts.card(free = r.mode == AiMode.FREE), onRefine, onAcceptRefine, onKeepRefine)
+                            // "More exact" for every card (author 26.11.2026): the AI's version waits for a yes.
+                            FoldValue(refine, Modifier.padding(top = GAP).padding(horizontal = 4.dp)) { r ->
+                                Column {
+                                    FoldValue(r.lowFunds) { LowFundsWarning(it, Modifier.padding(bottom = 8.dp)) }
+                                    RefineBlock(
+                                        r.state, RefineTexts.card(free = r.mode == AiMode.FREE), onRefine, onAcceptRefine, onKeepRefine,
+                                        extra = { OtherKindsBox(r.otherKinds, enabled = r.state !is RecordingState.Refine.Working, onRefineOtherKinds) },
+                                    )
+                                }
+                            }
+
+                            // "Delete card" scrolls with the rest, next to "Share" at the very end - far from the ticks.
+                            CardOptions(
+                                note, onChange, onDelete, Modifier.padding(top = GAP).padding(horizontal = 4.dp, vertical = 8.dp),
+                                onOpened = { optionsOpened++ },
+                            )
                         }
                     }
-
-                    // "Delete card" scrolls with the rest, next to "Share" at the very end - far from the ticks.
-                    CardOptions(
-                        note, onChange, onDelete, Modifier.padding(top = GAP).padding(horizontal = 4.dp, vertical = 8.dp),
-                        onOpened = { optionsOpened++ },
-                    )
                 }
                 // "3, 2, 1" in the middle, over the card - the same dial as on the main screen.
                 val lastDigit = remember { intArrayOf(3) }
@@ -342,8 +313,95 @@ fun CardScreen(
                     CountdownDial(lastDigit[0], onCancel = onStopAppend)
                 }
             }
+
+            // At the bottom while recording: the seismograph, "Listening…" or the words, and the red stop key. The
+            // card above it still scrolls by finger.
+            active?.let { SpeakNowCue(it) }
+            val lastActive = remember { arrayOfNulls<RecordingState.Active>(1) }
+            if (active != null) lastActive[0] = active
+            androidx.compose.animation.AnimatedVisibility(
+                visible = live,
+                enter = if (reduceMotion) EnterTransition.None else expandVertically(tween(FOLD_MS.toInt())) + fadeIn(tween(FOLD_MS.toInt())),
+                exit = if (reduceMotion) ExitTransition.None else shrinkVertically(tween(FOLD_MS.toInt())) + fadeOut(tween(FOLD_MS.toInt())),
+            ) {
+                lastActive[0]?.let { LivePanel(it, onStopAppend) }
+            }
         }
-        CardPreview(previewing, note, number, onClose = { previewing = false })
+        CardPreview(previewing, note, number, onClose = { previewing = false }, onChange = onChange)
+    }
+}
+
+/** The recording under the card view: what the pen draws, what is heard, and the key that ends it. */
+@Composable
+private fun LivePanel(shown: RecordingState.Active, onStop: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val reduceMotion = TapedoTheme.reduceMotion
+    val edge = TapedoTheme.colors.controlEdge
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind { drawLine(edge, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx()) }
+            .padding(horizontal = 16.dp)
+            .padding(top = 12.dp, bottom = 8.dp),
+    ) {
+        Seismograph(shown.levels, shown.sampleCount, SEISMOGRAPH_SAMPLES, penUp = !shown.ready)
+        // After the countdown and before the microphone listens: "starting", so no words are said into a closed mic.
+        val status = if (!shown.listening) {
+            stringResource(if (shown.micOpened) R.string.record_wait else R.string.record_starting)
+        } else {
+            null
+        }
+        FoldValue(status) { text ->
+            SwapText(
+                text,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = TapedoTheme.colors.record,
+                contentAlignment = Alignment.CenterStart,
+                modifier = Modifier.padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
+        Fold(shown.text.isNotEmpty() || shown.ready) {
+            val ink by animateColorAsState(
+                if (shown.text.isEmpty()) scheme.onSurfaceVariant else scheme.onSurface,
+                if (reduceMotion) snap() else tween(200),
+                label = "words ink",
+            )
+            Text(
+                shown.text.ifEmpty { stringResource(R.string.record_listening) },
+                style = MaterialTheme.typography.bodyMedium,
+                color = ink,
+                maxLines = 3,
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .then(if (shown.text.isEmpty()) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier),
+            )
+        }
+        RecordButton(
+            recording = true,
+            label = stringResource(R.string.preview_add_stop),
+            onClick = onStop,
+            modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp),
+        )
+    }
+}
+
+/**
+ * "May change the type and split" next to "More exact" (author 26.11.2026) - unticked, the AI gives back one card
+ * of the same type.
+ */
+@Composable
+private fun OtherKindsBox(checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    val ink = MaterialTheme.colorScheme.onSurface
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChange),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        PencilBox(checked, ink)
+        Text(stringResource(R.string.card_refine_other_kinds), style = MaterialTheme.typography.bodyMedium, color = ink)
     }
 }
 
@@ -352,3 +410,9 @@ private val GAP = 16.dp
 
 /** How long the view follows the unfolding settings: the fold (0.22 s) and the keyboard sliding away. */
 private const val OPTIONS_FOLLOW_NS = 450_000_000L
+
+/** What folds away when recording starts, and the bottom panel growing in. */
+private const val FOLD_MS = 220L
+
+/** How long the view keeps to the card's end while the recording panel grows in. */
+private const val PANEL_FOLLOW_NS = 300_000_000L

@@ -1,5 +1,8 @@
 package io.github.bakeron.tapedo.ui.cards
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,17 +37,17 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.bakeron.tapedo.R
 import io.github.bakeron.tapedo.core.model.ChecklistItem
 import io.github.bakeron.tapedo.core.model.Note
 import io.github.bakeron.tapedo.core.model.NoteType
-import io.github.bakeron.tapedo.ui.components.RubberStamp
 import io.github.bakeron.tapedo.ui.settings.priorityName
 import io.github.bakeron.tapedo.ui.theme.TapedoTheme
 
 /**
  * One index card: type and date in small capitals, the title, typed text or ticks on the paper of its kind
- * (see [CardPaper]), a priority tape on the corner and a blue "AI" stamp when the AI wrote it.
+ * (see [CardPaper]) and a priority tape on the corner. No "AI" mark (author 26.11.2026).
  *
  * @param compact the stack shows a few lines; the review window shows everything.
  * @param onToggleItem / [onToggleDone] null = read-only (e.g. a card not saved yet).
@@ -71,14 +74,14 @@ fun IndexCard(
     val today = rememberToday()
     val type = note.type
 
-    val kindNames = listOf(
-        stringResource(typeNameRes(type)),
-        stringResource(R.string.default_checklist_title),
-        stringResource(R.string.default_shopping_title),
-    )
+    val kindNames = kindNames(type)
+    // A list in the preview is headed by its name, or "Lista 2" - not "LISTA:" over the items (author 26.11.2026).
+    val listHead = preview && type == NoteType.CHECKLIST
     val title: String? = when {
         !preview -> note.title
         type == NoteType.TASK && number != null -> numberedName(type, number)
+        listHead && !hasOwnListName(note, kindNames) ->
+            if (number != null) numberedName(type, number) else stringResource(R.string.default_checklist_title)
         type == NoteType.EVENT -> null
         type.hasItems && titleIsKindName(note, kindNames) -> null
         titleComesFromBody(note) -> null
@@ -106,27 +109,25 @@ fun IndexCard(
                 Modifier.padding(top = 6.dp, end = 6.dp),
                 clickable = if (onClick != null) Modifier.clickable(onClickLabel = onClickLabel, onClick = onClick) else Modifier,
             ) {
-                // Header: type (and date) on the left, the AI stamp on the right. The calendar page and the
+                // Header: type (and date). The calendar page and the
                 // task's due field carry the date themselves, so it is not repeated here.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val meta = when (type) {
-                        NoteType.EVENT -> note.place.orEmpty()
-                        NoteType.TASK -> ""
-                        else -> metaLine(context, note, today, locale)
-                    }
-                    // The preview opens a list with "LISTA:" and the items right under it (author 10.11.2026).
-                    val listHead = preview && type == NoteType.CHECKLIST
-                    val head = stringResource(if (listHead) R.string.default_checklist_title else typeNameRes(type)) +
-                        if (meta.isNotEmpty()) "  ·  $meta" else ""
+                val meta = when (type) {
+                    NoteType.EVENT -> note.place.orEmpty()
+                    NoteType.TASK -> ""
+                    else -> metaLine(context, note, today, locale)
+                }
+                // The list's title says what it is - over it only its date, if it has one.
+                if (!listHead || meta.isNotEmpty()) {
+                    val head = (if (listHead) "" else stringResource(typeNameRes(type)) + if (meta.isNotEmpty()) "  ·  " else "") + meta
                     Text(
-                        (if (listHead) "$head:" else head).uppercase(locale),
+                        head.uppercase(locale),
                         style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f).padding(end = 52.dp),
+                        modifier = Modifier.padding(end = 52.dp),
                         maxLines = 2,
                     )
+                    Spacer(Modifier.padding(top = 6.dp))
                 }
-                Spacer(Modifier.padding(top = 6.dp))
 
                 // A lined note: the title sits on the red header line, like on an index card.
                 if (title != null) {
@@ -159,7 +160,8 @@ fun IndexCard(
                 }
 
                 if (note.items.isNotEmpty()) {
-                    Spacer(Modifier.padding(top = 4.dp))
+                    // The list's name stands apart from its items (author 26.11.2026).
+                    Spacer(Modifier.padding(top = if (listHead) 12.dp else 4.dp))
                     val limit = if (compact) 6 else Int.MAX_VALUE
                     var shown = 0
                     for ((group, items) in groupedItems(note)) {
@@ -177,7 +179,7 @@ fun IndexCard(
                         }
                         for ((index, item) in items) {
                             if (shown >= limit) break
-                            ItemRow(item, onToggle = onToggleItem?.let { { it(index) } })
+                            ItemRow(item, onToggle = onToggleItem?.let { { it(index) } }, roomy = preview)
                             shown++
                         }
                     }
@@ -192,17 +194,6 @@ fun IndexCard(
                 }
 
                 if (type == NoteType.TASK) DueField(note, Modifier.padding(top = 12.dp))
-
-                // Pressed on the bottom corner, a little crooked - like an office stamp.
-                if (note.byAi) {
-                    RubberStamp(
-                        stringResource(R.string.card_ai_stamp),
-                        Modifier
-                            .align(Alignment.End)
-                            .padding(top = 8.dp)
-                            .semantics { contentDescription = context.getString(R.string.card_ai_desc) },
-                    )
-                }
             }
 
             // Ideas have no priority, so no tape.
@@ -259,9 +250,13 @@ private fun TitleLine(note: Note, text: String, onToggleDone: (() -> Unit)?, rul
 }
 
 @Composable
-private fun ItemRow(item: ChecklistItem, onToggle: (() -> Unit)?) {
+private fun ItemRow(item: ChecklistItem, onToggle: (() -> Unit)?, roomy: Boolean) {
     val scheme = MaterialTheme.colorScheme
-    val ink = if (item.checked) scheme.onSurfaceVariant else scheme.onSurface
+    val ink by animateColorAsState(
+        if (item.checked) scheme.onSurfaceVariant else scheme.onSurface,
+        if (TapedoTheme.reduceMotion) snap() else tween(200),
+        label = "item ink",
+    )
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val state = stringResource(if (item.checked) R.string.card_item_checked else R.string.card_item_unchecked)
     Row(
@@ -280,12 +275,15 @@ private fun ItemRow(item: ChecklistItem, onToggle: (() -> Unit)?) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         PencilBox(item.checked, ink)
+        // The whole card (preview): a long item's lines closer together, the items further apart (author 26.11.2026).
         Text(
             item.text,
-            style = MaterialTheme.typography.bodyMedium,
+            style = if (roomy) MaterialTheme.typography.bodyMedium.copy(lineHeight = 18.sp) else MaterialTheme.typography.bodyMedium,
             color = ink,
             onTextLayout = { layout = it },
-            modifier = Modifier.handStrike(item.checked, { layout }, scheme.onSurface),
+            modifier = Modifier
+                .then(if (roomy) Modifier.padding(vertical = 6.dp) else Modifier)
+                .handStrike(item.checked, { layout }, scheme.onSurface),
         )
     }
 }
